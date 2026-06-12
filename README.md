@@ -10,6 +10,10 @@ data into one clear directive every morning.
 
 > **Native iOS app:** the complete SwiftUI implementation lives in [`ios/`](ios/README.md) —
 > open `ios/Forge/Forge.xcodeproj` in Xcode 16+ and run. Same brand, same thesis, real app.
+>
+> **Shareable demo:** [`Forge-Demo.html`](Forge-Demo.html) is the entire product in one
+> self-contained file — email it to anyone, they double-click and explore all 21 screens
+> in any browser. No install, no server, works on phones.
 
 ## Stack
 
