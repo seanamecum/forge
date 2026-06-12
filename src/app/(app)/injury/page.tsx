@@ -13,6 +13,8 @@ import {
   injuryRisk,
 } from "@/lib/mock/injuries";
 import { injuries, user } from "@/lib/mock/user";
+import { useForge } from "@/lib/store";
+import { toast } from "@/lib/toast";
 
 const TABS = ["Profile", "PT Library", "Protocols", "Concussion", "Return-to-Sport"] as const;
 
@@ -65,6 +67,7 @@ export default function InjuryPage() {
 }
 
 function Profile() {
+  const forge = useForge();
   return (
     <div className="space-y-6">
       {/* Risk hero */}
@@ -107,10 +110,20 @@ function Profile() {
             </div>
 
             <div className="mb-2 flex items-baseline justify-between text-xs">
-              <span className="text-cream-200">Pain today</span>
-              <span className="text-cream-100">{i.painToday}/10</span>
+              <span className="text-cream-200">Pain today — drag to log</span>
+              <span className={forge.painToday >= 5 ? "text-forge-ruby" : "text-cream-100"}>{forge.painToday}/10</span>
             </div>
-            <Bar value={i.painToday} max={10} tone={i.painToday >= 5 ? "ruby" : "amber"} />
+            <Bar value={forge.painToday} max={10} tone={forge.painToday >= 5 ? "ruby" : "amber"} />
+            <input
+              type="range"
+              min={0}
+              max={10}
+              value={forge.painToday}
+              onChange={(e) => forge.set("painToday", Number(e.target.value))}
+              onMouseUp={() => toast(`Pain logged: ${forge.painToday}/10${forge.painToday >= 6 ? " — elevated. If this persists or worsens, see a PT." : " — trend updated"}`)}
+              onTouchEnd={() => toast(`Pain logged: ${forge.painToday}/10`)}
+              className="mt-2 w-full accent-[#d4af37]"
+            />
 
             <div className="mt-4 grid grid-cols-3 gap-2">
               <SubScore label="Mobility" value="78%" tone="good" />
@@ -125,8 +138,20 @@ function Profile() {
             )}
 
             <div className="mt-4 flex gap-2">
-              <button className="btn-gold text-xs">Start today's rehab</button>
-              <button className="btn-ghost text-xs">Log pain</button>
+              <button
+                className={forge.rehabDoneToday ? "btn-ghost text-xs" : "btn-gold text-xs"}
+                onClick={() => {
+                  if (forge.rehabDoneToday) {
+                    toast("Rehab already completed today — next block tomorrow morning");
+                  } else {
+                    forge.set("rehabDoneToday", true);
+                    forge.addXp(120);
+                    toast("Rehab block done: pull-aparts 3×20, wall slides 3×10, ext. rotations 3×15 · +120 XP");
+                  }
+                }}
+              >
+                {forge.rehabDoneToday ? "Rehab done today ✓" : "Start today's rehab"}
+              </button>
             </div>
           </div>
         ))}
@@ -140,10 +165,28 @@ function Profile() {
           </p>
           <div className="mt-4 flex flex-wrap gap-1.5">
             {["Shoulder", "Knee", "Ankle", "Hip", "Back", "Neck", "Wrist", "Elbow", "Hamstring", "Groin", "Concussion"].map((a) => (
-              <span key={a} className="chip">{a}</span>
+              <button
+                key={a}
+                className="chip transition hover:border-gold-400/50 hover:text-gold-200"
+                onClick={() => {
+                  forge.addInjury(a);
+                  toast(`${a} injury logged — protocol queued, aggravating lifts blocked in the generator`);
+                }}
+              >
+                + {a}
+              </button>
             ))}
           </div>
-          <button className="btn-gold mt-5 w-full">+ Log new injury</button>
+          {forge.addedInjuries.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {forge.addedInjuries.map((inj) => (
+                <div key={inj.id} className="flex items-center justify-between rounded-md border border-forge-amber/30 bg-forge-amber/5 px-3 py-2">
+                  <span className="text-sm text-cream-100">{inj.name}</span>
+                  <span className="chip chip-amber">Acute · day 0</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -263,6 +306,7 @@ function Concussion() {
 }
 
 function ReturnToSport() {
+  const forge = useForge();
   return (
     <div className="space-y-4">
       <div className="card p-6">
@@ -271,22 +315,29 @@ function ReturnToSport() {
         <p className="mt-1 text-sm text-obsidian-200">Hockey shooting + cross-check pressure load.</p>
 
         <div className="mt-5 space-y-3">
-          {RTS_CHECKLIST.map((c) => (
-            <div
-              key={c.label}
-              className={`flex items-start gap-3 rounded-md border p-3 ${
-                c.done ? "border-forge-green/30 bg-forge-green/5" : "border-gold-400/10 bg-obsidian-800/40"
-              }`}
-            >
-              <span className={`grid h-7 w-7 place-items-center rounded-full text-[11px] ${c.done ? "bg-forge-green/15 text-forge-green" : "border border-gold-400/25 text-gold-300"}`}>
-                {c.done ? "✓" : "○"}
-              </span>
-              <div>
-                <div className="text-sm text-cream-50">{c.label}</div>
-                <div className="text-[11px] text-obsidian-200">{c.note}</div>
-              </div>
-            </div>
-          ))}
+          {RTS_CHECKLIST.map((c, idx) => {
+            const done = forge.rts[idx] ?? c.done;
+            return (
+              <button
+                key={c.label}
+                onClick={() => {
+                  forge.set("rts", { ...forge.rts, [idx]: !done });
+                  toast(!done ? `Gate cleared: ${c.label}` : `Gate re-opened: ${c.label}`);
+                }}
+                className={`flex w-full items-start gap-3 rounded-md border p-3 text-left transition ${
+                  done ? "border-forge-green/30 bg-forge-green/5" : "border-gold-400/10 bg-obsidian-800/40 hover:border-gold-400/30"
+                }`}
+              >
+                <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11px] ${done ? "bg-forge-green/15 text-forge-green" : "border border-gold-400/25 text-gold-300"}`}>
+                  {done ? "✓" : "○"}
+                </span>
+                <div>
+                  <div className={`text-sm ${done ? "text-obsidian-200 line-through" : "text-cream-50"}`}>{c.label}</div>
+                  <div className="text-[11px] text-obsidian-200">{c.note}</div>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         <div className="mt-5 rounded-md border border-gold-400/15 bg-gold-400/5 p-3 text-[13px] text-cream-200">

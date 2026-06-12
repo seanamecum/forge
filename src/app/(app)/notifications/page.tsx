@@ -1,5 +1,9 @@
+"use client";
+
 import { SectionTitle } from "@/components/ui/SectionTitle";
 import { notifications } from "@/lib/mock/notifications";
+import { useForge } from "@/lib/store";
+import { toast } from "@/lib/toast";
 
 const TONE: Record<string, { icon: string; color: string; bg: string }> = {
   progress: { icon: "▲", color: "text-forge-green", bg: "bg-forge-green/5 border-forge-green/20" },
@@ -11,22 +15,35 @@ const TONE: Record<string, { icon: string; color: string; bg: string }> = {
 };
 
 export default function NotificationsPage() {
+  const forge = useForge();
+
   return (
     <div className="space-y-6">
       <SectionTitle
         eyebrow="Daily"
         title="Notifications"
         subtitle="Forge surfaces real signal: increase weight today, recovery low, protein gap, magnesium intake, sleep debt, injury risk, PT due."
-        right={<button className="btn-ghost text-xs">Mark all read</button>}
+        right={
+          <button
+            className="btn-ghost text-xs"
+            onClick={() => {
+              forge.set("notifsRead", true);
+              toast("All notifications marked read");
+            }}
+          >
+            Mark all read
+          </button>
+        }
       />
 
       <div className="space-y-2">
         {notifications.map((n) => {
           const t = TONE[n.kind];
+          const read = forge.notifsRead || n.read;
           return (
             <div
               key={n.id}
-              className={`flex items-start gap-3 rounded-lg border p-4 ${t.bg} ${!n.read ? "ring-1 ring-gold-400/15" : "opacity-80"}`}
+              className={`flex items-start gap-3 rounded-lg border p-4 ${t.bg} ${!read ? "ring-1 ring-gold-400/15" : "opacity-80"}`}
             >
               <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gold-400/20 bg-obsidian-900/60 text-lg ${t.color}`}>
                 {t.icon}
@@ -38,7 +55,7 @@ export default function NotificationsPage() {
                 </div>
                 <div className="mt-0.5 text-[12px] text-cream-200">{n.body}</div>
               </div>
-              {!n.read && <span className="dot dot-gold" />}
+              {!read && <span className="dot dot-gold" />}
             </div>
           );
         })}

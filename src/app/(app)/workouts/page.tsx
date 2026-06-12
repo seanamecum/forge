@@ -1,17 +1,17 @@
+"use client";
+
 import Link from "next/link";
 import { SectionTitle } from "@/components/ui/SectionTitle";
-import { Stat } from "@/components/ui/Stat";
 import { Bar } from "@/components/ui/Bar";
 import { Sparkline, Barline } from "@/components/ui/Sparkline";
-import {
-  todaysWorkout,
-  workoutHistory,
-  volumeByMuscle,
-  prHistory,
-} from "@/lib/mock/workouts";
+import { todaysWorkout, workoutHistory, volumeByMuscle, prHistory } from "@/lib/mock/workouts";
 import { weightTrend } from "@/lib/mock/user";
+import { useForge } from "@/lib/store";
+import { toast } from "@/lib/toast";
 
 export default function WorkoutsPage() {
+  const forge = useForge();
+
   return (
     <div className="space-y-6">
       <SectionTitle
@@ -25,7 +25,7 @@ export default function WorkoutsPage() {
         }
       />
 
-      {/* Top: Today's workout */}
+      {/* Today's workout */}
       <div className="card card-gold p-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -47,10 +47,7 @@ export default function WorkoutsPage() {
 
         <div className="space-y-2">
           {todaysWorkout.exercises.map((ex, i) => (
-            <div
-              key={i}
-              className="rounded-md border border-gold-400/10 bg-obsidian-800/50 p-4 transition hover:border-gold-400/30"
-            >
+            <div key={i} className="rounded-md border border-gold-400/10 bg-obsidian-800/50 p-4 transition hover:border-gold-400/30">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-gold-400/30 bg-obsidian-900 text-xs text-gold-300">
@@ -58,15 +55,11 @@ export default function WorkoutsPage() {
                   </span>
                   <div>
                     <div className="text-sm text-cream-50">{ex.name}</div>
-                    <div className="mt-0.5 text-[12px] text-obsidian-200">
-                      {ex.prescription}
-                    </div>
-                    <div className="mt-2 text-[11px] text-gold-200/80">
-                      ✦ {ex.reasoning}
-                    </div>
+                    <div className="mt-0.5 text-[12px] text-obsidian-200">{ex.prescription}</div>
+                    <div className="mt-2 text-[11px] text-gold-200/80">✦ {ex.reasoning}</div>
                   </div>
                 </div>
-                <button className="btn-quiet">Start ▶</button>
+                <Link href="/workouts/log" className="btn-quiet shrink-0">Start ▶</Link>
               </div>
             </div>
           ))}
@@ -74,20 +67,23 @@ export default function WorkoutsPage() {
 
         <div className="mt-5 flex flex-wrap gap-2">
           <Link href="/workouts/log" className="btn-gold">Start logging</Link>
-          <button className="btn-ghost">Swap exercises</button>
-          <button className="btn-ghost">Add warm-up</button>
+          <button className="btn-ghost" onClick={() => toast("Swapped Bulgarian split squat → reverse lunge (similar stimulus, knee-friendlier)")}>
+            Swap exercises
+          </button>
+          <button className="btn-ghost" onClick={() => toast("Added 8-min warm-up: bike Z1 + hip openers + banded glute activation")}>
+            Add warm-up
+          </button>
         </div>
       </div>
 
       {/* Weekly stats */}
       <div className="grid gap-4 lg:grid-cols-4">
-        <StatCard title="Sessions / wk" value="5" sub="this week · target 5" />
-        <StatCard title="Total volume" value="42,180" unit="kg" sub="-3% vs 4-wk avg (deload)" />
+        <StatCard title="Sessions / wk" value={`${5 + forge.sessions.length}`} sub="this week · target 5" />
+        <StatCard title="Total volume" value={(42180 + forge.sessions.reduce((s, x) => s + x.volumeKg, 0)).toLocaleString()} unit="kg" sub="-3% vs 4-wk avg (deload)" />
         <StatCard title="Avg RPE" value="8.1" sub="last 7 sessions" />
         <StatCard title="Strain" value="18.6" sub="yesterday · high" />
       </div>
 
-      {/* Volume by muscle + PRs + history */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="card p-5">
           <div className="mb-3 flex items-center justify-between">
@@ -116,15 +112,14 @@ export default function WorkoutsPage() {
           <div className="mb-3 text-[10px] uppercase tracking-[0.22em] text-gold-300">Personal records</div>
           <div className="space-y-2">
             {prHistory.map((p) => (
-              <div
-                key={p.exercise}
-                className="flex items-center justify-between rounded-md border border-gold-400/10 bg-obsidian-800/50 px-3 py-2"
-              >
+              <div key={p.exercise} className="flex items-center justify-between rounded-md border border-gold-400/10 bg-obsidian-800/50 px-3 py-2">
                 <div>
                   <div className="text-sm text-cream-100">{p.exercise}</div>
                   <div className="text-[11px] text-obsidian-200">{p.date}</div>
                 </div>
-                <div className="stat-num text-xl text-gold-grad">{p.weightKg}<span className="text-xs ml-1 text-obsidian-200">kg</span></div>
+                <div className="stat-num text-xl text-gold-grad">
+                  {p.weightKg}<span className="ml-1 text-xs text-obsidian-200">kg</span>
+                </div>
               </div>
             ))}
           </div>
@@ -151,11 +146,21 @@ export default function WorkoutsPage() {
           <Link href="/workouts/log" className="btn-ghost">+ Log session</Link>
         </div>
         <div className="space-y-3">
+          {forge.sessions.map((s, i) => (
+            <div key={`mine-${i}`} className="rounded-md border border-gold-400/30 bg-gold-400/5 p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div>
+                  <div className="text-sm text-cream-50">{s.name}</div>
+                  <div className="text-[11px] text-obsidian-200">
+                    {s.date} · {s.durationMin} min · {s.sets} sets completed
+                  </div>
+                </div>
+                <div className="text-[11px] text-gold-200">Volume {s.volumeKg.toLocaleString()} kg · just logged</div>
+              </div>
+            </div>
+          ))}
           {workoutHistory.map((w) => (
-            <div
-              key={w.id}
-              className="rounded-md border border-gold-400/10 bg-obsidian-800/50 p-4"
-            >
+            <div key={w.id} className="rounded-md border border-gold-400/10 bg-obsidian-800/50 p-4">
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
                 <div>
                   <div className="text-sm text-cream-50">{w.name}</div>
@@ -163,25 +168,14 @@ export default function WorkoutsPage() {
                     {w.date} · {w.durationMin} min · RPE {w.rpeAvg} · strain {w.strain} · felt {w.feel}
                   </div>
                 </div>
-                <div className="text-[11px] text-gold-200">
-                  Volume {w.totalVolumeKg.toLocaleString()} kg
-                </div>
+                <div className="text-[11px] text-gold-200">Volume {w.totalVolumeKg.toLocaleString()} kg</div>
               </div>
               <div className="space-y-1">
                 {w.exercises.map((ex, i) => (
-                  <div
-                    key={i}
-                    className="flex items-baseline justify-between text-[12px] text-cream-200"
-                  >
+                  <div key={i} className="flex items-baseline justify-between text-[12px] text-cream-200">
                     <span>{ex.name}</span>
                     <span className="text-obsidian-200">
-                      {ex.sets
-                        .map((s) =>
-                          s.weightKg
-                            ? `${s.weightKg}×${s.reps}${s.rpe ? `@${s.rpe}` : ""}${s.isPr ? " ★" : ""}`
-                            : `${s.reps}r`
-                        )
-                        .join(" · ")}
+                      {ex.sets.map((s) => s.weightKg ? `${s.weightKg}×${s.reps}${s.rpe ? `@${s.rpe}` : ""}${s.isPr ? " ★" : ""}` : `${s.reps}r`).join(" · ")}
                     </span>
                   </div>
                 ))}
@@ -194,17 +188,7 @@ export default function WorkoutsPage() {
   );
 }
 
-function StatCard({
-  title,
-  value,
-  unit,
-  sub,
-}: {
-  title: string;
-  value: string;
-  unit?: string;
-  sub?: string;
-}) {
+function StatCard({ title, value, unit, sub }: { title: string; value: string; unit?: string; sub?: string }) {
   return (
     <div className="card p-5">
       <div className="text-[10px] uppercase tracking-[0.22em] text-gold-300">{title}</div>

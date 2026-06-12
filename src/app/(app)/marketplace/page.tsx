@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SectionTitle } from "@/components/ui/SectionTitle";
 import { coaches, programs, products } from "@/lib/mock/marketplace";
+import { toast } from "@/lib/toast";
 
 const TABS = ["Coaches", "Programs", "Affiliate Store"] as const;
 
@@ -50,7 +51,7 @@ export default function MarketplacePage() {
                 <span>★ {c.rating} · {c.clients} clients</span>
                 <span className="text-gold-grad">{c.price}</span>
               </div>
-              <button className="btn-gold mt-3 w-full text-[11px]">Book intro call</button>
+              <button className="btn-gold mt-3 w-full text-[11px]" onClick={() => toast(`Intro call requested with ${c.name} — they respond within 24h`)}>Book intro call</button>
             </div>
           ))}
         </div>
@@ -80,7 +81,7 @@ export default function MarketplacePage() {
                   <div className="text-cream-100">{p.buyers}</div>
                 </div>
               </div>
-              <button className="btn-gold mt-3 w-full text-[11px]">Add to library</button>
+              <button className="btn-gold mt-3 w-full text-[11px]" onClick={() => toast(`${p.name} added to your library — week 1 loads into Train`)}>Add to library</button>
             </div>
           ))}
         </div>

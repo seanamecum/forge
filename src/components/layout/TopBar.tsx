@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { today, user } from "@/lib/mock/user";
+import { useForge } from "@/lib/store";
 
 export function TopBar() {
+  const forge = useForge();
   return (
     <header className="sticky top-0 z-30 border-b border-gold-400/10 bg-obsidian-950/70 backdrop-blur">
       <div className="flex items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
@@ -36,9 +38,11 @@ export function TopBar() {
             aria-label="Notifications"
           >
             ◷
-            <span className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-forge-ruby text-[9px] text-cream-50">
-              3
-            </span>
+            {!forge.notifsRead && (
+              <span className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-forge-ruby text-[9px] text-cream-50">
+                3
+              </span>
+            )}
           </Link>
         </div>
       </div>

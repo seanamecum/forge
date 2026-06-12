@@ -1,6 +1,9 @@
+"use client";
+
 import { SectionTitle } from "@/components/ui/SectionTitle";
 import { Bar } from "@/components/ui/Bar";
 import { teams } from "@/lib/mock/marketplace";
+import { toast } from "@/lib/toast";
 
 export default function TeamsPage() {
   return (
@@ -9,7 +12,7 @@ export default function TeamsPage() {
         eyebrow="Forge Teams"
         title="Schools · Gyms · Sports Teams · Businesses"
         subtitle="Coach view, athlete recovery, compliance, team challenges. Built for accountability."
-        right={<button className="btn-gold text-xs">+ Create team</button>}
+        right={<button className="btn-gold text-xs" onClick={() => toast("Team creation: invite athletes by link, assign a coach seat, pick a plan")}>+ Create team</button>}
       />
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -52,8 +55,8 @@ export default function TeamsPage() {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="btn-gold text-[11px] flex-1">Open coach view</button>
-              <button className="btn-ghost text-[11px]">Team challenge</button>
+              <button className="btn-gold flex-1 text-[11px]" onClick={() => toast(`${t.name}: coach view shows per-athlete recovery, compliance, and injury flags`)}>Open coach view</button>
+              <button className="btn-ghost text-[11px]" onClick={() => toast(`Team challenge drafted for ${t.name} — pick metric and duration to launch`)}>Team challenge</button>
             </div>
           </div>
         ))}

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { SectionTitle } from "@/components/ui/SectionTitle";
 import { today, injuries } from "@/lib/mock/user";
+import { toast } from "@/lib/toast";
 
 const GOALS = [
   { id: "strength", name: "Get Stronger" },
@@ -144,9 +146,9 @@ export default function GeneratePage() {
               </div>
 
               <div className="mt-4 flex gap-2">
-                <button className="btn-gold">Use this session</button>
+                <Link href="/workouts/log" className="btn-gold">Use this session</Link>
                 <button className="btn-ghost" onClick={generate}>Regenerate</button>
-                <button className="btn-ghost">Save</button>
+                <button className="btn-ghost" onClick={() => toast("Session saved to your templates")}>Save</button>
               </div>
             </div>
           )}

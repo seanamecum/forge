@@ -1,6 +1,9 @@
+"use client";
+
 import { SectionTitle } from "@/components/ui/SectionTitle";
 import { Bar } from "@/components/ui/Bar";
 import { bloodwork } from "@/lib/mock/bloodwork";
+import { toast } from "@/lib/toast";
 
 const CATEGORY_LABEL: Record<string, string> = {
   hormones: "Hormones",
@@ -25,7 +28,7 @@ export default function BloodworkPage() {
         title="Bloodwork & Health Optimization"
         subtitle="T, free T, D, ferritin, lipids, glucose, A1c, CRP, thyroid, B12 — interpreted in context, not just flagged."
         right={
-          <button className="btn-gold text-xs">+ Upload new panel</button>
+          <button className="btn-gold text-xs" onClick={() => toast("Panel upload: PDF or lab CSV — markers parse automatically and trends update")}>+ Upload new panel</button>
         }
       />
 

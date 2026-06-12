@@ -1,8 +1,11 @@
+"use client";
+
 import { SectionTitle } from "@/components/ui/SectionTitle";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { Stat } from "@/components/ui/Stat";
 import { bodyMetrics } from "@/lib/mock/body";
 import { weightTrend } from "@/lib/mock/user";
+import { toast } from "@/lib/toast";
 
 export default function BodyPage() {
   const m = bodyMetrics.measurements;
@@ -33,7 +36,7 @@ export default function BodyPage() {
       <div className="card p-6">
         <div className="mb-4 flex items-baseline justify-between">
           <div className="display text-xl text-cream-50">Measurements</div>
-          <button className="btn-ghost text-xs">+ Log measurement</button>
+          <button className="btn-ghost text-xs" onClick={() => toast("Measurement logged — 30-day deltas recalculated")}>+ Log measurement</button>
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6">
           <Measurement label="Neck" value={`${m.neckCm} cm`} delta="−1.5" />
@@ -55,7 +58,7 @@ export default function BodyPage() {
       <div className="card p-6">
         <div className="mb-4 flex items-baseline justify-between">
           <div className="display text-xl text-cream-50">Progress photos</div>
-          <button className="btn-ghost text-xs">+ Add photo</button>
+          <button className="btn-ghost text-xs" onClick={() => toast("Progress photo added — comparison card updates at the 12-week mark")}>+ Add photo</button>
         </div>
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {[

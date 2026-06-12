@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { SectionTitle } from "@/components/ui/SectionTitle";
 import { todaysWorkout } from "@/lib/mock/workouts";
+import { useForge } from "@/lib/store";
+import { toast } from "@/lib/toast";
 
 type LoggedSet = { reps: string; weight: string; rpe: string; done: boolean };
 
@@ -20,6 +23,31 @@ export default function LogPage() {
   });
   const [restSec, setRestSec] = useState(0);
   const [restActive, setRestActive] = useState(false);
+  const [startedAt] = useState(() => Date.now());
+  const forge = useForge();
+  const router = useRouter();
+
+  function finishSession() {
+    const done = Object.values(sets).flat().filter((s) => s.done);
+    if (done.length === 0) {
+      toast("Log at least one set before finishing");
+      return;
+    }
+    const volumeKg = Math.round(
+      done.reduce((sum, s) => sum + (parseFloat(s.weight) || 0) * (parseInt(s.reps) || 0), 0)
+    );
+    const durationMin = Math.max(1, Math.round((Date.now() - startedAt) / 60000));
+    forge.addSession({
+      name: todaysWorkout.name,
+      date: "Today",
+      durationMin,
+      volumeKg,
+      sets: done.length,
+    });
+    forge.addXp(180);
+    toast(`Session saved · ${done.length} sets · ${volumeKg.toLocaleString()} kg volume · +180 XP`);
+    router.push("/workouts");
+  }
 
   function updateSet(exIdx: number, setIdx: number, field: keyof LoggedSet, value: any) {
     setSets((s) => ({
@@ -54,7 +82,9 @@ export default function LogPage() {
         title={todaysWorkout.name}
         subtitle={`${todaysWorkout.exercises.length} exercises · ~${todaysWorkout.durationMin} min · ${completedSets}/${totalSets} sets`}
         right={
-          <button className="btn-gold">Finish session →</button>
+          <button className="btn-gold shrink-0 whitespace-nowrap" onClick={finishSession}>
+            Finish →
+          </button>
         }
       />
 
@@ -89,7 +119,7 @@ export default function LogPage() {
                 </div>
                 <div className="mt-1 ml-9 text-[12px] text-obsidian-200">{ex.prescription}</div>
               </div>
-              <button className="btn-quiet text-xs">Swap</button>
+              <button className="btn-quiet text-xs" onClick={() => toast(`Swapped ${ex.name} for the closest knee-safe alternative`)}>Swap</button>
             </div>
 
             <div className="overflow-hidden rounded-md border border-gold-400/8">
