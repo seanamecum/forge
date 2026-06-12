@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WearablesView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ScreenScaffold {
@@ -26,25 +27,71 @@ struct WearablesView: View {
                     Image(systemName: "heart.fill").foregroundStyle(Theme.rubyBright)
                     Text("Apple Health").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.cream)
                     Spacer()
-                    Chip(text: hk.isAuthorized ? "Connected" : "Connect",
-                         tone: hk.isAuthorized ? .green : .gold)
+                    healthChip(for: hk.authState)
                 }
                 Text(hk.statusMessage).font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                if hk.usingMockData && hk.authState != .authorized {
+                    Chip(text: "Demo data", tone: .amber)
+                }
+
+                if let error = hk.lastError {
+                    ErrorBanner(message: error) { hk.lastError = nil }
+                }
 
                 HStack(spacing: 14) {
                     StatTile(label: "Steps", value: "\(hk.steps)")
                     StatTile(label: "Heart rate", value: "\(hk.heartRate)", unit: "bpm")
+                    StatTile(label: "Resting HR", value: "\(hk.restingHeartRate)", unit: "bpm")
+                    StatTile(label: "HRV", value: "\(hk.hrvMs)", unit: "ms")
+                }
+                HStack(spacing: 14) {
                     StatTile(label: "Energy", value: "\(hk.activeEnergy)", unit: "kcal")
-                    StatTile(label: "Weight", value: String(format: "%.0f", hk.weightLb), unit: "lb")
+                    StatTile(label: "Sleep", value: String(format: "%.1f", hk.sleepHoursLastNight), unit: "h")
+                    StatTile(label: "Weight", value: String(format: "%.0f", hk.bodyMassLb), unit: "lb")
+                    StatTile(label: "Workouts", value: "\(hk.workoutsLast7Days)", hint: "last 7 days")
                 }
 
-                Button(hk.isAuthorized ? "Refresh from Health" : "Connect Apple Health") {
-                    Task {
-                        if hk.isAuthorized { await hk.refresh() } else { await hk.connect() }
+                if hk.isLoading {
+                    LoadingStateView(label: "Reading Health data")
+                } else {
+                    switch hk.authState {
+                    case .denied:
+                        Button("Open Settings to enable Health access") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                openURL(url)
+                            }
+                        }
+                        .buttonStyle(GhostButtonStyle(compact: true))
+                    case .authorized:
+                        HStack(spacing: 8) {
+                            Button("Refresh") { Task { await hk.refresh() } }
+                                .buttonStyle(GhostButtonStyle(compact: true))
+                            Button("Save weight to Health") {
+                                Task {
+                                    if await hk.saveBodyMass(hk.bodyMassLb) {
+                                        hk.statusMessage = "Weight saved to Apple Health ✓"
+                                    }
+                                }
+                            }
+                            .buttonStyle(GhostButtonStyle(compact: true))
+                        }
+                    case .unavailable:
+                        EmptyView()
+                    case .notDetermined:
+                        Button("Connect Apple Health") { Task { await hk.connect() } }
+                            .buttonStyle(GoldButtonStyle(compact: true))
                     }
                 }
-                .buttonStyle(GhostButtonStyle(compact: true))
             }
+        }
+    }
+
+    private func healthChip(for state: HealthAuthState) -> some View {
+        switch state {
+        case .authorized: return Chip(text: "Connected", tone: .green)
+        case .denied: return Chip(text: "Denied", tone: .ruby)
+        case .unavailable: return Chip(text: "Unavailable", tone: .neutral)
+        case .notDetermined: return Chip(text: "Connect", tone: .gold)
         }
     }
 }

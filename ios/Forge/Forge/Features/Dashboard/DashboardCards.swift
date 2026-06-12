@@ -209,6 +209,8 @@ struct ModulesGrid: View {
         VStack(alignment: .leading, spacing: 10) {
             EyebrowLabel(text: "Explore Forge")
             LazyVGrid(columns: columns, spacing: 10) {
+                ModuleTile(icon: "target", title: "Goals", subtitle: "Targets · deadlines · progress") { GoalsView() }
+                ModuleTile(icon: "figure.run", title: "Running", subtitle: "Mileage · paces · live runs") { RunningView() }
                 ModuleTile(icon: "heart.text.square.fill", title: "Bloodwork", subtitle: "14 markers · AI read") { BloodworkView() }
                 ModuleTile(icon: "figure.arms.open", title: "Body", subtitle: "Composition · photos") { BodyTrackingView() }
                 ModuleTile(icon: "wand.and.stars", title: "Digital Twin", subtitle: "Your 12-week forecast") { ForecastView() }

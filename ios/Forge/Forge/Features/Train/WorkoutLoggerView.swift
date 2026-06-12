@@ -1,9 +1,12 @@
 import SwiftUI
+import SwiftData
 
 /// Live session logger: sets, weight, reps, RPE/RIR, rest timer, completion, volume.
+/// Finishing persists to SwiftData and (when authorized) writes to Apple Health.
 struct WorkoutLoggerView: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     let plan: GeneratedWorkout
     @State private var logged: [LoggedExercise] = []
@@ -128,10 +131,31 @@ struct WorkoutLoggerView: View {
     private var completedSets: Int { logged.reduce(0) { $0 + $1.sets.filter(\.completed).count } }
 
     private func finish() {
+        let completed = logged.filter { $0.sets.contains(where: \.completed) }
         let workout = Workout(name: plan.name, date: .now, durationMin: durationMin,
-                              exercises: logged.filter { $0.sets.contains(where: \.completed) },
-                              avgRPE: averageRPE, feel: .fine)
+                              exercises: completed, avgRPE: averageRPE, feel: .fine)
         app.workouts.finish(workout)
+
+        // Persist locally (SwiftData) — survives relaunch, works offline.
+        let summary = completed
+            .map { "\($0.exercise.name) ×\($0.sets.filter(\.completed).count)" }
+            .joined(separator: " · ")
+        let record = WorkoutRecord(name: plan.name, date: .now, durationMin: durationMin,
+                                   totalVolumeLb: totalVolume, setCount: completedSets,
+                                   avgRPE: averageRPE, exerciseSummary: summary)
+        PersistenceService.saveWorkout(record, context: modelContext)
+
+        // Mirror to Apple Health when connected (best-effort, never blocks the UI).
+        if app.healthKit.authState == .authorized {
+            let start = startedAt
+            let estimatedCalories = Double(durationMin) * 7.5
+            Task {
+                let saved = await app.healthKit.saveWorkout(
+                    start: start, end: .now, calories: estimatedCalories)
+                record.savedToHealthKit = saved
+            }
+        }
+
         finished = true
     }
 

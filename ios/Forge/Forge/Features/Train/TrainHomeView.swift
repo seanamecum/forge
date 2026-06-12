@@ -23,6 +23,7 @@ struct TrainHomeView: View {
     private var quickActions: some View {
         HStack(spacing: 10) {
             QuickAction(icon: "wand.and.stars", label: "Generate") { GeneratorView() }
+            QuickAction(icon: "figure.run", label: "Running") { RunningView() }
             QuickAction(icon: "books.vertical.fill", label: "Exercises") { ExerciseLibraryView() }
             QuickAction(icon: "camera.viewfinder", label: "Form AI") { FormAnalysisView() }
         }

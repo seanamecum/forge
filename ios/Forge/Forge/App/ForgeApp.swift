@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct ForgeApp: App {
@@ -11,5 +12,9 @@ struct ForgeApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Theme.gold)
         }
+        .modelContainer(for: [
+            UserRecord.self, GoalRecord.self, WorkoutRecord.self,
+            NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self, ScoreRecord.self,
+        ])
     }
 }

@@ -64,9 +64,3 @@ final class NutritionService {
         return foods.filter { $0.name.localizedCaseInsensitiveContains(query) }
     }
 }
-
-extension Int {
-    func clamped(to range: ClosedRange<Int>) -> Int {
-        Swift.min(range.upperBound, Swift.max(range.lowerBound, self))
-    }
-}

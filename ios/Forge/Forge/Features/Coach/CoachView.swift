@@ -2,9 +2,8 @@ import SwiftUI
 
 struct CoachView: View {
     @Environment(AppState.self) private var app
-    @State private var messages: [CoachMessage] = []
+    @State private var vm = CoachViewModel()
     @State private var input = ""
-    @State private var thinking = false
 
     var body: some View {
         NavigationStack {
@@ -14,17 +13,17 @@ struct CoachView: View {
                 ScrollViewReader { proxy in
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 14) {
-                            ForEach(messages) { msg in
+                            ForEach(vm.messages) { msg in
                                 CoachBubble(message: msg, onSuggestion: send)
                             }
-                            if thinking {
+                            if vm.isThinking {
                                 ThinkingIndicator()
                             }
                             Color.clear.frame(height: 4).id("bottom")
                         }
                         .padding(16)
                     }
-                    .onChange(of: messages.count) {
+                    .onChange(of: vm.messages.count) {
                         withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
                 }
@@ -33,7 +32,7 @@ struct CoachView: View {
             }
             .background(Theme.bg)
             .navigationBarHidden(true)
-            .onAppear { seedIfNeeded() }
+            .onAppear { vm.seedIfNeeded(userName: app.user.name) }
         }
     }
 
@@ -93,29 +92,9 @@ struct CoachView: View {
         .background(Theme.bgElevated)
     }
 
-    private func seedIfNeeded() {
-        guard messages.isEmpty else { return }
-        let first = app.user.name.split(separator: " ").first.map(String.init) ?? app.user.name
-        messages.append(CoachMessage(
-            role: .coach,
-            text: "Morning, \(first). I'm reading everything — last night's sleep, your HRV, the knee, yesterday's bench session, today's protein pace. Ask me anything.",
-            suggestions: ["What should I do today?", "Why am I tired?", "Should I train hard?",
-                          "Why is my bench not increasing?", "How do I recover from knee pain?",
-                          "What supplement am I missing?"]
-        ))
-    }
-
     private func send(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
-        messages.append(CoachMessage(role: .user, text: trimmed))
+        vm.send(text)
         input = ""
-        thinking = true
-        Task {
-            try? await Task.sleep(for: .milliseconds(800))
-            messages.append(AIService.reply(to: trimmed))
-            thinking = false
-        }
     }
 }
 

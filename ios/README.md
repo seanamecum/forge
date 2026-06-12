@@ -20,30 +20,28 @@ is already configured and works with free personal teams).
 
 ```
 Forge/
-  App/            ForgeApp (@main) · AppState (@Observable god-object: user, phase,
-                  tab, services, Forge Score engine) · RootView (welcome→onboarding→main)
-                  · MainTabView (custom 5-tab bar, gold Coach center)
-  Theme/          Theme (obsidian/gold/cream tokens, serif display font) ·
-                  Components (Card, Chip, StatTile, buttons, bars, ScreenScaffold) ·
-                  Rings (animated ScoreRing) · ChartViews (Swift Charts sparklines,
-                  bar trends, sleep-stage bar)
-  Models/         UserProfile, Exercise, Workout/WorkoutSet/LoggedExercise, Food/
-                  FoodEntry/Supplement/DeficiencyAlert, RecoveryData/SleepData/
-                  WearableDevice, InjuryProfile/PTExercise/RehabProtocol/RTPStage,
-                  BloodworkMarker/BodySnapshot/Forecast, SocialPost/Challenge/Badge/
-                  Mission/Team, CoachMessage, ForgeNotification
-  Mock/           MockData (Sean's world) · MockExercises (19 exercises + history/PRs)
-                  · MockRehab (PT library, 4 protocols, concussion, RTS, risk model)
-  Services/       Auth · HealthKit (real reads w/ mock fallback) · AI (coach brain) ·
-                  Workout (incl. generator logic) · Nutrition · Recovery · Injury ·
-                  Social · Marketplace · Notification — all @Observable, all owned by
-                  AppState, all swappable for networked implementations
-  Features/       Auth · Onboarding (14 steps) · Dashboard · Coach · Train (logger w/
-                  rest timer, exercise DB, AI generator, form analysis) · Nutrition
-                  (food log, barcode/photo sims, micros, deficiencies, supplements) ·
-                  Recovery (sleep stages, trends, wearables, FORGE RECOVERY injury/PT)
-                  · Health (bloodwork, body, digital twin) · Social (feed, groups,
-                  compete, achievements) · Market (marketplace, teams) · Profile
+  App/            ForgeApp (@main, SwiftData container) · RootView · MainTabView
+  Core/           AppState (@Observable: user, phase, services, Forge Score engine)
+    Mock/         MockData (Sean's world) · MockExercises · MockRehab
+    Persistence/  SwiftData @Model records (User, Goal, Workout, NutritionEntry,
+                  Recovery, Sleep, ScoreRecord) + PersistenceService helpers
+  DesignSystem/   Theme tokens · Components (Card, Chip, StatTile, buttons, bars,
+                  ScreenScaffold) · Rings · ChartViews (Swift Charts) ·
+                  StateViews (LoadingStateView, EmptyStateView, ErrorBanner)
+  Models/         Domain structs: UserProfile, Exercise, Workout, Food, RecoveryData,
+                  InjuryProfile, BloodworkMarker, SocialPost, CoachMessage, …
+  Services/       Auth · HealthKit (8 read types + workout/body-mass writes, denial
+                  handling, mock fallback) · AI (coach brain) · Workout (generator) ·
+                  Nutrition · Recovery · Injury · Social · Marketplace · Notification
+  ViewModels/     CoachViewModel (chat orchestration)
+  Features/       Auth · Onboarding (14 steps) · Dashboard · Coach · Goals (SwiftData
+                  CRUD) · Train (logger → SwiftData + HealthKit write, exercise DB,
+                  AI generator, Running, form analysis) · Nutrition · Recovery
+                  (sleep, wearables, FORGE RECOVERY injury/PT) · Health (bloodwork,
+                  body, digital twin) · Social · Market · Profile (Free/Pro/Elite)
+  Utilities/      Shared extensions (clamped, date labels)
+ForgeTests/       ScoringTests · GeneratorTests · WorkoutMathTests ·
+                  HealthKitServiceTests — run with ⌘U
 ```
 
 **Navigation:** 5 primary tabs per Apple HIG — Home, Train, Coach (center), Fuel,

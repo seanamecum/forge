@@ -1,7 +1,9 @@
 import SwiftUI
+import SwiftData
 
 struct DashboardView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         NavigationStack {
@@ -17,6 +19,10 @@ struct DashboardView: View {
                 DisclaimerNote()
             }
             .navigationBarHidden(true)
+            .onAppear {
+                // Snapshot today's Forge Score so trends build from real history.
+                PersistenceService.recordTodayScore(app.forgeScore, context: modelContext)
+            }
         }
     }
 
