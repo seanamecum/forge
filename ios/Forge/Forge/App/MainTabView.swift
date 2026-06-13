@@ -85,5 +85,7 @@ struct ForgeTabBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(tab.label) tab")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

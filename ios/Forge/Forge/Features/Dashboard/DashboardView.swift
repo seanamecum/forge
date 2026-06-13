@@ -37,6 +37,7 @@ struct DashboardView: View {
                 }
                 .frame(width: 38, height: 38)
             }
+            .accessibilityLabel("Profile and settings")
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(Date.now.formatted(.dateTime.weekday(.wide).month().day()).uppercased())
@@ -68,6 +69,9 @@ struct DashboardView: View {
                     }
                 }
             }
+            .accessibilityLabel(app.notifications.unreadCount > 0
+                ? "Notifications, \(app.notifications.unreadCount) unread"
+                : "Notifications")
         }
         .padding(.top, 6)
     }

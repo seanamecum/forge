@@ -1,23 +1,23 @@
 """
 FORGE — Human Performance OS · COMPLETE iOS SOURCE (single file)
 ================================================================================
-This one file contains the entire native SwiftUI iOS app: 73 files
+This one file contains the entire native SwiftUI iOS app: 74 files
 (Swift sources, the Xcode project, entitlements, asset catalog, and unit tests).
 
 It is self-extracting. Anyone with a Mac can rebuild the real project:
 
   1. Save this file (e.g. Forge-iOS-Source-Bundle.txt).
   2. In Terminal:  python3 Forge-iOS-Source-Bundle.txt
-     → recreates the ./Forge/ project folder beside this file.
+     -> recreates the ./Forge/ project folder beside this file.
   3. Open Forge/Forge.xcodeproj in Xcode 16+, pick an iPhone simulator, Run.
      Tests: press Cmd-U.
 
-No Python? Every file below is plain text between ">>>>FORGE_FILE>>>> <path>" markers —
+No Python? Every file below is plain text between ">>>>FORGE_FILE>>>> <path>" markers --
 copy them out by hand into matching folders.
 
 Stack: SwiftUI · MVVM · @Observable · SwiftData · HealthKit · Swift Charts.
 Bundle ID com.forge.performance · iOS 17.0 · demo athlete "Sean Calloway".
-Non-technical partners: open Forge-Demo.html instead — clickable product demo.
+Non-technical partners: open Forge-Demo.html instead -- clickable product demo.
 ================================================================================
 """
 #!/usr/bin/env python3
@@ -42,7 +42,7 @@ for part in parts[1:]:
         out.write(content)
     count += 1
     print("  wrote", path)
-print("\nDone — %d files. Open Forge/Forge.xcodeproj in Xcode 16+." % count)
+print("\nDone -- %d files. Open Forge/Forge.xcodeproj in Xcode 16+." % count)
 sys.exit(0)
 # ===FORGE-BUNDLE-BEGIN===
 
@@ -800,6 +800,8 @@ struct ForgeTabBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(tab.label) tab")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 >>>>FORGE_FILE>>>> Forge/Forge/App/RootView.swift
@@ -2405,6 +2407,71 @@ struct ScreenScaffold<Content: View>: View {
         .scrollContentBackground(.hidden)
     }
 }
+>>>>FORGE_FILE>>>> Forge/Forge/DesignSystem/DesignSystemPreviews.swift
+import SwiftUI
+
+// Xcode canvas previews for the reusable design-system primitives.
+// These need no AppState or SwiftData, so they render instantly and verify
+// the brand look in isolation. Feature screens carry their own #Preview blocks
+// with `.environment(AppState())` where state is required.
+
+#Preview("Cards & Buttons") {
+    ScreenScaffold {
+        SectionHeader(eyebrow: "Design System", title: "Forge UI Kit",
+                      subtitle: "Obsidian / gold / cream — the premium athletic language.")
+        Card(gold: true) {
+            VStack(alignment: .leading, spacing: 10) {
+                EyebrowLabel(text: "Gold Card")
+                Text("Today is a controlled day.")
+                    .font(Theme.display(20)).foregroundStyle(Theme.cream)
+                CoachNote(text: "The coach note style — used for AI guidance throughout the app.")
+            }
+        }
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                EyebrowLabel(text: "Standard Card")
+                HStack(spacing: 8) {
+                    Chip(text: "Gold", tone: .gold)
+                    Chip(text: "Good", tone: .green)
+                    Chip(text: "Warn", tone: .amber)
+                    Chip(text: "Alert", tone: .ruby)
+                }
+                LabeledBar(label: "Protein", valueText: "142 / 200 g", value: 142, target: 200, tone: .gold)
+                LabeledBar(label: "Recovery", valueText: "78 / 100", value: 78, target: 100, tone: .green)
+                Button("Primary Action") {}.buttonStyle(GoldButtonStyle())
+                Button("Secondary Action") {}.buttonStyle(GhostButtonStyle())
+            }
+        }
+    }
+    .background(Theme.bg)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Score Rings") {
+    HStack(spacing: 16) {
+        ScoreRing(value: 78, label: "Forge", size: 120)
+        ScoreRing(value: 64, label: "Recovery", size: 120, tone: .green)
+        ScoreRing(value: 28, label: "Risk", size: 120, tone: .ruby)
+    }
+    .padding()
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Theme.bg)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("State Views") {
+    ScreenScaffold {
+        Card { LoadingStateView(label: "Reading Health data") }
+        Card {
+            EmptyStateView(icon: "target", title: "No goals yet",
+                           message: "Set the first one to start tracking.",
+                           actionLabel: "+ New Goal", action: {})
+        }
+        ErrorBanner(message: "Couldn't save workout — check your connection.", onDismiss: {})
+    }
+    .background(Theme.bg)
+    .preferredColorScheme(.dark)
+}
 >>>>FORGE_FILE>>>> Forge/Forge/DesignSystem/Rings.swift
 import SwiftUI
 
@@ -3444,6 +3511,7 @@ struct DashboardView: View {
                 }
                 .frame(width: 38, height: 38)
             }
+            .accessibilityLabel("Profile and settings")
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(Date.now.formatted(.dateTime.weekday(.wide).month().day()).uppercased())
@@ -3475,6 +3543,9 @@ struct DashboardView: View {
                     }
                 }
             }
+            .accessibilityLabel(app.notifications.unreadCount > 0
+                ? "Notifications, \(app.notifications.unreadCount) unread"
+                : "Notifications")
         }
         .padding(.top, 6)
     }
