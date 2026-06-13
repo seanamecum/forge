@@ -1,0 +1,43 @@
+name: CI
+
+# Builds and tests both apps on every push / PR. The iOS job is the one that
+# actually compiles the Swift the dev machine couldn't — treat a green "ios"
+# check as the source of truth for "the iOS app builds and its tests pass".
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ios:
+    name: iOS · build + test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      - name: Build & test (iPhone simulator)
+        working-directory: ios/Forge
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Forge.xcodeproj \
+            -scheme Forge \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -resultBundlePath TestResults \
+            clean build test \
+            CODE_SIGNING_ALLOWED=NO
+
+  web:
+    name: Web · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build

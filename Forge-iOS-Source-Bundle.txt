@@ -1,8 +1,8 @@
 """
 FORGE — Human Performance OS · COMPLETE iOS SOURCE (single file)
 ================================================================================
-This one file contains the entire native SwiftUI iOS app: 82 files
-(Swift sources, the Xcode project, entitlements, asset catalog, and unit tests).
+This one file contains the entire native SwiftUI iOS app: 83 files
+(Swift sources, the Xcode project + shared scheme, entitlements, assets, tests).
 
 It is self-extracting. Anyone with a Mac can rebuild the real project:
 
@@ -10,7 +10,7 @@ It is self-extracting. Anyone with a Mac can rebuild the real project:
   2. In Terminal:  python3 Forge-iOS-Source-Bundle.txt
      -> recreates the ./Forge/ project folder beside this file.
   3. Open Forge/Forge.xcodeproj in Xcode 16+, pick an iPhone simulator, Run.
-     Tests: press Cmd-U.
+     Tests: press Cmd-U.  CLI: xcodebuild -scheme Forge ... build test
 
 No Python? Every file below is plain text between ">>>>FORGE_FILE>>>> <path>" markers --
 copy them out by hand into matching folders.
@@ -20,6 +20,7 @@ Claude Messages API (raw HTTPS, mock fallback) · local notifications.
 Bundle ID com.forge.performance, iOS 17.0, demo athlete "Sean Calloway".
 AI: set ANTHROPIC_API_KEY in the Xcode scheme (or a gitignored Secrets.plist) to
 go live; empty = offline mock. Production should proxy through a backend.
+CI that compiles + tests this on macOS lives at .github/workflows/ci.yml in the repo.
 Non-technical partners: open Forge-Demo.html instead -- clickable product demo.
 ================================================================================
 """
@@ -500,6 +501,95 @@ sys.exit(0)
 	};
 	rootObject = AA0000000000000000000002 /* Project object */;
 }
+>>>>FORGE_FILE>>>> Forge/Forge.xcodeproj/xcshareddata/xcschemes/Forge.xcscheme
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme
+   LastUpgradeVersion = "1600"
+   version = "1.7">
+   <BuildAction
+      parallelizeBuildables = "YES"
+      buildImplicitDependencies = "YES">
+      <BuildActionEntries>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "AA0000000000000000000006"
+               BuildableName = "Forge.app"
+               BlueprintName = "Forge"
+               ReferencedContainer = "container:Forge.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      shouldUseLaunchSchemeArgsEnv = "YES">
+      <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "AA0000000000000000000021"
+               BuildableName = "ForgeTests.xctest"
+               BlueprintName = "ForgeTests"
+               ReferencedContainer = "container:Forge.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+      </Testables>
+   </TestAction>
+   <LaunchAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      launchStyle = "0"
+      useCustomWorkingDirectory = "NO"
+      ignoresPersistentStateOnLaunch = "NO"
+      debugDocumentVersioning = "YES"
+      debugServiceExtension = "internal"
+      allowLocationSimulation = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "AA0000000000000000000006"
+            BuildableName = "Forge.app"
+            BlueprintName = "Forge"
+            ReferencedContainer = "container:Forge.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </LaunchAction>
+   <ProfileAction
+      buildConfiguration = "Release"
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      savedToolIdentifier = ""
+      useCustomWorkingDirectory = "NO"
+      debugDocumentVersioning = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "AA0000000000000000000006"
+            BuildableName = "Forge.app"
+            BlueprintName = "Forge"
+            ReferencedContainer = "container:Forge.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </ProfileAction>
+   <AnalyzeAction
+      buildConfiguration = "Debug">
+   </AnalyzeAction>
+   <ArchiveAction
+      buildConfiguration = "Release"
+      revealArchiveInOrganizer = "YES">
+   </ArchiveAction>
+</Scheme>
 >>>>FORGE_FILE>>>> Forge/ForgeTests/AIServiceTests.swift
 import XCTest
 @testable import Forge
