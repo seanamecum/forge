@@ -193,7 +193,12 @@ struct NotificationStep: View {
             Button(asked ? (app.notifications.permissionGranted ? "Notifications enabled ✓" : "Continue without notifications") : "Enable notifications") {
                 guard !asked else { return }
                 Task {
-                    await app.notifications.requestPermission()
+                    let granted = await app.notifications.requestPermission()
+                    if granted {
+                        let dir = app.dailyDirective
+                        await app.notifications.setMorningDirective(
+                            true, headline: dir.headline, priority: dir.priorityAction)
+                    }
                     asked = true
                 }
             }

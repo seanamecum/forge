@@ -1,7 +1,7 @@
 """
 FORGE — Human Performance OS · COMPLETE iOS SOURCE (single file)
 ================================================================================
-This one file contains the entire native SwiftUI iOS app: 81 files
+This one file contains the entire native SwiftUI iOS app: 82 files
 (Swift sources, the Xcode project, entitlements, asset catalog, and unit tests).
 
 It is self-extracting. Anyone with a Mac can rebuild the real project:
@@ -16,8 +16,8 @@ No Python? Every file below is plain text between ">>>>FORGE_FILE>>>> <path>" ma
 copy them out by hand into matching folders.
 
 Stack: SwiftUI · MVVM · @Observable · SwiftData · HealthKit · Swift Charts ·
-Claude Messages API (raw HTTPS, mock fallback). Bundle ID com.forge.performance,
-iOS 17.0, demo athlete "Sean Calloway".
+Claude Messages API (raw HTTPS, mock fallback) · local notifications.
+Bundle ID com.forge.performance, iOS 17.0, demo athlete "Sean Calloway".
 AI: set ANTHROPIC_API_KEY in the Xcode scheme (or a gitignored Secrets.plist) to
 go live; empty = offline mock. Production should proxy through a backend.
 Non-technical partners: open Forge-Demo.html instead -- clickable product demo.
@@ -739,6 +739,38 @@ final class HealthKitServiceTests: XCTestCase {
                                  Double(nutrition.user.waterTargetOz) * 1.5,
                                  "Water logging must clamp at 150% of target")
         XCTAssertLessThanOrEqual(nutrition.hydrationScore, 100)
+    }
+}
+>>>>FORGE_FILE>>>> Forge/ForgeTests/NotificationServiceTests.swift
+import XCTest
+@testable import Forge
+
+final class NotificationServiceTests: XCTestCase {
+
+    func testSeedsWithUnreadItems() {
+        let service = NotificationService()
+        XCTAssertFalse(service.items.isEmpty)
+        XCTAssertGreaterThan(service.unreadCount, 0)
+    }
+
+    func testMarkAllReadClearsUnread() {
+        let service = NotificationService()
+        service.markAllRead()
+        XCTAssertEqual(service.unreadCount, 0)
+        XCTAssertTrue(service.items.allSatisfy(\.read))
+    }
+
+    func testDirectiveTimeDefaultsAreSane() {
+        let service = NotificationService()
+        XCTAssertTrue((0..<24).contains(service.directiveHour))
+        XCTAssertTrue((0..<60).contains(service.directiveMinute))
+    }
+
+    func testPreviewRequiresPermissionAndDoesNotCrash() async {
+        // No permission in the test host → sendPreview is a safe no-op (never throws/crashes).
+        let service = NotificationService()
+        await service.sendPreview()
+        XCTAssertFalse(service.permissionGranted)
     }
 }
 >>>>FORGE_FILE>>>> Forge/ForgeTests/ScoringTests.swift
@@ -5568,7 +5600,12 @@ struct NotificationStep: View {
             Button(asked ? (app.notifications.permissionGranted ? "Notifications enabled ✓" : "Continue without notifications") : "Enable notifications") {
                 guard !asked else { return }
                 Task {
-                    await app.notifications.requestPermission()
+                    let granted = await app.notifications.requestPermission()
+                    if granted {
+                        let dir = app.dailyDirective
+                        await app.notifications.setMorningDirective(
+                            true, headline: dir.headline, priority: dir.priorityAction)
+                    }
                     asked = true
                 }
             }
@@ -5718,9 +5755,6 @@ import SwiftUI
 
 struct ProfileView: View {
     @Environment(AppState.self) private var app
-    @State private var pushEnabled = true
-    @State private var dailyBrief = true
-    @State private var smartNudges = true
     @State private var showDisclaimer = false
 
     var body: some View {
@@ -5820,11 +5854,55 @@ struct ProfileView: View {
 
     private var notificationPrefs: some View {
         Card {
-            VStack(alignment: .leading, spacing: 10) {
-                EyebrowLabel(text: "Notification Preferences")
-                Toggle(isOn: $pushEnabled) { prefLabel("Push notifications") }.tint(Theme.gold)
-                Toggle(isOn: $dailyBrief) { prefLabel("Morning daily brief") }.tint(Theme.gold)
-                Toggle(isOn: $smartNudges) { prefLabel("Smart nudges (protein, PT, streaks)") }.tint(Theme.gold)
+            VStack(alignment: .leading, spacing: 12) {
+                EyebrowLabel(text: "Notifications")
+
+                Toggle(isOn: Binding(
+                    get: { app.notifications.morningDirectiveOn },
+                    set: { on in
+                        let dir = app.dailyDirective
+                        Task { await app.notifications.setMorningDirective(on, headline: dir.headline, priority: dir.priorityAction) }
+                    }
+                )) { prefLabel("Morning directive") }
+                .tint(Theme.gold)
+
+                if app.notifications.morningDirectiveOn {
+                    DatePicker(
+                        selection: Binding(
+                            get: {
+                                var c = DateComponents()
+                                c.hour = app.notifications.directiveHour
+                                c.minute = app.notifications.directiveMinute
+                                return Calendar.current.date(from: c) ?? Date()
+                            },
+                            set: { newDate in
+                                let comps = Calendar.current.dateComponents([.hour, .minute], from: newDate)
+                                app.notifications.directiveHour = comps.hour ?? 7
+                                app.notifications.directiveMinute = comps.minute ?? 0
+                                let dir = app.dailyDirective
+                                Task { await app.notifications.rescheduleMorningDirective(headline: dir.headline, priority: dir.priorityAction) }
+                            }),
+                        displayedComponents: .hourAndMinute
+                    ) {
+                        prefLabel("Delivery time")
+                    }
+                    .datePickerStyle(.compact)
+                    .tint(Theme.gold)
+                }
+
+                Toggle(isOn: Binding(
+                    get: { app.notifications.smartNudgesOn },
+                    set: { on in
+                        Task { await app.notifications.setSmartNudges(on, proteinRemaining: app.nutrition.proteinRemaining) }
+                    }
+                )) { prefLabel("Smart nudges (protein · PT)") }
+                .tint(Theme.gold)
+
+                Button("Send a test notification") {
+                    Task { await app.notifications.sendPreview() }
+                }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.gold)
             }
         }
     }
@@ -9428,28 +9506,148 @@ import Foundation
 import Observation
 import UserNotifications
 
+/// Local notifications — schedules the morning directive and smart nudges so the
+/// daily loop reaches out instead of waiting. All on-device (UNUserNotificationCenter),
+/// no backend. Preferences persist across launches.
 @Observable
 final class NotificationService {
     var items: [ForgeNotification] = MockData.notifications
     var permissionGranted = false
 
+    // Preferences (persisted)
+    var morningDirectiveOn: Bool {
+        didSet { UserDefaults.standard.set(morningDirectiveOn, forKey: Keys.morning) }
+    }
+    var smartNudgesOn: Bool {
+        didSet { UserDefaults.standard.set(smartNudgesOn, forKey: Keys.nudges) }
+    }
+    var directiveHour: Int {
+        didSet { UserDefaults.standard.set(directiveHour, forKey: Keys.hour) }
+    }
+    var directiveMinute: Int {
+        didSet { UserDefaults.standard.set(directiveMinute, forKey: Keys.minute) }
+    }
+
+    private enum Keys {
+        static let morning = "forge.notif.morning"
+        static let nudges = "forge.notif.nudges"
+        static let hour = "forge.notif.hour"
+        static let minute = "forge.notif.minute"
+    }
+    private enum ID {
+        static let directive = "forge.morningDirective"
+        static let protein = "forge.nudge.protein"
+        static let pt = "forge.nudge.pt"
+    }
+
+    init() {
+        let d = UserDefaults.standard
+        morningDirectiveOn = d.object(forKey: Keys.morning) as? Bool ?? false
+        smartNudgesOn = d.object(forKey: Keys.nudges) as? Bool ?? false
+        directiveHour = d.object(forKey: Keys.hour) as? Int ?? 7
+        directiveMinute = d.object(forKey: Keys.minute) as? Int ?? 0
+    }
+
     var unreadCount: Int { items.filter { !$0.read }.count }
 
     func markAllRead() {
-        items = items.map { item in
-            var copy = item
-            copy.read = true
-            return copy
-        }
+        items = items.map { var c = $0; c.read = true; return c }
     }
 
-    func requestPermission() async {
+    // MARK: - Permission
+
+    @discardableResult
+    func requestPermission() async -> Bool {
         let center = UNUserNotificationCenter.current()
         do {
             permissionGranted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
         } catch {
             permissionGranted = false
         }
+        return permissionGranted
+    }
+
+    private func ensurePermission() async -> Bool {
+        if permissionGranted { return true }
+        return await requestPermission()
+    }
+
+    // MARK: - Morning directive (daily, repeating)
+
+    func setMorningDirective(_ on: Bool, headline: String, priority: String) async {
+        morningDirectiveOn = on
+        guard on else {
+            cancel(ID.directive)
+            return
+        }
+        guard await ensurePermission() else { morningDirectiveOn = false; return }
+        let content = UNMutableNotificationContent()
+        content.title = "Today's Directive"
+        content.body = "\(headline) \(priority)"
+        content.sound = .default
+        var when = DateComponents()
+        when.hour = directiveHour
+        when.minute = directiveMinute
+        let trigger = UNCalendarNotificationTrigger(dateMatching: when, repeats: true)
+        await add(ID.directive, content: content, trigger: trigger)
+    }
+
+    /// Re-schedule after a time change while the toggle is on.
+    func rescheduleMorningDirective(headline: String, priority: String) async {
+        guard morningDirectiveOn else { return }
+        await setMorningDirective(true, headline: headline, priority: priority)
+    }
+
+    // MARK: - Smart nudges (daily, repeating)
+
+    func setSmartNudges(_ on: Bool, proteinRemaining: Int) async {
+        smartNudgesOn = on
+        guard on else {
+            cancel(ID.protein); cancel(ID.pt)
+            return
+        }
+        guard await ensurePermission() else { smartNudgesOn = false; return }
+
+        let protein = UNMutableNotificationContent()
+        protein.title = "Protein check"
+        protein.body = proteinRemaining > 0
+            ? "\(proteinRemaining) g to go — make dinner protein-first."
+            : "On target. Lock it in with a casein bowl before bed."
+        protein.sound = .default
+        await add(ID.protein, content: protein, trigger: dailyAt(hour: 20, minute: 0))
+
+        let pt = UNMutableNotificationContent()
+        pt.title = "PT session due"
+        pt.body = "Knee rehab — Spanish squats, TKEs, calf raises. ~12 min."
+        pt.sound = .default
+        await add(ID.pt, content: pt, trigger: dailyAt(hour: 17, minute: 0))
+    }
+
+    /// Fire a one-off in a few seconds so the user can see a live notification.
+    func sendPreview() async {
+        guard await ensurePermission() else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Forge"
+        content.body = "Notifications are on. Your morning directive will land here."
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 4, repeats: false)
+        await add("forge.preview", content: content, trigger: trigger)
+    }
+
+    // MARK: - Helpers
+
+    private func dailyAt(hour: Int, minute: Int) -> UNCalendarNotificationTrigger {
+        var c = DateComponents(); c.hour = hour; c.minute = minute
+        return UNCalendarNotificationTrigger(dateMatching: c, repeats: true)
+    }
+
+    private func add(_ id: String, content: UNMutableNotificationContent, trigger: UNNotificationTrigger) async {
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+
+    private func cancel(_ id: String) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
     }
 }
 >>>>FORGE_FILE>>>> Forge/Forge/Services/NutritionService.swift

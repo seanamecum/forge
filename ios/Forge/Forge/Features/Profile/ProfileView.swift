@@ -2,9 +2,6 @@ import SwiftUI
 
 struct ProfileView: View {
     @Environment(AppState.self) private var app
-    @State private var pushEnabled = true
-    @State private var dailyBrief = true
-    @State private var smartNudges = true
     @State private var showDisclaimer = false
 
     var body: some View {
@@ -104,11 +101,55 @@ struct ProfileView: View {
 
     private var notificationPrefs: some View {
         Card {
-            VStack(alignment: .leading, spacing: 10) {
-                EyebrowLabel(text: "Notification Preferences")
-                Toggle(isOn: $pushEnabled) { prefLabel("Push notifications") }.tint(Theme.gold)
-                Toggle(isOn: $dailyBrief) { prefLabel("Morning daily brief") }.tint(Theme.gold)
-                Toggle(isOn: $smartNudges) { prefLabel("Smart nudges (protein, PT, streaks)") }.tint(Theme.gold)
+            VStack(alignment: .leading, spacing: 12) {
+                EyebrowLabel(text: "Notifications")
+
+                Toggle(isOn: Binding(
+                    get: { app.notifications.morningDirectiveOn },
+                    set: { on in
+                        let dir = app.dailyDirective
+                        Task { await app.notifications.setMorningDirective(on, headline: dir.headline, priority: dir.priorityAction) }
+                    }
+                )) { prefLabel("Morning directive") }
+                .tint(Theme.gold)
+
+                if app.notifications.morningDirectiveOn {
+                    DatePicker(
+                        selection: Binding(
+                            get: {
+                                var c = DateComponents()
+                                c.hour = app.notifications.directiveHour
+                                c.minute = app.notifications.directiveMinute
+                                return Calendar.current.date(from: c) ?? Date()
+                            },
+                            set: { newDate in
+                                let comps = Calendar.current.dateComponents([.hour, .minute], from: newDate)
+                                app.notifications.directiveHour = comps.hour ?? 7
+                                app.notifications.directiveMinute = comps.minute ?? 0
+                                let dir = app.dailyDirective
+                                Task { await app.notifications.rescheduleMorningDirective(headline: dir.headline, priority: dir.priorityAction) }
+                            }),
+                        displayedComponents: .hourAndMinute
+                    ) {
+                        prefLabel("Delivery time")
+                    }
+                    .datePickerStyle(.compact)
+                    .tint(Theme.gold)
+                }
+
+                Toggle(isOn: Binding(
+                    get: { app.notifications.smartNudgesOn },
+                    set: { on in
+                        Task { await app.notifications.setSmartNudges(on, proteinRemaining: app.nutrition.proteinRemaining) }
+                    }
+                )) { prefLabel("Smart nudges (protein · PT)") }
+                .tint(Theme.gold)
+
+                Button("Send a test notification") {
+                    Task { await app.notifications.sendPreview() }
+                }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.gold)
             }
         }
     }
