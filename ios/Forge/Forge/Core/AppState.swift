@@ -38,6 +38,9 @@ final class AppState {
     var selectedTab: MainTab = .home
     var user: UserProfile = MockData.sean
 
+    /// Today's morning check-in, if completed (in-memory; SwiftData holds history).
+    var checkIn: CheckInSnapshot?
+
     // Services — mock-backed now, swap for networked implementations later.
     let auth = AuthService()
     let healthKit = HealthKitService()
@@ -126,7 +129,8 @@ final class AppState {
             injuryRiskBand: injuries.risk.band,
             activeInjuryName: injury?.type.rawValue,
             activeInjuryPain: injury?.painToday,
-            workoutName: workouts.todaysPlan.name
+            workoutName: workouts.todaysPlan.name,
+            soreness: checkIn?.soreness
         )
     }
 }

@@ -9,6 +9,7 @@ struct DashboardView: View {
         NavigationStack {
             ScreenScaffold {
                 header
+                MorningCheckInCard()
                 TodaysDirectiveCard()
                 ForgeScoreHero()
                 metricRow

@@ -7,13 +7,14 @@ final class DirectiveTests: XCTestCase {
                       protein: Int = 0, hydration: Int = 100,
                       riskPct: Int = 10, riskBand: String = "Low",
                       injuryName: String? = nil, pain: Int? = nil,
-                      workout: String = "Lower — Posterior Chain") -> DailyDirective {
+                      workout: String = "Lower — Posterior Chain",
+                      soreness: Int? = nil) -> DailyDirective {
         DirectiveEngine.make(
             recovery: recovery, sleepDebtHours: sleepDebt,
             proteinRemaining: protein, hydrationPct: hydration,
             injuryRiskPercent: riskPct, injuryRiskBand: riskBand,
             activeInjuryName: injuryName, activeInjuryPain: pain,
-            workoutName: workout)
+            workoutName: workout, soreness: soreness)
     }
 
     func testHighRecoveryPushesHard() {
@@ -56,6 +57,20 @@ final class DirectiveTests: XCTestCase {
                      riskPct: 25, riskBand: "Moderate", injuryName: "Knee")
         XCTAssertTrue(d.rationale.hasSuffix("."))
         XCTAssertTrue(d.rationale.contains(", and "))
+    }
+
+    func testHighSorenessOverridesGoodRecovery() {
+        // Even at high recovery, logging 8/10 soreness flips the directive to recovery.
+        let d = make(recovery: 85, soreness: 8)
+        XCTAssertEqual(d.headline, "Pull back and recover today.")
+        XCTAssertEqual(d.tone, .ruby)
+        XCTAssertTrue(d.priorityAction.lowercased().contains("mobility"))
+        XCTAssertTrue(d.rationale.contains("soreness 8/10"))
+    }
+
+    func testLowSorenessDoesNotOverride() {
+        let d = make(recovery: 85, soreness: 2)
+        XCTAssertEqual(d.headline, "Push hard today.")
     }
 
     func testScoreNarrativeNamesWeakestDriver() {

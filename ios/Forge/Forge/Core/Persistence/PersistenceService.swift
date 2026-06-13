@@ -7,7 +7,8 @@ enum PersistenceService {
 
     static let allModels: [any PersistentModel.Type] = [
         UserRecord.self, GoalRecord.self, WorkoutRecord.self,
-        NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self, ScoreRecord.self,
+        NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
+        ScoreRecord.self, CheckInRecord.self,
     ]
 
     /// Upsert today's Forge Score snapshot (one record per calendar day).

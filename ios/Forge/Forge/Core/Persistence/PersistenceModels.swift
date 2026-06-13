@@ -132,3 +132,20 @@ final class ScoreRecord {
         self.score = score
     }
 }
+
+@Model
+final class CheckInRecord {
+    var date: Date
+    var sleepQuality: Int   // 1–5
+    var soreness: Int       // 0–10
+    var energy: Int         // 1–5
+    var stress: Int         // 1–5
+
+    init(date: Date, sleepQuality: Int, soreness: Int, energy: Int, stress: Int) {
+        self.date = date
+        self.sleepQuality = sleepQuality
+        self.soreness = soreness
+        self.energy = energy
+        self.stress = stress
+    }
+}

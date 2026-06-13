@@ -1,8 +1,21 @@
 import Foundation
 
-/// The brain. Rule-based for the prototype — swap `reply(to:)` internals for a
-/// Claude API call later; the message/cards/steps shape is already LLM-friendly.
+/// The brain. Two paths behind one async entry point:
+///   • Live  — calls the Claude Messages API (raw HTTPS; Swift has no official SDK)
+///             with a system prompt built from the athlete's real data.
+///   • Mock  — the rule-based engine below; used when no API key is configured,
+///             and as the offline-safe fallback whenever a live call fails.
+/// The app behaves identically with or without a key — it never breaks offline.
 enum AIService {
+
+    static let quickPrompts = [
+        "What should I train today?", "Should I train hard?", "Should I deload?",
+        "What should I eat today?", "Why is my recovery low?", "How do I fix my knee pain?",
+        "What supplements am I missing?", "How do I hit 225 bench?",
+        "What is holding me back?", "What will I look like in 12 weeks?",
+    ]
+
+    // MARK: - Daily brief (dashboard hero)
 
     static func dailyBrief(forgeScore: Int) -> String {
         let d = MockData.today
@@ -10,10 +23,124 @@ enum AIService {
         "Knee stays in rehab loading (no plyo). Close the 72 g protein gap by 9 PM, and get lights-out by 22:30 — sleep is your one lagging input."
     }
 
-    static func reply(to question: String) -> CoachMessage {
+    // MARK: - Unified entry point
+
+    /// Returns a coach reply. Tries the live model when configured; otherwise (or on
+    /// any error) returns the rich mock so the chat always works.
+    static func reply(to question: String,
+                      history: [CoachMessage] = [],
+                      checkInNote: String? = nil) async -> CoachMessage {
+        guard ForgeConfig.aiMode == .live else { return mockReply(to: question) }
+        do {
+            let text = try await callClaude(question: question, history: history, checkInNote: checkInNote)
+            return CoachMessage(role: .coach, text: text, suggestions: Array(quickPrompts.prefix(4)))
+        } catch {
+            return mockReply(to: question)
+        }
+    }
+
+    // MARK: - Live: Claude Messages API (raw HTTPS)
+
+    private enum AIError: Error { case badStatus, emptyBody }
+
+    private struct APIMessage: Codable { let role: String; let content: String }
+    private struct APIRequest: Codable {
+        let model: String
+        let max_tokens: Int
+        let system: String
+        let messages: [APIMessage]
+    }
+    private struct APIResponse: Codable {
+        struct Block: Codable { let type: String; let text: String? }
+        let content: [Block]
+    }
+
+    private static func callClaude(question: String,
+                                   history: [CoachMessage],
+                                   checkInNote: String?) async throws -> String {
+        var request = URLRequest(url: URL(string: ForgeConfig.messagesEndpoint)!)
+        request.httpMethod = "POST"
+        request.setValue(ForgeConfig.anthropicAPIKey, forHTTPHeaderField: "x-api-key")
+        request.setValue(ForgeConfig.anthropicVersion, forHTTPHeaderField: "anthropic-version")
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.timeoutInterval = 30
+
+        // Build the message list. The API requires the first message to be `user`,
+        // so drop the leading coach/seed turns; consecutive same-role turns are fine.
+        var messages: [APIMessage] = []
+        for m in history.suffix(12) {
+            let role = m.role == .user ? "user" : "assistant"
+            if messages.isEmpty && role != "user" { continue }
+            messages.append(APIMessage(role: role, content: m.text))
+        }
+        messages.append(APIMessage(role: "user", content: question))
+
+        // Opus 4.8: no temperature/top_p (removed); thinking omitted for a snappy chat.
+        let body = APIRequest(model: ForgeConfig.coachModel,
+                              max_tokens: ForgeConfig.coachMaxTokens,
+                              system: systemPrompt(checkInNote: checkInNote),
+                              messages: messages)
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw AIError.badStatus
+        }
+        let decoded = try JSONDecoder().decode(APIResponse.self, from: data)
+        let text = decoded.content.compactMap(\.text).joined()
+        guard !text.isEmpty else { throw AIError.emptyBody }
+        return text
+    }
+
+    /// The system prompt — Forge's coaching persona plus the athlete's live data.
+    /// Exposed `internal` so tests can assert it carries the right signals.
+    static func systemPrompt(checkInNote: String?) -> String {
+        let u = MockData.sean
+        let d = MockData.today
+        let knee = MockData.knee
+        let defs = MockData.deficiencies.prefix(3).map { "\($0.nutrient) \($0.current)/\($0.target) (\($0.daysLow)d low)" }.joined(separator: ", ")
+        let vitD = MockData.bloodwork.first { $0.name.contains("Vitamin D") }
+        let benchForecast = MockData.forecasts.first { $0.metric == "Bench Press" }
+
+        var ctx = """
+        You are Forge — an elite, premium AI performance coach inside a human-performance app. \
+        You are direct, specific, and motivating; never generic. Reference the athlete's actual numbers. \
+        Give one clear directive plus the reasoning, in 2–4 short sentences. Avoid bullet lists unless asked.
+
+        ATHLETE
+        - \(u.name), \(u.age), \(u.sport). Goals: \(u.goals.map(\.rawValue).joined(separator: ", ")). Level: \(u.fitnessLevel.rawValue).
+        - Lifts: bench 180, squat 230, deadlift 280. \(u.streakDays)-day streak.
+
+        TODAY
+        - Recovery \(d.recovery)/100, readiness \(d.readiness.rawValue), HRV \(d.hrv)ms (baseline \(d.hrvBaseline)), resting HR \(d.restingHR).
+        - Sleep \(String(format: "%.1f", d.sleep.hours))h last night; sleep debt \(String(format: "%.1f", d.sleepDebtHours))h this week.
+        - Strain yesterday \(String(format: "%.1f", d.strainYesterday))/21.
+
+        FUEL
+        - Targets: \(u.calorieTarget) kcal / \(u.proteinTarget)g protein / \(u.waterTargetOz)oz water.
+        - Deficiencies (7-day): \(defs).\(vitD.map { " Bloodwork Vitamin D \(Int($0.value)) ng/mL (low)." } ?? "")
+
+        INJURY
+        - \(knee.name): day \(knee.daysOld), \(knee.phase.rawValue), pain \(knee.painToday)/10. Avoid plyometrics and skating sprints; heavy-slow-resistance and isometrics only.
+
+        FORECAST
+        - \(benchForecast.map { "\($0.metric): \($0.current) → \($0.projected) by \($0.eta) if consistent." } ?? "Trending up if recovery holds.")
+
+        SAFETY
+        - You provide educational guidance, not medical advice. For severe pain, swelling, head injury, chest pain, or neurological symptoms, tell the athlete to see a physician or physical therapist.
+        """
+        if let note = checkInNote, !note.isEmpty {
+            ctx += "\n\nMORNING CHECK-IN\n- \(note) Weigh this heavily — it's today's freshest signal."
+        }
+        return ctx
+    }
+
+    // MARK: - Mock engine (offline-safe fallback)
+
+    static func mockReply(to question: String) -> CoachMessage {
         let q = question.lowercased()
 
-        if q.contains("do today") || q.contains("plan my day") {
+        if q.contains("do today") || q.contains("plan my day") || q.contains("train today") {
             return CoachMessage(role: .coach,
                 text: "Three calls today, in order. (1) Upper push session as written — recovery is 78, so the progression to 185 on bench is on. (2) Knee rehab block after lifting: Spanish squats and TKEs, ~12 minutes. (3) You're 72 g short on protein pace — make dinner protein-first and you'll land on target.",
                 steps: ["Recovery 78 → green light for upper intensity",
@@ -25,7 +152,7 @@ enum AIService {
                         CoachCard(label: "Fuel", value: "+72 g protein", tone: .gold)],
                 suggestions: ["Should I train hard?", "What should I eat?", "How's my knee tracking?"])
         }
-        if q.contains("tired") || q.contains("fatigue") || q.contains("drained") {
+        if q.contains("tired") || q.contains("fatigue") || q.contains("drained") || q.contains("recovery low") {
             return CoachMessage(role: .coach,
                 text: "Stacked, in order of weight: you're carrying 3.1 hours of sleep debt this week, HRV is 6% under baseline (58 vs 62), and magnesium has run at 52% of target for 6 days — low Mg reliably degrades both of the first two. Fix tonight: Mg-glycinate 400 mg, lights out 22:30, and tomorrow will read differently.",
                 steps: ["Sleep: 5 of 7 nights under 8 h",
@@ -34,7 +161,7 @@ enum AIService {
                         "Strain yesterday 14.2 — moderate, not the culprit"],
                 cards: [CoachCard(label: "Tonight", value: "Mg 400 mg + 22:30", tone: .gold),
                         CoachCard(label: "Tomorrow", value: "Re-check HRV", tone: .green)],
-                suggestions: ["What supplement am I missing?", "Should I take a rest day?"])
+                suggestions: ["What supplement am I missing?", "Should I deload?"])
         }
         if q.contains("train hard") || q.contains("push today") || q.contains("go heavy") {
             return CoachMessage(role: .coach,
@@ -48,6 +175,17 @@ enum AIService {
                         CoachCard(label: "Avoid", value: "Jumps · sprints", tone: .ruby)],
                 suggestions: ["Generate today's workout", "Why is my bench not increasing?"])
         }
+        if q.contains("deload") {
+            return CoachMessage(role: .coach,
+                text: "Not a full deload — your acute:chronic ratio is 1.24, elevated but not red. Hold volume flat this week and cap top sets at RPE 8.5 while the knee finishes phase 2. If HRV is still under baseline next Sunday, then we pull volume 30% for 5 days. Right now: steady, not stop.",
+                steps: ["ACR 1.24 — elevated, not critical",
+                        "HRV 58 vs 62 baseline",
+                        "Knee phase 2/4 — protect, don't detrain",
+                        "Re-check Sunday"],
+                cards: [CoachCard(label: "This week", value: "Hold volume flat", tone: .gold),
+                        CoachCard(label: "Cap", value: "RPE 8.5", tone: .amber)],
+                suggestions: ["Why is my recovery low?", "What should I train today?"])
+        }
         if q.contains("eat") || q.contains("food") || q.contains("meal") || q.contains("nutrition") {
             return CoachMessage(role: .coach,
                 text: "You have 1,050 kcal and 72 g protein left against the lean-bulk targets. Tonight: 8 oz chicken or steak, 1.5 cups rice, vegetables, plus the casein bowl before bed — that's ~1,000 kcal and 75 g protein, done. You're also at 62% hydration; put electrolytes in the next bottle since you skate tomorrow.",
@@ -58,19 +196,19 @@ enum AIService {
                 cards: [CoachCard(label: "Remaining", value: "1,050 kcal", tone: .gold),
                         CoachCard(label: "Protein left", value: "72 g", tone: .amber),
                         CoachCard(label: "Hydration", value: "62%", tone: .amber)],
-                suggestions: ["What supplement am I missing?", "Build me a dinner"])
+                suggestions: ["What supplements am I missing?", "What is holding me back?"])
         }
-        if q.contains("bench") {
+        if q.contains("bench") || q.contains("225") {
             return CoachMessage(role: .coach,
-                text: "Your bench has stalled at 180 for three weeks, and the data points at recovery, not programming. Top sets have run RPE 9+ four sessions straight, and you average 6.9 h of sleep on bench days. At your training age that combination flatlines progress. The fix: two weeks at RPE 8 cap (175×5), add a paused bench back-off set, sleep 8 h the night before pressing. Then we test 185 — the forecast says 225 lands in November if we protect the slope.",
+                text: "Your bench has stalled at 180 for three weeks, and the data points at recovery, not programming. Top sets have run RPE 9+ four sessions straight, and you average 6.9 h of sleep on bench days. The fix: two weeks at RPE 8 cap (175×5), add a paused bench back-off set, sleep 8 h the night before pressing. Then we test 185 — the forecast says 225 lands by November 6 if we protect the slope.",
                 steps: ["Top-set RPE trend: 9, 9, 9.5, 9",
                         "Sleep on bench days: 6.9 h avg vs 7.5 overall",
                         "Chest volume 13 sets/wk — already optimal",
                         "Est. 1RM 207 — strength is there, expression isn't"],
                 cards: [CoachCard(label: "Next 2 weeks", value: "175×5 @ RPE 8", tone: .gold),
                         CoachCard(label: "Add", value: "Paused bench 3×5", tone: .green),
-                        CoachCard(label: "Test day", value: "185×5 · June 24", tone: .green)],
-                suggestions: ["Show my PR history", "Should I train hard?"])
+                        CoachCard(label: "225 ETA", value: "Nov 6", tone: .green)],
+                suggestions: ["Should I train hard?", "What is holding me back?"])
         }
         if q.contains("knee") || q.contains("injury") || q.contains("pain") || q.contains("recover from") {
             return CoachMessage(role: .coach,
@@ -96,10 +234,33 @@ enum AIService {
                         CoachCard(label: "Keep", value: "Creatine · whey · D3", tone: .green)],
                 suggestions: ["Why am I tired?", "Show my deficiencies"])
         }
+        if q.contains("holding me back") || q.contains("weakness") || q.contains("what should i change") {
+            return CoachMessage(role: .coach,
+                text: "One thing, clearly: sleep. You're at 6.9 h on training days against a 8.5 h ceiling for a 21-year-old athlete, and it's the common cause behind your dipped HRV, the bench stall, and slower knee recovery. Fix the sleep and three problems improve at once. Everything else — training, nutrition, the rehab — is already dialed.",
+                steps: ["Sleep debt 3.1 h — the root cause",
+                        "Knock-on: HRV −6%, bench stall, slower rehab",
+                        "Training + nutrition adherence already high",
+                        "Highest-leverage single change available"],
+                cards: [CoachCard(label: "Fix", value: "8 h × 6 nights", tone: .gold),
+                        CoachCard(label: "Unlocks", value: "HRV · bench · knee", tone: .green)],
+                suggestions: ["Why is my recovery low?", "What supplements am I missing?"])
+        }
+        if q.contains("12 weeks") || q.contains("look like") || q.contains("forecast") || q.contains("future") {
+            return CoachMessage(role: .coach,
+                text: "Staying consistent: 207 lb at ~15% body fat, bench 225 by November 6, squat back on its slope once the knee clears, and recovery averaging 83 if you close the sleep gap. The trajectory is good — the only variable that bends the whole curve is sleep. Hold the line for 12 weeks and you're a visibly different athlete.",
+                steps: ["Weight 200 → 207 lb (+0.6/wk)",
+                        "Bench 180 → 225 by Nov 6",
+                        "Body fat ~15% (lean-bulk drift)",
+                        "Recovery avg 75 → 83 with sleep fix"],
+                cards: [CoachCard(label: "Weight", value: "207 lb", tone: .gold),
+                        CoachCard(label: "Bench", value: "225 · Nov 6", tone: .green),
+                        CoachCard(label: "Recovery", value: "→ 83", tone: .green)],
+                suggestions: ["What is holding me back?", "How do I hit 225 bench?"])
+        }
         return CoachMessage(role: .coach,
             text: "I'm reading your full picture — training, recovery, sleep, fuel, the knee, your goals. Ask me anything about today, fatigue, the bench plateau, your knee, or what's missing in your stack.",
-            suggestions: ["What should I do today?", "Why am I tired?", "Should I train hard?",
-                          "Why is my bench not increasing?", "How do I recover from knee pain?",
-                          "What supplement am I missing?"])
+            suggestions: ["What should I train today?", "Why is my recovery low?", "Should I deload?",
+                          "How do I hit 225 bench?", "How do I fix my knee pain?",
+                          "What supplements am I missing?"])
     }
 }

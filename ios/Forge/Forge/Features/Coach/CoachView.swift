@@ -32,7 +32,10 @@ struct CoachView: View {
             }
             .background(Theme.bg)
             .navigationBarHidden(true)
-            .onAppear { vm.seedIfNeeded(userName: app.user.name) }
+            .onAppear {
+                vm.checkInNote = app.checkIn?.coachNote
+                vm.seedIfNeeded(userName: app.user.name)
+            }
         }
     }
 

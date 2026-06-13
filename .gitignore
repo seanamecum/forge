@@ -8,3 +8,8 @@ out
 .DS_Store
 .vercel
 next-env.d.ts
+
+# iOS — never commit a real API key
+ios/**/Secrets.plist
+**/xcuserdata/
+*.xcuserstate

@@ -14,7 +14,8 @@ struct ForgeApp: App {
         }
         .modelContainer(for: [
             UserRecord.self, GoalRecord.self, WorkoutRecord.self,
-            NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self, ScoreRecord.self,
+            NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
+            ScoreRecord.self, CheckInRecord.self,
         ])
     }
 }

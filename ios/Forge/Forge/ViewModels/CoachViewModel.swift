@@ -1,22 +1,23 @@
 import Foundation
 import Observation
 
-/// Chat state + orchestration for the AI Coach. AIService stays a pure
-/// reply engine (mock now, Claude API later); this owns the conversation.
+/// Chat state + orchestration for the AI Coach. AIService owns the live/mock
+/// decision; this owns the conversation and passes today's check-in as context.
 @Observable
 final class CoachViewModel {
     var messages: [CoachMessage] = []
     var isThinking = false
+    /// Set by the view from today's morning check-in, if completed.
+    var checkInNote: String?
 
     func seedIfNeeded(userName: String) {
         guard messages.isEmpty else { return }
         let first = userName.split(separator: " ").first.map(String.init) ?? userName
+        let mode = ForgeConfig.aiMode == .live ? "" : " (demo coach — add an API key for live AI)"
         messages.append(CoachMessage(
             role: .coach,
-            text: "Morning, \(first). I'm reading everything — last night's sleep, your HRV, the knee, yesterday's bench session, today's protein pace. Ask me anything.",
-            suggestions: ["What should I do today?", "Why am I tired?", "Should I train hard?",
-                          "Why is my bench not increasing?", "How do I recover from knee pain?",
-                          "What supplement am I missing?"]
+            text: "Morning, \(first). I'm reading everything — last night's sleep, your HRV, the knee, yesterday's bench session, today's protein pace\(mode). Ask me anything.",
+            suggestions: Array(AIService.quickPrompts.prefix(6))
         ))
     }
 
@@ -24,10 +25,11 @@ final class CoachViewModel {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, !isThinking else { return }
         messages.append(CoachMessage(role: .user, text: trimmed))
+        let history = messages
         isThinking = true
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(800))
-            messages.append(AIService.reply(to: trimmed))
+            let reply = await AIService.reply(to: trimmed, history: history, checkInNote: checkInNote)
+            messages.append(reply)
             isThinking = false
         }
     }
