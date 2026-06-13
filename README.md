@@ -14,6 +14,11 @@ data into one clear directive every morning.
 > **Shareable demo:** [`Forge-Demo.html`](Forge-Demo.html) is the entire product in one
 > self-contained file — email it to anyone, they double-click and explore all 21 screens
 > in any browser. No install, no server, works on phones.
+>
+> **Full iOS source in one file:** [`Forge-iOS-Source-Bundle.txt`](Forge-iOS-Source-Bundle.txt)
+> packs all 73 iOS files into a single self-extracting text file. A developer runs
+> `python3 Forge-iOS-Source-Bundle.txt` to rebuild the real Xcode project, then opens it
+> in Xcode 16+.
 
 ## Stack
 
