@@ -47,6 +47,11 @@ struct ForgeScoreHero: View {
 
                 if showBreakdown {
                     VStack(spacing: 8) {
+                        Text(app.forgeScoreNarrative)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.creamDim)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.bottom, 2)
                         ForEach(app.forgeScoreBreakdown) { c in
                             HStack(spacing: 10) {
                                 Text(c.label)

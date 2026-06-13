@@ -98,6 +98,37 @@ final class AppState {
             ScoreComponent(label: "Injury Status", value: injuries.injuryStatusScore, weight: 0.10),
         ]
     }
+
+    /// Plain-language explanation of what's raising and lowering the score today.
+    var forgeScoreNarrative: String {
+        let sorted = forgeScoreBreakdown.sorted { $0.value < $1.value }
+        guard let lowest = sorted.first, let highest = sorted.last else { return "" }
+        let second = sorted.dropFirst().first
+        let drags: String
+        if let second, second.value < 75 {
+            drags = "\(lowest.label) (\(lowest.value)) and \(second.label) (\(second.value))"
+        } else {
+            drags = "\(lowest.label) (\(lowest.value))"
+        }
+        return "Held back by \(drags). Lifted by \(highest.label) (\(highest.value))."
+    }
+
+    /// Today's single most important instruction — synthesized by DirectiveEngine.
+    var dailyDirective: DailyDirective {
+        let d = recovery.today
+        let injury = injuries.active.first
+        return DirectiveEngine.make(
+            recovery: d.recovery,
+            sleepDebtHours: d.sleepDebtHours,
+            proteinRemaining: nutrition.proteinRemaining,
+            hydrationPct: nutrition.hydrationPct,
+            injuryRiskPercent: injuries.risk.percent,
+            injuryRiskBand: injuries.risk.band,
+            activeInjuryName: injury?.type.rawValue,
+            activeInjuryPain: injury?.painToday,
+            workoutName: workouts.todaysPlan.name
+        )
+    }
 }
 
 struct ScoreComponent: Identifiable {
