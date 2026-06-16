@@ -1,8 +1,10 @@
 name: CI
 
-# Builds and tests both apps on every push / PR. The iOS job is the one that
-# actually compiles the Swift the dev machine couldn't — treat a green "ios"
-# check as the source of truth for "the iOS app builds and its tests pass".
+# Builds and tests both apps. The iOS "build-for-testing" step compiles the
+# whole app + test target against a GENERIC simulator destination — no simulator
+# boot, so it can't hang on provisioning and gives a fast, reliable compile
+# answer. Tests then run on a booted simulator (capped). Everything is
+# timeout-bounded so a stuck runner fails in minutes, not hours.
 on:
   push:
   pull_request:
@@ -12,27 +14,40 @@ jobs:
   ios:
     name: iOS · build + test
     runs-on: macos-15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
       - name: Show toolchain
         run: xcodebuild -version
 
-      - name: Build & test (iPhone simulator)
+      - name: Compile (build-for-testing, generic destination)
+        timeout-minutes: 25
         working-directory: ios/Forge
         run: |
           set -o pipefail
-          xcodebuild \
+          xcodebuild build-for-testing \
+            -project Forge.xcodeproj \
+            -scheme Forge \
+            -destination 'generic/platform=iOS Simulator' \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Test (booted simulator)
+        timeout-minutes: 12
+        working-directory: ios/Forge
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
             -project Forge.xcodeproj \
             -scheme Forge \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
-            -resultBundlePath TestResults \
-            clean build test \
             CODE_SIGNING_ALLOWED=NO
 
   web:
     name: Web · build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
