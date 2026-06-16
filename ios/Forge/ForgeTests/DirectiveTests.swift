@@ -81,4 +81,53 @@ final class DirectiveTests: XCTestCase {
         XCTAssertTrue(narrative.hasPrefix("Held back by"))
         XCTAssertTrue(narrative.contains("Lifted by"))
     }
+
+    // MARK: - Prescription (the structured daily plan)
+
+    func testDirectiveBuildsFullPrescription() {
+        let d = DirectiveEngine.make(
+            recovery: 78, sleepDebtHours: 3.1, proteinRemaining: 72, hydrationPct: 61,
+            injuryRiskPercent: 22, injuryRiskBand: "Moderate",
+            activeInjuryName: "Knee", activeInjuryPain: 2,
+            workoutName: "Upper Push + Knee-Safe Lower", soreness: nil,
+            calorieTarget: 3200, proteinTarget: 200, mobilityMinutes: 20,
+            keySupplement: "Magnesium 400 mg", sleepTargetHours: 8.25)
+
+        let kinds = d.actions.map(\.kind)
+        XCTAssertTrue(kinds.contains(.train))
+        XCTAssertTrue(kinds.contains(.fuel))
+        XCTAssertTrue(kinds.contains(.protein))
+        XCTAssertTrue(kinds.contains(.mobility))
+        XCTAssertTrue(kinds.contains(.supplement))
+        XCTAssertTrue(kinds.contains(.sleep))
+
+        XCTAssertEqual(d.actions.first { $0.kind == .fuel }?.value, "3,200 kcal")
+        XCTAssertEqual(d.actions.first { $0.kind == .protein }?.value, "200 g · 72 g to go")
+        XCTAssertTrue(d.actions.first { $0.kind == .mobility }?.value.contains("knee PT") ?? false)
+        XCTAssertEqual(d.actions.first { $0.kind == .sleep }?.value, "8h 15m target")
+    }
+
+    func testScalarDirectiveHasOnlyTrainActionByDefault() {
+        // Without prescription inputs the directive still works — just the session.
+        let d = make()
+        XCTAssertEqual(d.actions.map(\.kind), [.train])
+    }
+
+    func testProteinActionReadsOnTrackWhenMet() {
+        let d = DirectiveEngine.make(
+            recovery: 78, sleepDebtHours: 0, proteinRemaining: 0, hydrationPct: 100,
+            injuryRiskPercent: 10, injuryRiskBand: "Low",
+            activeInjuryName: nil, activeInjuryPain: nil,
+            workoutName: "Push", proteinTarget: 200)
+        XCTAssertEqual(d.actions.first { $0.kind == .protein }?.value, "200 g · on track")
+    }
+
+    func testMobilityActionIsGenericWithoutInjury() {
+        let d = DirectiveEngine.make(
+            recovery: 78, sleepDebtHours: 0, proteinRemaining: 0, hydrationPct: 100,
+            injuryRiskPercent: 10, injuryRiskBand: "Low",
+            activeInjuryName: nil, activeInjuryPain: nil,
+            workoutName: "Push", mobilityMinutes: 12)
+        XCTAssertEqual(d.actions.first { $0.kind == .mobility }?.value, "12 min mobility")
+    }
 }

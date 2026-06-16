@@ -51,7 +51,40 @@ struct ForgeScoreHero: View {
                             .font(.system(size: 11.5))
                             .foregroundStyle(Theme.creamDim)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.bottom, 2)
+
+                        // What moved the score — signed drivers.
+                        VStack(alignment: .leading, spacing: 5) {
+                            ForEach(app.forgeScoreChanges) { change in
+                                HStack(spacing: 7) {
+                                    Image(systemName: change.positive ? "arrow.up.right" : "arrow.down.right")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(change.positive ? Theme.green : Theme.amber)
+                                        .frame(width: 13)
+                                    Text(change.text)
+                                        .font(.system(size: 11.5))
+                                        .foregroundStyle(Theme.creamDim)
+                                    Spacer(minLength: 0)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        // The single highest-leverage fix.
+                        HStack(spacing: 7) {
+                            Image(systemName: "arrow.up.forward.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.gold)
+                            Text(app.forgeScoreLever)
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(Theme.gold)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 2)
+
+                        Divider().overlay(Theme.hairline.opacity(0.5))
+
                         ForEach(app.forgeScoreBreakdown) { c in
                             HStack(spacing: 10) {
                                 Text(c.label)

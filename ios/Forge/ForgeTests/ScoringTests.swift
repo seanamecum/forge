@@ -47,4 +47,25 @@ final class ScoringTests: XCTestCase {
                               "Higher pain must lower the injury component of the Forge Score")
         }
     }
+
+    // MARK: - "Why it changed" + biggest lever
+
+    func testForgeScoreChangesAreSignedAndNonEmpty() {
+        let app = AppState()
+        let changes = app.forgeScoreChanges
+        XCTAssertFalse(changes.isEmpty, "The score must always explain what moved it")
+        // A positive anchor is guaranteed even on a flat day.
+        XCTAssertTrue(changes.contains { $0.positive })
+    }
+
+    func testForgeScoreLeverNamesTheHighestImpactFix() {
+        let app = AppState()
+        let lever = app.forgeScoreLever
+        XCTAssertFalse(lever.isEmpty)
+        // The biggest lever maximizes recoverable points = (100 - value) * weight.
+        let expected = app.forgeScoreBreakdown.max {
+            Double(100 - $0.value) * $0.weight < Double(100 - $1.value) * $1.weight
+        }!
+        XCTAssertTrue(lever.contains(expected.label) || lever.contains("dialed"))
+    }
 }

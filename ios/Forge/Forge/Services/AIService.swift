@@ -102,6 +102,23 @@ enum AIService {
         let vitD = MockData.bloodwork.first { $0.name.contains("Vitamin D") }
         let benchForecast = MockData.forecasts.first { $0.metric == "Bench Press" }
 
+        // The same directive the dashboard shows — so the coach and the app are one brain.
+        let directive = DirectiveEngine.make(
+            recovery: d.recovery,
+            sleepDebtHours: d.sleepDebtHours,
+            proteinRemaining: 72,
+            hydrationPct: 62,
+            injuryRiskPercent: MockData.injuryRisk.percent,
+            injuryRiskBand: MockData.injuryRisk.band,
+            activeInjuryName: knee.type.rawValue,
+            activeInjuryPain: knee.painToday,
+            workoutName: "Upper Push + Knee-Safe Lower",
+            calorieTarget: u.calorieTarget,
+            proteinTarget: u.proteinTarget,
+            mobilityMinutes: 20,
+            keySupplement: "Magnesium 400 mg",
+            sleepTargetHours: 8.0 + min(d.sleepDebtHours * 0.08, 1.0))
+
         var ctx = """
         You are Forge — an elite, premium AI performance coach inside a human-performance app. \
         You are direct, specific, and motivating; never generic. Reference the athlete's actual numbers. \
@@ -129,6 +146,11 @@ enum AIService {
         SAFETY
         - You provide educational guidance, not medical advice. For severe pain, swelling, head injury, chest pain, or neurological symptoms, tell the athlete to see a physician or physical therapist.
         """
+        // Today's directive — keep the coach perfectly aligned with the on-screen plan.
+        ctx += "\n\nTODAY'S DIRECTIVE (the app is showing the athlete this exact plan — stay consistent with it)"
+        ctx += "\n- \(directive.headline) \(directive.priorityAction)"
+        ctx += "\n- Plan: " + directive.actions.map { "\($0.label) \($0.value)" }.joined(separator: " · ")
+
         if let note = checkInNote, !note.isEmpty {
             ctx += "\n\nMORNING CHECK-IN\n- \(note) Weigh this heavily — it's today's freshest signal."
         }

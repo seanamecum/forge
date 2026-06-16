@@ -116,7 +116,50 @@ final class AppState {
         return "Held back by \(drags). Lifted by \(highest.label) (\(highest.value))."
     }
 
-    /// Today's single most important instruction — synthesized by DirectiveEngine.
+    /// Why the score moved — signed contributors, so the number feels alive.
+    /// Positives blend day-over-day trend movement with today's strong components;
+    /// negatives surface the components actively dragging the score down.
+    var forgeScoreChanges: [ScoreChange] {
+        var out: [ScoreChange] = []
+
+        func dayMove(_ name: String) -> Double? {
+            guard let s = recovery.trends.first(where: { $0.name == name }), s.values.count >= 2
+            else { return nil }
+            return s.values[s.values.count - 1] - s.values[s.values.count - 2]
+        }
+        if let r = dayMove("Recovery") {
+            if r >= 1.5 { out.append(ScoreChange(text: "Recovery improved", positive: true)) }
+            else if r <= -1.5 { out.append(ScoreChange(text: "Recovery dipped", positive: false)) }
+        }
+        if let s = dayMove("Sleep") {
+            if s >= 0.2 { out.append(ScoreChange(text: "Better sleep last night", positive: true)) }
+            else if s <= -0.2 { out.append(ScoreChange(text: "Shorter sleep last night", positive: false)) }
+        }
+
+        // Components actively dragging the score (lowest two under 65).
+        for c in forgeScoreBreakdown.sorted(by: { $0.value < $1.value }).prefix(2) where c.value < 65 {
+            out.append(ScoreChange(text: "\(c.label) low (\(c.value))", positive: false))
+        }
+        // Guarantee at least one positive anchor — the strongest component.
+        if !out.contains(where: { $0.positive }),
+           let top = forgeScoreBreakdown.max(by: { $0.value < $1.value }) {
+            out.append(ScoreChange(text: "\(top.label) strong (\(top.value))", positive: true))
+        }
+        return out
+    }
+
+    /// The single component where the most points are recoverable — what to fix first.
+    var forgeScoreLever: String {
+        guard let c = forgeScoreBreakdown.max(by: {
+            Double(100 - $0.value) * $0.weight < Double(100 - $1.value) * $1.weight
+        }) else { return "" }
+        let gain = Int((Double(100 - c.value) * c.weight).rounded())
+        guard gain > 0 else { return "Every input is dialed — hold the line." }
+        return "\(c.label) is your biggest lever — up to +\(gain) points on the table."
+    }
+
+    /// Today's directive — the full prescribed plan, synthesized by DirectiveEngine
+    /// from every live signal. This is the single source the dashboard AND the coach read.
     var dailyDirective: DailyDirective {
         let d = recovery.today
         let injury = injuries.active.first
@@ -130,8 +173,23 @@ final class AppState {
             activeInjuryName: injury?.type.rawValue,
             activeInjuryPain: injury?.painToday,
             workoutName: workouts.todaysPlan.name,
-            soreness: checkIn?.soreness
+            soreness: checkIn?.soreness,
+            calorieTarget: user.calorieTarget,
+            proteinTarget: user.proteinTarget,
+            mobilityMinutes: injury != nil ? 20 : 12,
+            keySupplement: keySupplementTonight,
+            sleepTargetHours: 8.0 + min(d.sleepDebtHours * 0.08, 1.0)
         )
+    }
+
+    /// The most valuable supplement not yet taken today — bedtime-relevant first.
+    /// Feeds the directive's "Supplement" prescription.
+    private var keySupplementTonight: String? {
+        let pending = nutrition.supplements.filter { !$0.loggedToday }
+        let pick = pending.first { $0.timing.lowercased().contains("bed") } ?? pending.first
+        guard let s = pick else { return nil }
+        let shortName = s.name.split(separator: " ").first.map(String.init) ?? s.name
+        return "\(shortName) \(s.dose)"
     }
 }
 
@@ -140,4 +198,11 @@ struct ScoreComponent: Identifiable {
     let label: String
     let value: Int
     let weight: Double
+}
+
+/// A signed driver of today's Forge Score movement — "+ Recovery improved", "− Hydration low".
+struct ScoreChange: Identifiable {
+    let id = UUID()
+    let text: String
+    let positive: Bool
 }

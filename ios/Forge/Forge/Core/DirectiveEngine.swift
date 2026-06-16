@@ -1,5 +1,40 @@
 import Foundation
 
+/// One prescribed action in today's plan — "Protein: 200 g · 72 g to go".
+/// Pure data so it renders identically in the card, a widget, or a push.
+struct DirectiveAction: Identifiable {
+    enum Kind: String, CaseIterable {
+        case train, fuel, protein, mobility, supplement, sleep
+
+        var icon: String {
+            switch self {
+            case .train:      return "dumbbell.fill"
+            case .fuel:       return "flame.fill"
+            case .protein:    return "fork.knife"
+            case .mobility:   return "figure.cooldown"
+            case .supplement: return "pills.fill"
+            case .sleep:      return "moon.stars.fill"
+            }
+        }
+        var label: String {
+            switch self {
+            case .train:      return "Train"
+            case .fuel:       return "Fuel"
+            case .protein:    return "Protein"
+            case .mobility:   return "Mobility"
+            case .supplement: return "Supplement"
+            case .sleep:      return "Sleep"
+            }
+        }
+    }
+    let kind: Kind
+    let value: String      // the prescription, e.g. "2,650 kcal" or "8h 15m target"
+    let tone: Tone
+    var id: String { kind.rawValue }
+    var icon: String { kind.icon }
+    var label: String { kind.label }
+}
+
 /// The single most important instruction for today, synthesized from every signal.
 /// This is the heart of Forge's "turn data into decisions" thesis — pure logic,
 /// unit-tested, with zero UI so it can be reused anywhere (widget, watch, push).
@@ -9,7 +44,10 @@ struct DailyDirective: Equatable {
     let priorityAction: String  // "Complete knee PT before lifting."
     let workoutName: String
     let tone: Tone
+    /// The prescribed plan for today — what to actually do, in order.
+    var actions: [DirectiveAction] = []
 
+    // Equatable intentionally ignores `actions` (compares the decision, not the render list).
     static func == (lhs: DailyDirective, rhs: DailyDirective) -> Bool {
         lhs.headline == rhs.headline && lhs.rationale == rhs.rationale
             && lhs.priorityAction == rhs.priorityAction
@@ -28,7 +66,13 @@ enum DirectiveEngine {
         activeInjuryName: String?,
         activeInjuryPain: Int?,
         workoutName: String,
-        soreness: Int? = nil
+        soreness: Int? = nil,
+        // Prescription inputs — defaulted so the scalar directive (and its tests) are unaffected.
+        calorieTarget: Int = 0,
+        proteinTarget: Int = 0,
+        mobilityMinutes: Int = 0,
+        keySupplement: String? = nil,
+        sleepTargetHours: Double = 0
     ) -> DailyDirective {
 
         // 1. Training intensity follows recovery — but high morning soreness overrides it.
@@ -73,9 +117,66 @@ enum DirectiveEngine {
             priorityAction = "You're cleared to progress — chase the top set."
         }
 
+        // 4. The prescribed plan — concrete, checkable targets for today.
+        let actions = buildActions(
+            recovery: recovery, verySore: verySore, workoutName: workoutName,
+            calorieTarget: calorieTarget,
+            proteinTarget: proteinTarget, proteinRemaining: proteinRemaining,
+            mobilityMinutes: mobilityMinutes, activeInjuryName: activeInjuryName,
+            keySupplement: keySupplement, sleepTargetHours: sleepTargetHours)
+
         return DailyDirective(headline: headline, rationale: rationale,
-                              priorityAction: priorityAction, workoutName: workoutName, tone: tone)
+                              priorityAction: priorityAction, workoutName: workoutName,
+                              tone: tone, actions: actions)
     }
+
+    // MARK: - Prescription
+
+    private static func buildActions(
+        recovery: Int, verySore: Bool, workoutName: String,
+        calorieTarget: Int, proteinTarget: Int, proteinRemaining: Int,
+        mobilityMinutes: Int, activeInjuryName: String?,
+        keySupplement: String?, sleepTargetHours: Double
+    ) -> [DirectiveAction] {
+        var actions: [DirectiveAction] = []
+
+        // Train — the day's session, toned by how hard to go.
+        let trainTone: Tone = verySore ? .amber : (recovery >= 80 ? .green : (recovery < 60 ? .amber : .gold))
+        actions.append(DirectiveAction(kind: .train, value: workoutName, tone: trainTone))
+
+        // Fuel — calorie target.
+        if calorieTarget > 0 {
+            actions.append(DirectiveAction(kind: .fuel, value: "\(grouped(calorieTarget)) kcal", tone: .gold))
+        }
+
+        // Protein — target plus how much is still owed today.
+        if proteinTarget > 0 {
+            let value = proteinRemaining > 0 ? "\(proteinTarget) g · \(proteinRemaining) g to go" : "\(proteinTarget) g · on track"
+            actions.append(DirectiveAction(kind: .protein, value: value,
+                                           tone: proteinRemaining >= 40 ? .amber : .green))
+        }
+
+        // Mobility / PT — heavier when an injury is active.
+        if mobilityMinutes > 0 {
+            let value = activeInjuryName.map { "\(mobilityMinutes) min \($0.lowercased()) PT" } ?? "\(mobilityMinutes) min mobility"
+            actions.append(DirectiveAction(kind: .mobility, value: value,
+                                           tone: activeInjuryName != nil ? .amber : .royal))
+        }
+
+        // Supplement — the single most valuable one not yet taken.
+        if let s = keySupplement, !s.isEmpty {
+            actions.append(DirectiveAction(kind: .supplement, value: s, tone: .gold))
+        }
+
+        // Sleep — tonight's target, debt-adjusted.
+        if sleepTargetHours > 0 {
+            actions.append(DirectiveAction(kind: .sleep, value: "\(clock(sleepTargetHours)) target", tone: .royal))
+        }
+
+        return actions
+    }
+
+    // MARK: - Helpers
 
     /// Join clauses into one sentence: "a, b, and c."
     private static func sentence(_ parts: [String]) -> String {
@@ -93,5 +194,24 @@ enum DirectiveEngine {
         let whole = Int(h)
         let mins = Int((h - Double(whole)) * 60)
         return mins > 0 ? "\(whole)h \(mins)m" : "\(whole)h"
+    }
+
+    /// "8h 15m" from 8.25.
+    private static func clock(_ h: Double) -> String {
+        let whole = Int(h)
+        let mins = Int(((h - Double(whole)) * 60).rounded())
+        return mins > 0 ? "\(whole)h \(mins)m" : "\(whole)h"
+    }
+
+    /// "3,200" with a thousands separator, no locale surprises.
+    private static func grouped(_ n: Int) -> String {
+        let s = String(n)
+        guard s.count > 3 else { return s }
+        var out = "", count = 0
+        for ch in s.reversed() {
+            if count != 0 && count % 3 == 0 { out.append(",") }
+            out.append(ch); count += 1
+        }
+        return String(out.reversed())
     }
 }
