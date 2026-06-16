@@ -13,3 +13,6 @@ next-env.d.ts
 ios/**/Secrets.plist
 **/xcuserdata/
 *.xcuserstate
+
+# Atelier is a separate product with its own git repo — keep it out of Forge's tree
+atelier/
