@@ -1,5 +1,7 @@
 # ◆ FORGE
 
+[![CI](https://github.com/seanamecum/forge/actions/workflows/ci.yml/badge.svg)](https://github.com/seanamecum/forge/actions/workflows/ci.yml)
+
 **Human Performance, Engineered.**
 
 Forge is an AI-powered human performance operating system. Not a fitness app — a closed-loop
