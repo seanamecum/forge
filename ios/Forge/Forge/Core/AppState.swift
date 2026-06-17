@@ -191,6 +191,49 @@ final class AppState {
         let shortName = s.name.split(separator: " ").first.map(String.init) ?? s.name
         return "\(shortName) \(s.dose)"
     }
+
+    // MARK: - Cross-module intelligence
+
+    /// Why today's recovery reads the way it does — decomposed into its causes.
+    var recoveryDrivers: [RecoveryDriver] {
+        let d = recovery.today
+        let mg = magnesiumStatus
+        return InsightEngine.recoveryDrivers(
+            recovery: d.recovery,
+            sleepHours: d.sleep.hours, sleepReference: 8.5,
+            hrv: d.hrv, hrvBaseline: d.hrvBaseline,
+            strainYesterday: d.strainYesterday, strainAvg: average(MockData.strainTrend),
+            restingHR: d.restingHR, restingHRBaseline: 52,
+            magnesiumPct: mg.pct, magnesiumDaysLow: mg.days)
+    }
+
+    /// The causal chains linking the modules — sleep→recovery→training→injury→fuel.
+    /// One brain: the dashboard, the coach, and the directive all read these.
+    var forgeInsights: [ForgeInsight] {
+        let d = recovery.today
+        let injury = injuries.active.first
+        let mg = magnesiumStatus
+        return InsightEngine.crossModule(
+            recovery: d.recovery, sleepDebtHours: d.sleepDebtHours,
+            hrv: d.hrv, hrvBaseline: d.hrvBaseline,
+            proteinRemaining: nutrition.proteinRemaining, hydrationPct: nutrition.hydrationPct,
+            injuryName: injury?.type.rawValue, injuryPhase: injury?.phase.rawValue, injuryPain: injury?.painToday,
+            injuryRiskPercent: injuries.risk.percent, injuryRiskBand: injuries.risk.band,
+            magnesiumPct: mg.pct, magnesiumDaysLow: mg.days)
+    }
+
+    /// Magnesium status pulled from the live nutrient + deficiency data.
+    private var magnesiumStatus: (pct: Int, days: Int) {
+        let pct = nutrition.nutrientGroups
+            .flatMap(\.items)
+            .first { $0.name.contains("Magnesium") }?.percentOfTarget ?? 100
+        let days = nutrition.deficiencies.first { $0.nutrient.contains("Magnesium") }?.daysLow ?? 0
+        return (pct, days)
+    }
+
+    private func average(_ xs: [Double]) -> Double {
+        xs.isEmpty ? 0 : xs.reduce(0, +) / Double(xs.count)
+    }
 }
 
 struct ScoreComponent: Identifiable {

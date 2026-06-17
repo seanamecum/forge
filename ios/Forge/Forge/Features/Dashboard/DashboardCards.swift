@@ -108,6 +108,100 @@ struct ForgeScoreHero: View {
     }
 }
 
+// MARK: - Forge Intelligence (cross-module connections)
+
+/// The connective tissue: why recovery reads the way it does, and the causal
+/// chains linking sleep → recovery → training → injury → fuel. This is what makes
+/// Forge feel like one brain instead of twelve separate trackers.
+struct IntelligenceCard: View {
+    @Environment(AppState.self) private var app
+
+    var body: some View {
+        let drivers = Array(app.recoveryDrivers.prefix(3))
+        let insights = Array(app.forgeInsights.prefix(3))
+        return Card {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 6) {
+                    Image(systemName: "brain.head.profile")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.gold)
+                    EyebrowLabel(text: "Forge Intelligence · How Today Connects")
+                }
+
+                if !drivers.isEmpty {
+                    Text("WHY RECOVERY IS \(app.recovery.today.recovery)")
+                        .font(.system(size: 8.5, weight: .semibold))
+                        .kerning(1.4)
+                        .foregroundStyle(Theme.muted)
+                    VStack(spacing: 7) {
+                        ForEach(drivers) { d in
+                            HStack(alignment: .top, spacing: 9) {
+                                Image(systemName: d.positive ? "arrow.up.right" : "arrow.down.right")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(d.positive ? Theme.green : Theme.amber)
+                                    .frame(width: 13)
+                                    .padding(.top, 2)
+                                Text(d.factor)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Theme.cream)
+                                    .frame(width: 84, alignment: .leading)
+                                Text(d.detail)
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(Theme.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                }
+
+                if !drivers.isEmpty && !insights.isEmpty {
+                    Divider().overlay(Theme.hairline)
+                }
+
+                if !insights.isEmpty {
+                    Text("THE CONNECTIONS")
+                        .font(.system(size: 8.5, weight: .semibold))
+                        .kerning(1.4)
+                        .foregroundStyle(Theme.muted)
+                    VStack(spacing: 11) {
+                        ForEach(insights) { i in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: i.icon)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(i.tone.color)
+                                    .frame(width: 24, height: 24)
+                                    .background(Circle().fill(i.tone.color.opacity(0.14)))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(i.chain)
+                                        .font(.system(size: 12.5, weight: .medium))
+                                        .foregroundStyle(Theme.cream)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text(i.action)
+                                        .font(.system(size: 11.5))
+                                        .foregroundStyle(Theme.creamDim)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                }
+
+                Button { app.selectedTab = .coach } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "sparkles").font(.system(size: 10))
+                        Text("Ask the coach about this").font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(Theme.gold)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Forge intelligence. " + app.forgeInsights.prefix(3).map(\.chain).joined(separator: ". "))
+    }
+}
+
 // MARK: - Today's workout
 
 struct TodaysWorkoutCard: View {

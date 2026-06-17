@@ -11,6 +11,7 @@ struct DashboardView: View {
                 header
                 MorningCheckInCard()
                 TodaysDirectiveCard()
+                IntelligenceCard()
                 ForgeScoreHero()
                 metricRow
                 TodaysWorkoutCard()

@@ -151,6 +151,29 @@ enum AIService {
         ctx += "\n- \(directive.headline) \(directive.priorityAction)"
         ctx += "\n- Plan: " + directive.actions.map { "\($0.label) \($0.value)" }.joined(separator: " · ")
 
+        // Cross-module intelligence — the coach reasons in causal chains, never in silos.
+        let drivers = InsightEngine.recoveryDrivers(
+            recovery: d.recovery, sleepHours: d.sleep.hours, sleepReference: 8.5,
+            hrv: d.hrv, hrvBaseline: d.hrvBaseline,
+            strainYesterday: d.strainYesterday, strainAvg: 13.9,
+            restingHR: d.restingHR, restingHRBaseline: 52,
+            magnesiumPct: 52, magnesiumDaysLow: 6)
+        if !drivers.isEmpty {
+            ctx += "\n\nWHY RECOVERY IS \(d.recovery) (cite these specifics when asked about fatigue or recovery)"
+            for dr in drivers.prefix(3) { ctx += "\n- \(dr.factor): \(dr.detail)" }
+        }
+        let insights = InsightEngine.crossModule(
+            recovery: d.recovery, sleepDebtHours: d.sleepDebtHours,
+            hrv: d.hrv, hrvBaseline: d.hrvBaseline,
+            proteinRemaining: 72, hydrationPct: 62,
+            injuryName: knee.type.rawValue, injuryPhase: knee.phase.rawValue, injuryPain: knee.painToday,
+            injuryRiskPercent: MockData.injuryRisk.percent, injuryRiskBand: MockData.injuryRisk.band,
+            magnesiumPct: 52, magnesiumDaysLow: 6)
+        if !insights.isEmpty {
+            ctx += "\n\nCROSS-MODULE CONNECTIONS (reason in these chains — this is how Forge thinks)"
+            for ins in insights.prefix(3) { ctx += "\n- \(ins.chain) → \(ins.action)" }
+        }
+
         if let note = checkInNote, !note.isEmpty {
             ctx += "\n\nMORNING CHECK-IN\n- \(note) Weigh this heavily — it's today's freshest signal."
         }
