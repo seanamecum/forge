@@ -49,6 +49,42 @@ struct EmptyStateView: View {
     }
 }
 
+/// A secondary action whose backend isn't in this build yet. Replaces dead
+/// no-op buttons with one honest, consistent affordance — no silent taps,
+/// no "(placeholder)" labels. Self-contained so it needs no per-view state.
+struct ComingSoonButton: View {
+    let title: String
+    let feature: String
+    var compact = true
+    var gold = false
+    @State private var show = false
+
+    init(_ title: String, feature: String, compact: Bool = true, gold: Bool = false) {
+        self.title = title
+        self.feature = feature
+        self.compact = compact
+        self.gold = gold
+    }
+
+    var body: some View {
+        button
+            .alert("Available at launch", isPresented: $show) {
+                Button("Got it", role: .cancel) {}
+            } message: {
+                Text("\(feature) activates when you connect your Forge account. It's on the launch roadmap.")
+            }
+            .accessibilityHint("\(feature) is coming at launch")
+    }
+
+    @ViewBuilder private var button: some View {
+        if gold {
+            Button(title) { show = true }.buttonStyle(GoldButtonStyle())
+        } else {
+            Button(title) { show = true }.buttonStyle(GhostButtonStyle(compact: compact))
+        }
+    }
+}
+
 struct ErrorBanner: View {
     let message: String
     var onDismiss: (() -> Void)? = nil

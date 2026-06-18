@@ -58,7 +58,7 @@ struct CoachCardView: View {
                     Text("★ \(String(format: "%.2f", coach.rating)) · \(coach.clients) athletes")
                         .font(.system(size: 11)).foregroundStyle(Theme.creamDim)
                     Spacer()
-                    Button("Book intro") {}.buttonStyle(GhostButtonStyle(compact: true))
+                    ComingSoonButton("Book intro", feature: "Coach booking")
                 }
             }
         }
@@ -84,7 +84,7 @@ struct ProgramCardView: View {
                     Chip(text: "\(program.daysPerWeek)x / wk")
                     Chip(text: "\(program.buyers.formatted()) sold", tone: .gold)
                     Spacer()
-                    Button("Get") {}.buttonStyle(GhostButtonStyle(compact: true))
+                    ComingSoonButton("Get", feature: "Program purchase")
                 }
             }
         }

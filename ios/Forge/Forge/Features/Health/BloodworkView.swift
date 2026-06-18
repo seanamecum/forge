@@ -24,8 +24,7 @@ struct BloodworkView: View {
                 }
             }
 
-            Button("Upload New Panel (placeholder)") {}
-                .buttonStyle(GhostButtonStyle())
+            ComingSoonButton("Upload New Panel", feature: "Lab panel upload", compact: false)
         }
         .navigationTitle("Bloodwork")
         .navigationBarTitleDisplayMode(.inline)

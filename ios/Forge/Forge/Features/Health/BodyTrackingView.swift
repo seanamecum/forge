@@ -51,7 +51,7 @@ struct BodyTrackingView: View {
                 HStack {
                     EyebrowLabel(text: "Measurements")
                     Spacer()
-                    Button("Log") {}.buttonStyle(GhostButtonStyle(compact: true))
+                    ComingSoonButton("Log", feature: "Weight logging")
                 }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                     ForEach(MockData.measurements) { m in
@@ -77,7 +77,7 @@ struct BodyTrackingView: View {
                 HStack {
                     EyebrowLabel(text: "Progress Photos")
                     Spacer()
-                    Button("Add") {}.buttonStyle(GhostButtonStyle(compact: true))
+                    ComingSoonButton("Add", feature: "Progress photos")
                 }
                 HStack(spacing: 8) {
                     ForEach(history) { snap in

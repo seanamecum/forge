@@ -32,16 +32,15 @@ struct TeamsView: View {
                         }
 
                         HStack(spacing: 10) {
-                            Button("Coach view") {}.buttonStyle(GhostButtonStyle(compact: true))
-                            Button("Team challenge") {}.buttonStyle(GhostButtonStyle(compact: true))
+                            ComingSoonButton("Coach view", feature: "Coach dashboards")
+                            ComingSoonButton("Team challenge", feature: "Team challenges")
                             Spacer()
                         }
                     }
                 }
             }
 
-            Button("+ Create a Team") {}
-                .buttonStyle(GoldButtonStyle())
+            ComingSoonButton("+ Create a Team", feature: "Team creation", compact: false, gold: true)
         }
         .navigationTitle("Teams")
         .navigationBarTitleDisplayMode(.inline)
