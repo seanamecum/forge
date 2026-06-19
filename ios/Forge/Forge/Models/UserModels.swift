@@ -76,7 +76,7 @@ enum DietPreference: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 }
 
-struct UserProfile: Identifiable {
+struct UserProfile: Identifiable, Codable {
     let id = UUID()
     var name: String
     var age: Int
@@ -104,12 +104,12 @@ struct UserProfile: Identifiable {
         return "\(ft)'\(inch)\""
     }
 
-    // Daily fuel targets (mock-derived from goal + bodyweight).
-    var calorieTarget: Int { 3200 }
-    var proteinTarget: Int { 200 }
-    var carbTarget: Int { 380 }
-    var fatTarget: Int { 95 }
-    var waterTargetOz: Int { 120 }
+    // Daily fuel targets — derived from this athlete's body, activity, and goal.
+    var calorieTarget: Int { TargetEngine.calories(self) }
+    var proteinTarget: Int { TargetEngine.protein(self) }
+    var carbTarget: Int { TargetEngine.carbs(self) }
+    var fatTarget: Int { TargetEngine.fat(self) }
+    var waterTargetOz: Int { TargetEngine.water(self) }
 
     var initials: String {
         name.split(separator: " ").compactMap { $0.first.map(String.init) }.prefix(2).joined()

@@ -36,7 +36,9 @@ enum MainTab: String, CaseIterable {
 final class AppState {
     var phase: AppPhase = .welcome
     var selectedTab: MainTab = .home
-    var user: UserProfile = MockData.sean
+    var user: UserProfile = MockData.sean {
+        didSet { Self.persistUser(user) }
+    }
 
     /// Today's morning check-in, if completed (in-memory; SwiftData holds history).
     var checkIn: CheckInSnapshot?
@@ -53,10 +55,27 @@ final class AppState {
     let notifications = NotificationService()
 
     init() {
+        // Restore the saved profile so a returning user never reverts to the demo athlete.
+        if let saved = Self.loadUser() { user = saved }
         // Returning users skip straight to the dashboard.
         if UserDefaults.standard.bool(forKey: "forge.hasOnboarded") {
             phase = .main
         }
+    }
+
+    // MARK: - Profile persistence
+
+    private static let userKey = "forge.user.v1"
+
+    private static func persistUser(_ profile: UserProfile) {
+        if let data = try? JSONEncoder().encode(profile) {
+            UserDefaults.standard.set(data, forKey: userKey)
+        }
+    }
+
+    private static func loadUser() -> UserProfile? {
+        guard let data = UserDefaults.standard.data(forKey: userKey) else { return nil }
+        return try? JSONDecoder().decode(UserProfile.self, from: data)
     }
 
     func completeAuth(demo: Bool) {
