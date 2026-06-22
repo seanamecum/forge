@@ -71,6 +71,7 @@ enum DirectiveEngine {
         calorieTarget: Int = 0,
         proteinTarget: Int = 0,
         mobilityMinutes: Int = 0,
+        rehabPlanSummary: String? = nil,
         keySupplement: String? = nil,
         sleepTargetHours: Double = 0
     ) -> DailyDirective {
@@ -123,6 +124,7 @@ enum DirectiveEngine {
             calorieTarget: calorieTarget,
             proteinTarget: proteinTarget, proteinRemaining: proteinRemaining,
             mobilityMinutes: mobilityMinutes, activeInjuryName: activeInjuryName,
+            rehabPlanSummary: rehabPlanSummary,
             keySupplement: keySupplement, sleepTargetHours: sleepTargetHours)
 
         return DailyDirective(headline: headline, rationale: rationale,
@@ -136,6 +138,7 @@ enum DirectiveEngine {
         recovery: Int, verySore: Bool, workoutName: String,
         calorieTarget: Int, proteinTarget: Int, proteinRemaining: Int,
         mobilityMinutes: Int, activeInjuryName: String?,
+        rehabPlanSummary: String?,
         keySupplement: String?, sleepTargetHours: Double
     ) -> [DirectiveAction] {
         var actions: [DirectiveAction] = []
@@ -156,9 +159,16 @@ enum DirectiveEngine {
                                            tone: proteinRemaining >= 40 ? .amber : .green))
         }
 
-        // Mobility / PT — heavier when an injury is active.
-        if mobilityMinutes > 0 {
-            let value = activeInjuryName.map { "\(mobilityMinutes) min \($0.lowercased()) PT" } ?? "\(mobilityMinutes) min mobility"
+        // Mobility / PT — the specific rehab plan when an injury is active.
+        if mobilityMinutes > 0 || rehabPlanSummary != nil {
+            let value: String
+            if let rehab = rehabPlanSummary, !rehab.isEmpty {
+                value = rehab
+            } else if let name = activeInjuryName {
+                value = "\(mobilityMinutes) min \(name.lowercased()) PT"
+            } else {
+                value = "\(mobilityMinutes) min mobility"
+            }
             actions.append(DirectiveAction(kind: .mobility, value: value,
                                            tone: activeInjuryName != nil ? .amber : .royal))
         }

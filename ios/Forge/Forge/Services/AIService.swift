@@ -174,6 +174,15 @@ enum AIService {
             for ins in insights.prefix(3) { ctx += "\n- \(ins.chain) → \(ins.action)" }
         }
 
+        // Rehab — today's PT prescription + return-to-sport readiness.
+        let rehab = RehabEngine.plan(for: knee, library: MockData.ptExercises, protocols: MockData.protocols)
+        let readiness = RehabEngine.readiness(checklist: MockData.kneeRTSChecklist, injury: knee)
+        ctx += "\n\nREHAB (prescribe this exact plan when asked about the injury or rehab)"
+        ctx += "\n- \(rehab.title): \(rehab.focus)"
+        ctx += "\n- " + rehab.exercises.prefix(4).map { "\($0.name) \($0.prescription)" }.joined(separator: " · ")
+        ctx += "\n- Return-to-sport readiness \(readiness.percent)% (\(readiness.band)), \(readiness.etaText)."
+        if let next = readiness.nextMilestone { ctx += " Next milestone: \(next)." }
+
         if let note = checkInNote, !note.isEmpty {
             ctx += "\n\nMORNING CHECK-IN\n- \(note) Weigh this heavily — it's today's freshest signal."
         }

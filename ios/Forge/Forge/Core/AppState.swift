@@ -196,6 +196,7 @@ final class AppState {
             calorieTarget: user.calorieTarget,
             proteinTarget: user.proteinTarget,
             mobilityMinutes: injury != nil ? 20 : 12,
+            rehabPlanSummary: injuryRehabPlan?.summary,
             keySupplement: keySupplementTonight,
             sleepTargetHours: 8.0 + min(d.sleepDebtHours * 0.08, 1.0)
         )
@@ -248,6 +249,20 @@ final class AppState {
             .first { $0.name.contains("Magnesium") }?.percentOfTarget ?? 100
         let days = nutrition.deficiencies.first { $0.nutrient.contains("Magnesium") }?.daysLow ?? 0
         return (pct, days)
+    }
+
+    // MARK: - Injury rehab
+
+    /// Today's auto-generated PT plan for the active injury — feeds the Directive.
+    var injuryRehabPlan: RehabPlan? {
+        guard let injury = injuries.active.first else { return nil }
+        return RehabEngine.plan(for: injury, library: injuries.ptLibrary, protocols: injuries.protocols)
+    }
+
+    /// Return-to-sport readiness for the active injury.
+    var returnReadiness: ReturnReadiness? {
+        guard let injury = injuries.active.first else { return nil }
+        return RehabEngine.readiness(checklist: injuries.rtsChecklist, injury: injury)
     }
 
     private func average(_ xs: [Double]) -> Double {
