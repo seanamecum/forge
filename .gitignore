@@ -8,6 +8,7 @@ out
 .DS_Store
 .vercel
 next-env.d.ts
+*.tsbuildinfo
 
 # iOS — never commit a real API key
 ios/**/Secrets.plist

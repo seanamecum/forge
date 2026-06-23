@@ -15,13 +15,72 @@ import {
 } from "@/lib/mock/user";
 import { todaysWorkout, volumeByMuscle } from "@/lib/mock/workouts";
 import { dailyBrief } from "@/lib/ai/coach";
+import { makeDirective, scoreChanges, scoreLever, toneTextClass } from "@/core";
 
 export default function Dashboard() {
   const brief = dailyBrief();
   const lowest = [...forgeScoreBreakdown].sort((a, b) => a.value - b.value)[0];
 
+  // The Daily Directive — computed by @forge/core from today's live signals.
+  const sleepDebtHours = 4.3;
+  const directive = makeDirective({
+    recovery: today.recovery,
+    sleepDebtHours,
+    calorieTarget: user.targets.calories,
+    proteinTarget: user.targets.protein,
+    proteinRemaining: today.proteinRemaining,
+    hydrationPct: today.hydrationPct,
+    injuryName: injuries[0]?.area,
+    injuryPain: injuries[0]?.painToday,
+    injuryRiskBand: "Moderate",
+    injuryRiskPercent: today.injuryRiskPct,
+    rehabSummary: injuries[0]
+      ? `15 min ${injuries[0].area} PT — band work + scap control`
+      : undefined,
+    keySupplement: "Magnesium 400 mg",
+    sleepTargetHours: 8.0 + Math.min(sleepDebtHours * 0.08, 1.0),
+    workoutName: today.todaysWorkout.name,
+  });
+  const changes = scoreChanges(forgeScoreBreakdown, { recovery: recoveryTrend, sleep: sleepTrend });
+  const lever = scoreLever(forgeScoreBreakdown);
+
   return (
     <div className="space-y-6">
+      {/* DAILY DIRECTIVE — the centerpiece: what to do today, and why */}
+      <section className="card card-gold p-6 sm:p-8">
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-gold-300">✦ Today's Directive</div>
+          <span className="chip chip-gold">{directive.workoutName}</span>
+        </div>
+        <h1 className={`display mt-2 text-2xl sm:text-3xl ${toneTextClass(directive.tone)}`}>
+          {directive.headline}
+        </h1>
+        <p className="mt-2 max-w-2xl text-cream-200">{directive.rationale}</p>
+
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          {directive.actions.map((a) => (
+            <div
+              key={a.kind}
+              className="flex items-center gap-3 rounded-md border border-gold-400/12 bg-obsidian-800/50 px-3 py-2.5"
+            >
+              <span className="text-lg">{a.icon}</span>
+              <div className="min-w-0">
+                <div className="text-[9px] uppercase tracking-[0.18em] text-obsidian-200">{a.label}</div>
+                <div className={`truncate text-sm ${toneTextClass(a.tone)}`}>{a.value}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 flex items-start gap-2 rounded-md border border-gold-400/15 bg-gold-400/5 p-3">
+          <span className="text-gold-200">▶</span>
+          <div>
+            <div className="text-[9px] uppercase tracking-[0.18em] text-obsidian-200">Priority</div>
+            <div className="text-sm text-cream-100">{directive.priority}</div>
+          </div>
+        </div>
+      </section>
+
       {/* HERO — Forge Score + AI brief */}
       <section className="card card-gold overflow-hidden p-6 sm:p-8">
         <div className="grid items-center gap-8 lg:grid-cols-[auto,1fr,auto]">
@@ -198,6 +257,20 @@ export default function Dashboard() {
               <div className="display mt-1 text-base text-cream-50">8 inputs · live weighted</div>
             </div>
             <span className="chip">Lowest: {lowest.label}</span>
+          </div>
+          <div className="mb-3 space-y-1.5">
+            {changes.map((c, i) => (
+              <div key={i} className="flex items-center gap-2 text-[11px]">
+                <span className={c.positive ? "text-forge-green" : "text-forge-amber"}>
+                  {c.positive ? "▲" : "▼"}
+                </span>
+                <span className="text-cream-200">{c.text}</span>
+              </div>
+            ))}
+            <div className="flex items-center gap-2 pt-1 text-[11px] text-gold-200">
+              <span>◆</span>
+              <span>{lever}</span>
+            </div>
           </div>
           <div className="space-y-2.5">
             {forgeScoreBreakdown.map((b) => (
