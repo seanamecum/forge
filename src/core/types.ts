@@ -40,6 +40,48 @@ export interface ScoreChange {
   positive: boolean;
 }
 
+// --- Targets (fuel) --------------------------------------------------------
+export type Goal =
+  | "build_muscle"
+  | "lose_fat"
+  | "strength"
+  | "endurance"
+  | "athletic"
+  | "health"
+  | "injury_recovery";
+
+export type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
+
+export interface BodyProfile {
+  weightLb: number;
+  activity: ActivityLevel;
+  goal: Goal;
+}
+
+export interface FuelTargets {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  waterOz: number;
+}
+
+// --- Cross-module intelligence ---------------------------------------------
+export interface RecoveryDriver {
+  factor: string;
+  detail: string;
+  positive: boolean;
+  weight: number;
+}
+
+export interface ForgeInsight {
+  icon: string;
+  chain: string;
+  action: string;
+  tone: Tone;
+  severity: number;
+}
+
 /** Tailwind text-color class for a tone — keeps rendering consistent app-wide. */
 export function toneTextClass(tone: Tone): string {
   switch (tone) {

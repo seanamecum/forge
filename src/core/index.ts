@@ -5,3 +5,5 @@
 export * from "./types";
 export * from "./directive";
 export * from "./score";
+export * from "./insight";
+export * from "./targets";
