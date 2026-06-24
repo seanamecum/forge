@@ -7,3 +7,4 @@ export * from "./directive";
 export * from "./score";
 export * from "./insight";
 export * from "./targets";
+export * from "./rehab";

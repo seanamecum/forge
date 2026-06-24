@@ -82,6 +82,29 @@ export interface ForgeInsight {
   severity: number;
 }
 
+// --- Injury rehab ----------------------------------------------------------
+export interface RehabExercise {
+  name: string;
+  prescription: string;
+  note: string;
+}
+
+export interface RehabPlan {
+  title: string;
+  focus: string;
+  exercises: RehabExercise[];
+  estMinutes: number;
+  summary: string;
+}
+
+export interface ReturnReadiness {
+  percent: number;
+  band: string;
+  phaseLabel: string;
+  nextMilestone: string;
+  etaText: string;
+}
+
 /** Tailwind text-color class for a tone — keeps rendering consistent app-wide. */
 export function toneTextClass(tone: Tone): string {
   switch (tone) {

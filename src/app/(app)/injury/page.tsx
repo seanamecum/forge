@@ -15,6 +15,7 @@ import {
 import { injuries, user } from "@/lib/mock/user";
 import { useForge } from "@/lib/store";
 import { toast } from "@/lib/toast";
+import { rehabPlan, returnReadiness } from "@/core";
 
 const TABS = ["Profile", "PT Library", "Protocols", "Concussion", "Return-to-Sport"] as const;
 
@@ -68,6 +69,19 @@ export default function InjuryPage() {
 
 function Profile() {
   const forge = useForge();
+  const injury = injuries[0];
+  // Computed by @forge/core — reacts live to the pain slider below.
+  const rehab = injury
+    ? rehabPlan(
+        { area: injury.area, name: injury.name, phase: injury.phase, painToday: forge.painToday },
+        ptExercises,
+        protocols
+      )
+    : null;
+  const readiness = injury
+    ? returnReadiness({ area: injury.area, name: injury.name, phase: injury.phase, painToday: forge.painToday })
+    : null;
+
   return (
     <div className="space-y-6">
       {/* Risk hero */}
@@ -95,6 +109,39 @@ function Profile() {
           </div>
         </div>
       </div>
+
+      {/* FORGE REHAB — computed daily PT + return-to-sport readiness */}
+      {rehab && readiness && (
+        <div className="card p-6">
+          <div className="grid items-center gap-6 lg:grid-cols-[auto,1fr]">
+            <div className="flex flex-col items-center">
+              <Ring value={readiness.percent} size={150} stroke={11} tone="gold" label="RTS Ready" big />
+              <span className="mt-2 chip chip-gold">{readiness.band}</span>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.22em] text-gold-300">{rehab.title}</div>
+              <h3 className="display mt-1 text-2xl text-cream-50">{rehab.focus}</h3>
+              <div className="mt-1 text-[12px] text-obsidian-200">
+                Today&apos;s PT · ~{rehab.estMinutes} min · next: {readiness.nextMilestone} · {readiness.etaText}
+              </div>
+              <div className="mt-4 space-y-2">
+                {rehab.exercises.map((ex) => (
+                  <div
+                    key={ex.name}
+                    className="flex items-baseline justify-between gap-3 rounded-md border border-gold-400/10 bg-obsidian-800/50 px-3 py-2 text-sm"
+                  >
+                    <div>
+                      <div className="text-cream-100">{ex.name}</div>
+                      <div className="text-[11px] text-obsidian-200">{ex.note}</div>
+                    </div>
+                    <span className="shrink-0 text-[12px] text-gold-200">{ex.prescription}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Active injuries */}
       <div className="grid gap-4 lg:grid-cols-2">
