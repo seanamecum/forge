@@ -3,83 +3,30 @@ import { Ring } from "@/components/ui/Ring";
 import { Sparkline, Barline } from "@/components/ui/Sparkline";
 import { Stat } from "@/components/ui/Stat";
 import { Bar } from "@/components/ui/Bar";
-import {
-  today,
-  user,
-  injuries,
-  forgeScoreTrend,
-  recoveryTrend,
-  hrvTrend,
-  sleepTrend,
-  forgeScoreBreakdown,
-} from "@/lib/mock/user";
-import { todaysWorkout, volumeByMuscle } from "@/lib/mock/workouts";
-import { dailyBrief } from "@/lib/ai/coach";
-import {
-  makeDirective,
-  scoreChanges,
-  scoreLever,
-  toneTextClass,
-  recoveryDrivers,
-  crossModule,
-} from "@/core";
+import { toneTextClass } from "@/core";
+import { dataSource } from "@/lib/data";
 
-export default function Dashboard() {
-  const brief = dailyBrief();
+export default async function Dashboard() {
+  // One read through the @forge/data seam — Mock today, Supabase at M1, view unchanged.
+  const {
+    user,
+    today,
+    injuries,
+    forgeScoreBreakdown,
+    forgeScoreTrend,
+    recoveryTrend,
+    hrvTrend,
+    sleepTrend,
+    todaysWorkout,
+    volumeByMuscle,
+    brief,
+    directive,
+    scoreChanges: changes,
+    scoreLever: lever,
+    recoveryDrivers: recDrivers,
+    connections,
+  } = await dataSource.getDashboard();
   const lowest = [...forgeScoreBreakdown].sort((a, b) => a.value - b.value)[0];
-
-  // The Daily Directive — computed by @forge/core from today's live signals.
-  const sleepDebtHours = 4.3;
-  const directive = makeDirective({
-    recovery: today.recovery,
-    sleepDebtHours,
-    calorieTarget: user.targets.calories,
-    proteinTarget: user.targets.protein,
-    proteinRemaining: today.proteinRemaining,
-    hydrationPct: today.hydrationPct,
-    injuryName: injuries[0]?.area,
-    injuryPain: injuries[0]?.painToday,
-    injuryRiskBand: "Moderate",
-    injuryRiskPercent: today.injuryRiskPct,
-    rehabSummary: injuries[0]
-      ? `15 min ${injuries[0].area} PT — band work + scap control`
-      : undefined,
-    keySupplement: "Magnesium 400 mg",
-    sleepTargetHours: 8.0 + Math.min(sleepDebtHours * 0.08, 1.0),
-    workoutName: today.todaysWorkout.name,
-  });
-  const changes = scoreChanges(forgeScoreBreakdown, { recovery: recoveryTrend, sleep: sleepTrend });
-  const lever = scoreLever(forgeScoreBreakdown);
-
-  // Cross-module intelligence — recovery attribution + causal chains, from @forge/core.
-  const hrvBaseline = today.hrv - today.hrvDelta;
-  const recDrivers = recoveryDrivers({
-    recovery: today.recovery,
-    sleepHours: today.sleepHours,
-    sleepReference: 8.5,
-    hrv: today.hrv,
-    hrvBaseline,
-    strainYesterday: today.strainYesterday,
-    strainAvg: 15,
-    restingHr: today.restingHr,
-    restingHrBaseline: 50,
-    magnesiumPct: 52,
-    magnesiumDaysLow: 6,
-  }).slice(0, 3);
-  const connections = crossModule({
-    recovery: today.recovery,
-    sleepDebtHours,
-    hrv: today.hrv,
-    hrvBaseline,
-    proteinRemaining: today.proteinRemaining,
-    hydrationPct: today.hydrationPct,
-    injuryName: injuries[0]?.area,
-    injuryPhase: injuries[0]?.phase,
-    injuryRiskPercent: today.injuryRiskPct,
-    injuryRiskBand: "Moderate",
-    magnesiumPct: 52,
-    magnesiumDaysLow: 6,
-  }).slice(0, 3);
 
   return (
     <div className="space-y-6">
