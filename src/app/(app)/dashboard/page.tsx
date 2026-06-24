@@ -15,7 +15,14 @@ import {
 } from "@/lib/mock/user";
 import { todaysWorkout, volumeByMuscle } from "@/lib/mock/workouts";
 import { dailyBrief } from "@/lib/ai/coach";
-import { makeDirective, scoreChanges, scoreLever, toneTextClass } from "@/core";
+import {
+  makeDirective,
+  scoreChanges,
+  scoreLever,
+  toneTextClass,
+  recoveryDrivers,
+  crossModule,
+} from "@/core";
 
 export default function Dashboard() {
   const brief = dailyBrief();
@@ -43,6 +50,36 @@ export default function Dashboard() {
   });
   const changes = scoreChanges(forgeScoreBreakdown, { recovery: recoveryTrend, sleep: sleepTrend });
   const lever = scoreLever(forgeScoreBreakdown);
+
+  // Cross-module intelligence — recovery attribution + causal chains, from @forge/core.
+  const hrvBaseline = today.hrv - today.hrvDelta;
+  const recDrivers = recoveryDrivers({
+    recovery: today.recovery,
+    sleepHours: today.sleepHours,
+    sleepReference: 8.5,
+    hrv: today.hrv,
+    hrvBaseline,
+    strainYesterday: today.strainYesterday,
+    strainAvg: 15,
+    restingHr: today.restingHr,
+    restingHrBaseline: 50,
+    magnesiumPct: 52,
+    magnesiumDaysLow: 6,
+  }).slice(0, 3);
+  const connections = crossModule({
+    recovery: today.recovery,
+    sleepDebtHours,
+    hrv: today.hrv,
+    hrvBaseline,
+    proteinRemaining: today.proteinRemaining,
+    hydrationPct: today.hydrationPct,
+    injuryName: injuries[0]?.area,
+    injuryPhase: injuries[0]?.phase,
+    injuryRiskPercent: today.injuryRiskPct,
+    injuryRiskBand: "Moderate",
+    magnesiumPct: 52,
+    magnesiumDaysLow: 6,
+  }).slice(0, 3);
 
   return (
     <div className="space-y-6">
@@ -159,6 +196,50 @@ export default function Dashboard() {
               : "green"
           }
         />
+      </section>
+
+      {/* FORGE INTELLIGENCE — cross-module connections */}
+      <section className="card p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <span className="text-gold-300">◆</span>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-gold-300">
+            Forge Intelligence · How Today Connects
+          </div>
+        </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-obsidian-200">
+              Why recovery is {today.recovery}
+            </div>
+            <div className="space-y-2">
+              {recDrivers.map((d) => (
+                <div key={d.factor} className="flex items-start gap-2 text-[12px]">
+                  <span className={d.positive ? "text-forge-green" : "text-forge-amber"}>
+                    {d.positive ? "▲" : "▼"}
+                  </span>
+                  <span className="w-24 shrink-0 text-cream-100">{d.factor}</span>
+                  <span className="text-obsidian-200">{d.detail}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-obsidian-200">
+              The connections
+            </div>
+            <div className="space-y-3">
+              {connections.map((c, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <span className="text-base">{c.icon}</span>
+                  <div>
+                    <div className={`text-[12px] ${toneTextClass(c.tone)}`}>{c.chain}</div>
+                    <div className="text-[11px] text-obsidian-200">{c.action}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* GRID — Workout + Nutrition + Recovery + AI */}
