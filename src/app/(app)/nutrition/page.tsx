@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { SectionTitle } from "@/components/ui/SectionTitle";
 import { Bar } from "@/components/ui/Bar";
-import { foodDb, todaysMeals, savedMeals, micronutrientMatrix, Food } from "@/lib/mock/nutrition";
+import { foodDb, todaysMeals, savedMeals, micronutrientMatrix, deficiencies, Food } from "@/lib/mock/nutrition";
 import { today, user } from "@/lib/mock/user";
 import { useForge } from "@/lib/store";
 import { toast } from "@/lib/toast";
+import { nutritionGuidance, toneTextClass } from "@/core";
 
 type Modal = null | "search" | "barcode" | "photo";
 
@@ -21,6 +22,20 @@ export default function NutritionPage() {
   const extraPro = forge.meals.reduce((s, m) => s + m.protein, 0);
   const calIn = today.caloriesIn + extraCal;
   const proIn = today.proteinIn + Math.round(extraPro);
+
+  // "What should I eat next?" — guidance from @forge/core, live off the macros above.
+  const advice = nutritionGuidance(
+    {
+      caloriesRemaining: Math.max(0, user.targets.calories - calIn),
+      proteinRemaining: Math.max(0, user.targets.protein - proIn),
+      hydrationPct: Math.round((forge.waterMl / user.targets.waterMl) * 100),
+      deficiencies: deficiencies.map((d) => ({
+        nutrient: d.nutrient,
+        pct: Math.round((d.current / d.target) * 100),
+      })),
+    },
+    foodDb
+  );
 
   const filtered = foodDb.filter(
     (f) =>
@@ -49,6 +64,38 @@ export default function NutritionPage() {
           </div>
         }
       />
+
+      {/* WHAT TO EAT NEXT — guidance from @forge/core */}
+      <div className="card card-gold p-6">
+        <div className="text-[10px] uppercase tracking-[0.22em] text-gold-300">✦ What to eat next</div>
+        <h3 className="display mt-1 text-xl text-cream-50">{advice.headline}</h3>
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1fr,auto]">
+          <div className="space-y-2">
+            {advice.actions.map((a, i) => (
+              <div key={i} className="flex items-start gap-2 text-[13px]">
+                <span className={toneTextClass(a.tone)}>•</span>
+                <span className="text-cream-200">{a.text}</span>
+              </div>
+            ))}
+          </div>
+          {advice.pick && (
+            <div className="rounded-md border border-gold-400/15 bg-gold-400/5 p-4 sm:min-w-[210px]">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-obsidian-200">Top pick</div>
+              <div className="mt-1 text-sm text-cream-50">{advice.pick.name}</div>
+              <div className="text-[11px] text-gold-200">{advice.pick.detail}</div>
+              <button
+                className="btn-gold mt-3 w-full text-xs"
+                onClick={() => {
+                  const f = foodDb.find((x) => x.name === advice.pick!.name);
+                  if (f) logFood(f);
+                }}
+              >
+                Log it
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-4">
         <div className="card card-gold col-span-1 p-5 lg:col-span-2">

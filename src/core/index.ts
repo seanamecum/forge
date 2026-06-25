@@ -8,3 +8,4 @@ export * from "./score";
 export * from "./insight";
 export * from "./targets";
 export * from "./rehab";
+export * from "./nutrition";
