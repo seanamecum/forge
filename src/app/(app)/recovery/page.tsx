@@ -9,8 +9,23 @@ import {
   hrvTrend,
   sleepTrend,
 } from "@/lib/mock/user";
+import { recoveryDrivers } from "@/core";
 
 export default function RecoveryPage() {
+  // Recovery explains itself — attribution computed by @forge/core.
+  const recDrivers = recoveryDrivers({
+    recovery: today.recovery,
+    sleepHours: today.sleepHours,
+    sleepReference: 8.5,
+    hrv: today.hrv,
+    hrvBaseline: today.hrv - today.hrvDelta,
+    strainYesterday: today.strainYesterday,
+    strainAvg: 15,
+    restingHr: today.restingHr,
+    restingHrBaseline: 50,
+    magnesiumPct: 52,
+    magnesiumDaysLow: 6,
+  });
   return (
     <div className="space-y-6">
       <SectionTitle
@@ -25,6 +40,29 @@ export default function RecoveryPage() {
         <RingCard value={today.sleep} label="Sleep" sub={`${today.sleepHours} h`} tone="royal" />
         <RingCard value={Math.round((today.hrv / 80) * 100)} label="HRV" sub={`${today.hrv} ms`} tone="gold" />
         <RingCard value={Math.round((today.restingHr / 80) * 100)} label="RHR" sub={`${today.restingHr} bpm`} tone="ruby" inverted />
+      </div>
+
+      {/* WHY RECOVERY — attribution from @forge/core */}
+      <div className="card p-6">
+        <div className="mb-3 text-[10px] uppercase tracking-[0.22em] text-gold-300">
+          Why recovery is {today.recovery}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {recDrivers.map((d) => (
+            <div
+              key={d.factor}
+              className="flex items-start gap-2.5 rounded-md border border-gold-400/10 bg-obsidian-800/40 px-3 py-2.5"
+            >
+              <span className={d.positive ? "text-forge-green" : "text-forge-amber"}>
+                {d.positive ? "▲" : "▼"}
+              </span>
+              <div>
+                <div className="text-sm text-cream-100">{d.factor}</div>
+                <div className="text-[11px] text-obsidian-200">{d.detail}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Sleep breakdown + trends */}
