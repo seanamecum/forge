@@ -3,29 +3,12 @@ import { Ring } from "@/components/ui/Ring";
 import { Bar } from "@/components/ui/Bar";
 import { Sparkline, Barline } from "@/components/ui/Sparkline";
 import { Stat } from "@/components/ui/Stat";
-import {
-  today,
-  recoveryTrend,
-  hrvTrend,
-  sleepTrend,
-} from "@/lib/mock/user";
-import { recoveryDrivers } from "@/core";
+import { dataSource } from "@/lib/data";
 
-export default function RecoveryPage() {
-  // Recovery explains itself — attribution computed by @forge/core.
-  const recDrivers = recoveryDrivers({
-    recovery: today.recovery,
-    sleepHours: today.sleepHours,
-    sleepReference: 8.5,
-    hrv: today.hrv,
-    hrvBaseline: today.hrv - today.hrvDelta,
-    strainYesterday: today.strainYesterday,
-    strainAvg: 15,
-    restingHr: today.restingHr,
-    restingHrBaseline: 50,
-    magnesiumPct: 52,
-    magnesiumDaysLow: 6,
-  });
+export default async function RecoveryPage() {
+  // One read through the @forge/data seam (Mock today, Supabase at M1).
+  const { today, recoveryTrend, hrvTrend, sleepTrend, recoveryDrivers: recDrivers } =
+    await dataSource.getRecovery();
   return (
     <div className="space-y-6">
       <SectionTitle

@@ -28,6 +28,16 @@ export interface DashboardData {
   connections: ForgeInsight[];
 }
 
+/** Everything the recovery page renders. */
+export interface RecoveryPageData {
+  today: typeof today;
+  recoveryTrend: number[];
+  hrvTrend: number[];
+  sleepTrend: number[];
+  recoveryDrivers: RecoveryDriver[];
+}
+
 export interface ForgeDataSource {
   getDashboard(): Promise<DashboardData>;
+  getRecovery(): Promise<RecoveryPageData>;
 }

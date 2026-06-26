@@ -22,7 +22,7 @@ import {
   recoveryDrivers,
   crossModule,
 } from "@/core";
-import type { DashboardData, ForgeDataSource } from "./source";
+import type { DashboardData, ForgeDataSource, RecoveryPageData } from "./source";
 
 export class MockDataSource implements ForgeDataSource {
   async getDashboard(): Promise<DashboardData> {
@@ -94,6 +94,28 @@ export class MockDataSource implements ForgeDataSource {
       scoreLever: scoreLever(forgeScoreBreakdown),
       recoveryDrivers: recDrivers,
       connections,
+    };
+  }
+
+  async getRecovery(): Promise<RecoveryPageData> {
+    return {
+      today,
+      recoveryTrend,
+      hrvTrend,
+      sleepTrend,
+      recoveryDrivers: recoveryDrivers({
+        recovery: today.recovery,
+        sleepHours: today.sleepHours,
+        sleepReference: 8.5,
+        hrv: today.hrv,
+        hrvBaseline: today.hrv - today.hrvDelta,
+        strainYesterday: today.strainYesterday,
+        strainAvg: 15,
+        restingHr: today.restingHr,
+        restingHrBaseline: 50,
+        magnesiumPct: 52,
+        magnesiumDaysLow: 6,
+      }),
     };
   }
 }
