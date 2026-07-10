@@ -117,4 +117,6 @@ struct StoreProduct: Identifiable {
     let rating: Double
     var tag: String? = nil
     let icon: String  // SF Symbol
+    /// Curated shelf this product belongs to — Supplements, Recovery, Equipment…
+    var category: String = "Gear"
 }

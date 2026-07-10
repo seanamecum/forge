@@ -20,6 +20,9 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.35), value: phaseKey)
+        // Dynamic Type: honor user text size up to AX2; larger sizes need a
+        // dedicated reflow pass before they render acceptably in dense cards.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 
     private var phaseKey: Int {

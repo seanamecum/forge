@@ -52,6 +52,7 @@ final class NotificationService {
 
     // MARK: - Permission
 
+    @MainActor
     @discardableResult
     func requestPermission() async -> Bool {
         let center = UNUserNotificationCenter.current()
@@ -63,6 +64,7 @@ final class NotificationService {
         return permissionGranted
     }
 
+    @MainActor
     private func ensurePermission() async -> Bool {
         if permissionGranted { return true }
         return await requestPermission()
@@ -70,6 +72,7 @@ final class NotificationService {
 
     // MARK: - Morning directive (daily, repeating)
 
+    @MainActor
     func setMorningDirective(_ on: Bool, headline: String, priority: String) async {
         morningDirectiveOn = on
         guard on else {
@@ -89,6 +92,7 @@ final class NotificationService {
     }
 
     /// Re-schedule after a time change while the toggle is on.
+    @MainActor
     func rescheduleMorningDirective(headline: String, priority: String) async {
         guard morningDirectiveOn else { return }
         await setMorningDirective(true, headline: headline, priority: priority)
@@ -96,6 +100,7 @@ final class NotificationService {
 
     // MARK: - Smart nudges (daily, repeating)
 
+    @MainActor
     func setSmartNudges(_ on: Bool, proteinRemaining: Int) async {
         smartNudgesOn = on
         guard on else {
@@ -120,6 +125,7 @@ final class NotificationService {
     }
 
     /// Fire a one-off in a few seconds so the user can see a live notification.
+    @MainActor
     func sendPreview() async {
         guard await ensurePermission() else { return }
         let content = UNMutableNotificationContent()

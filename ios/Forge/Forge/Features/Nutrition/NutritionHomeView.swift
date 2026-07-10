@@ -11,8 +11,9 @@ struct NutritionHomeView: View {
         NavigationStack {
             ScreenScaffold {
                 SectionHeader(eyebrow: "Fuel", title: "Nutrition",
-                              subtitle: "Lean bulk: +280 kcal surplus · 200 g protein floor.")
+                              subtitle: "Targets adapt to your training, weight trend, recovery, and rehab — never silently.")
 
+                coachedTargetsCard
                 macroCard
                 waterCard
                 quickLogRow
@@ -20,6 +21,7 @@ struct NutritionHomeView: View {
                 navLinks
             }
             .navigationBarHidden(true)
+            .onAppear { app.refreshFuelPlan() }
             .sheet(isPresented: $showFoodSearch) {
                 FoodSearchSheet(meal: pickedMeal)
             }
@@ -44,6 +46,52 @@ struct NutritionHomeView: View {
         }
     }
 
+    /// Adaptive targets — why today's numbers are today's numbers.
+    /// Base plan from your body and goal; coached deltas from live signals.
+    @ViewBuilder
+    private var coachedTargetsCard: some View {
+        if let plan = app.nutrition.activePlan {
+            Card {
+                VStack(alignment: .leading, spacing: 11) {
+                    HStack {
+                        HStack(spacing: 6) {
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.gold)
+                            EyebrowLabel(text: "Coached Targets · Adaptive")
+                        }
+                        Spacer()
+                        if plan.isAdjusted {
+                            Chip(text: "\(plan.adjustments.count) active", tone: .gold)
+                        }
+                    }
+                    Text(plan.headline)
+                        .font(Theme.text(13.5, .medium))
+                        .foregroundStyle(Theme.cream)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if plan.isAdjusted {
+                        Text("Base \(plan.baseCalories) kcal · \(plan.baseProtein)g → today \(plan.calories) kcal · \(plan.protein)g")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.muted)
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(plan.adjustments) { adj in
+                                HStack(alignment: .top, spacing: 9) {
+                                    Chip(text: adj.label, tone: .gold)
+                                    Text(adj.reason)
+                                        .font(Theme.text(12))
+                                        .foregroundStyle(Theme.creamDim)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Coached targets. \(plan.headline)")
+        }
+    }
+
     private var macroCard: some View {
         let n = app.nutrition
         return Card(gold: true) {
@@ -52,17 +100,17 @@ struct NutritionHomeView: View {
                     Text("\(n.calories)")
                         .font(Theme.display(40))
                         .foregroundStyle(Theme.goldGradient)
-                    Text("/ \(n.user.calorieTarget) kcal")
+                    Text("/ \(n.calorieTarget) kcal")
                         .font(.system(size: 13)).foregroundStyle(Theme.muted)
                     Spacer()
                     Chip(text: "\(n.caloriesRemaining) left", tone: .gold)
                 }
-                LabeledBar(label: "Protein", valueText: "\(n.protein) / \(n.user.proteinTarget) g",
-                           value: Double(n.protein), target: Double(n.user.proteinTarget), tone: .green)
-                LabeledBar(label: "Carbs", valueText: "\(n.carbs) / \(n.user.carbTarget) g",
-                           value: Double(n.carbs), target: Double(n.user.carbTarget), tone: .gold)
-                LabeledBar(label: "Fat", valueText: "\(n.fat) / \(n.user.fatTarget) g",
-                           value: Double(n.fat), target: Double(n.user.fatTarget), tone: .amber)
+                LabeledBar(label: "Protein", valueText: "\(n.protein) / \(n.proteinTarget) g",
+                           value: Double(n.protein), target: Double(n.proteinTarget), tone: .green)
+                LabeledBar(label: "Carbs", valueText: "\(n.carbs) / \(n.carbTarget) g",
+                           value: Double(n.carbs), target: Double(n.carbTarget), tone: .gold)
+                LabeledBar(label: "Fat", valueText: "\(n.fat) / \(n.fatTarget) g",
+                           value: Double(n.fat), target: Double(n.fatTarget), tone: .amber)
             }
         }
     }
@@ -78,14 +126,14 @@ struct NutritionHomeView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(n.hydrationPct < 70 ? Theme.amber : Theme.green)
                 }
-                CapsuleBar(value: n.waterOz, target: Double(n.user.waterTargetOz), tone: .royal, height: 9)
+                CapsuleBar(value: n.waterOz, target: Double(n.waterTargetOz), tone: .royal, height: 9)
                 HStack(spacing: 8) {
                     ForEach([8, 16, 24], id: \.self) { oz in
                         Button("+\(oz) oz") { app.nutrition.addWater(Double(oz)) }
                             .buttonStyle(GhostButtonStyle(compact: true))
                     }
                     Spacer()
-                    Text("\(Int(n.waterOz)) / \(n.user.waterTargetOz) oz")
+                    Text("\(Int(n.waterOz)) / \(n.waterTargetOz) oz")
                         .font(.system(size: 11)).foregroundStyle(Theme.muted)
                 }
             }

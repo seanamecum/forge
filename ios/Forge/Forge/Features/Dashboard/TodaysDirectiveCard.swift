@@ -30,7 +30,7 @@ struct TodaysDirectiveCard: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(directive.rationale)
-                    .font(.system(size: 13))
+                    .font(Theme.text(13))
                     .foregroundStyle(Theme.creamDim)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -64,7 +64,7 @@ struct TodaysDirectiveCard: View {
                             .kerning(1.4)
                             .foregroundStyle(Theme.muted)
                         Text(directive.priorityAction)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(Theme.text(13, .medium))
                             .foregroundStyle(Theme.cream)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -109,7 +109,7 @@ private struct DirectiveActionRow: View {
                     .kerning(1.2)
                     .foregroundStyle(Theme.muted)
                 Text(action.value)
-                    .font(.system(size: 13.5, weight: .medium))
+                    .font(Theme.text(13.5, .medium))
                     .foregroundStyle(Theme.cream)
                     .fixedSize(horizontal: false, vertical: true)
             }

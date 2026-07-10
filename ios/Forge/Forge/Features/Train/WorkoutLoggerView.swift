@@ -38,7 +38,16 @@ struct WorkoutLoggerView: View {
         .navigationTitle(plan.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.bgElevated, for: .navigationBar)
-        .onAppear { seed() }
+        .onAppear {
+            seed()
+            WorkoutLiveActivityController.start(
+                workoutName: plan.name, startedAt: startedAt, totalSets: totalSets)
+        }
+        .onDisappear {
+            // Leaving the logger ends the lock-screen session either way —
+            // a finished workout already ended it; an abandoned one must too.
+            WorkoutLiveActivityController.end()
+        }
         .onReceive(timer) { _ in
             if restRemaining > 0 { restRemaining -= 1 }
         }
@@ -48,10 +57,13 @@ struct WorkoutLoggerView: View {
                                              sets: [WorkoutSet(weightLb: 0, reps: 0)]))
             }
         }
-        .alert("Session saved", isPresented: $finished) {
+        .alert(prCount > 0 ? "Session saved — \(prCount) PR\(prCount == 1 ? "" : "s")! 🏆" : "Session saved",
+               isPresented: $finished) {
             Button("Done") { dismiss() }
         } message: {
-            Text("\(Int(totalVolume).formatted()) lb total volume · \(durationMin) min. PRs are flagged automatically.")
+            Text(prCount > 0
+                 ? "\(Int(totalVolume).formatted()) lb total volume · \(durationMin) min. New record\(prCount == 1 ? "" : "s") added to your PR board."
+                 : "\(Int(totalVolume).formatted()) lb total volume · \(durationMin) min.")
         }
     }
 
@@ -97,9 +109,14 @@ struct WorkoutLoggerView: View {
             for item in block.items {
                 guard let id = item.exerciseID else { continue }
                 let exercise = MockData.exercise(id)
+                // Hevy principle: start where you left off. Last session's best
+                // set prefills weight AND reps; the 1RM heuristic is the fallback.
+                let last = app.workouts.lastPerformance(of: exercise.name)
+                let weight = last?.weightLb ?? defaultWeight(for: exercise)
+                let reps = last?.reps ?? 0
                 logged.append(LoggedExercise(
                     exercise: exercise,
-                    sets: (0..<3).map { _ in WorkoutSet(weightLb: defaultWeight(for: exercise), reps: 0) }
+                    sets: (0..<3).map { _ in WorkoutSet(weightLb: weight, reps: reps) }
                 ))
             }
         }
@@ -113,6 +130,10 @@ struct WorkoutLoggerView: View {
     private func startRest(_ seconds: Int) {
         restTotal = seconds
         restRemaining = seconds
+        WorkoutLiveActivityController.update(
+            setsDone: completedSets, totalSets: totalSets, volumeLb: totalVolume,
+            restEndsAt: Date.now.addingTimeInterval(TimeInterval(seconds)),
+            isPR: prCount > 0)
     }
 
     private var restLabel: String {
@@ -127,10 +148,16 @@ struct WorkoutLoggerView: View {
         logged.reduce(0) { $0 + $1.volumeLb }
     }
 
+    private var prCount: Int {
+        logged.flatMap(\.sets).filter { $0.completed && $0.isPR }.count
+    }
+
     private var totalSets: Int { logged.reduce(0) { $0 + $1.sets.count } }
     private var completedSets: Int { logged.reduce(0) { $0 + $1.sets.filter(\.completed).count } }
 
     private func finish() {
+        Haptics.success()
+        WorkoutLiveActivityController.end()
         let completed = logged.filter { $0.sets.contains(where: \.completed) }
         let workout = Workout(name: plan.name, date: .now, durationMin: durationMin,
                               exercises: completed, avgRPE: averageRPE, feel: .fine)
@@ -169,6 +196,7 @@ struct WorkoutLoggerView: View {
 // MARK: - Per-exercise card
 
 struct ExerciseLogCard: View {
+    @Environment(AppState.self) private var app
     @Binding var logged: LoggedExercise
     let onSetCompleted: (Int) -> Void
 
@@ -182,6 +210,21 @@ struct ExerciseLogCard: View {
                     Spacer()
                     Text(logged.exercise.primaryMuscles.joined(separator: " · "))
                         .font(.system(size: 10)).foregroundStyle(Theme.faint)
+                }
+
+                // Hevy-style ghost: where you left off, and the bar to beat.
+                if let last = app.workouts.lastPerformance(of: logged.exercise.name) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 9))
+                        Text("Last time: \(Int(last.weightLb)) lb × \(last.reps)")
+                        if let pr = app.workouts.prBaseline(for: logged.exercise.name) {
+                            Text("· PR e1RM \(Int(pr)) lb")
+                                .foregroundStyle(Theme.gold.opacity(0.85))
+                        }
+                    }
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Theme.muted)
                 }
 
                 // Column labels
@@ -198,7 +241,8 @@ struct ExerciseLogCard: View {
                 .foregroundStyle(Theme.faint)
 
                 ForEach($logged.sets) { $set in
-                    SetRow(set: $set, index: indexOf(set: set)) {
+                    SetRow(set: $set, index: indexOf(set: set),
+                           exerciseName: logged.exercise.name) {
                         onSetCompleted(logged.restSeconds)
                     }
                 }
@@ -222,16 +266,29 @@ struct ExerciseLogCard: View {
 }
 
 struct SetRow: View {
+    @Environment(AppState.self) private var app
     @Binding var set: WorkoutSet
     let index: Int
+    let exerciseName: String
     let onComplete: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("\(index)")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(set.completed ? Theme.green : Theme.muted)
-                .frame(width: 28, alignment: .leading)
+            ZStack(alignment: .leading) {
+                Text("\(index)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(set.completed ? Theme.green : Theme.muted)
+                    .opacity(set.isPR && set.completed ? 0 : 1)
+                if set.isPR && set.completed {
+                    Text("PR")
+                        .font(.system(size: 10, weight: .heavy))
+                        .foregroundStyle(Theme.bg)
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(Capsule().fill(Theme.goldGradient))
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .frame(width: 28, alignment: .leading)
 
             NumberField(value: $set.weightLb)
             IntField(value: $set.reps)
@@ -239,15 +296,43 @@ struct SetRow: View {
             OptionalIntField(value: $set.rir)
 
             Button {
-                set.completed.toggle()
-                if set.completed { onComplete() }
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.6)) {
+                    set.completed.toggle()
+                    if set.completed {
+                        // Live PR detection — the moment it happens, not at finish.
+                        set.isPR = app.workouts.isPRCandidate(set, exerciseName: exerciseName)
+                    } else {
+                        set.isPR = false
+                    }
+                }
+                if set.isPR && set.completed {
+                    Haptics.success()   // double-tap celebration for a record
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(180))
+                        Haptics.success()
+                    }
+                } else if set.completed {
+                    Haptics.success()
+                    onComplete()
+                } else {
+                    Haptics.tap()
+                }
+                if set.isPR && set.completed { onComplete() }
             } label: {
                 Image(systemName: set.completed ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 20))
-                    .foregroundStyle(set.completed ? Theme.green : Theme.faint.opacity(0.5))
+                    .foregroundStyle(set.completed ? (set.isPR ? Theme.gold : Theme.green) : Theme.faint.opacity(0.5))
             }
             .frame(width: 34)
+            .accessibilityLabel(set.isPR && set.completed
+                ? "Set \(index) complete — new personal record"
+                : (set.completed ? "Set \(index) complete" : "Complete set \(index)"))
         }
+        .padding(.vertical, set.isPR && set.completed ? 3 : 0)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(set.isPR && set.completed ? Theme.gold.opacity(0.07) : .clear)
+        )
     }
 }
 

@@ -22,7 +22,12 @@ is already configured and works with free personal teams).
 Forge/
   App/            ForgeApp (@main, SwiftData container) · RootView · MainTabView
   Core/           AppState (@Observable: user, phase, services, Forge Score engine) ·
-                  DirectiveEngine (today's one instruction) · ForgeConfig (API key/mode)
+                  DirectiveEngine (today's one instruction) · DataHub (unified multi-
+                  wearable layer: source priority, preferred sources, fallbacks) ·
+                  AdaptiveNutritionEngine (coached fuel targets, with reasons) ·
+                  TrainingAnalyticsEngine (plateaus, weak points) · WeeklyReportEngine ·
+                  EvidenceBase (vetted citations for the coach) · WidgetBridge ·
+                  WorkoutActivity (Live Activity contract) · ForgeConfig (proxy/key/mode)
     Mock/         MockData (Sean's world) · MockExercises · MockRehab
     Persistence/  SwiftData @Model records (User, Goal, Workout, NutritionEntry,
                   Recovery, Sleep, ScoreRecord, CheckInRecord) + PersistenceService
@@ -44,8 +49,14 @@ Forge/
                   body, digital twin) · Social · Market · Profile (Free/Pro/Elite,
                   notification scheduling)
   Utilities/      Shared extensions (clamped, date labels)
-ForgeTests/       Scoring · Generator · WorkoutMath · HealthKitService · Directive ·
-                  AIService · NotificationService — ~40 tests, run with ⌘U
+ForgeWidget/      Home-screen widget (Today's Directive + Forge Score) and the
+                  workout Live Activity (lock screen + Dynamic Island)
+ForgeWatch/       Apple Watch companion — the Directive on the wrist, pushed live
+                  from the phone over WatchConnectivity (placeholder until first sync)
+ForgeTests/       Scoring · Generator · WorkoutMath · HealthKit · Directive · AIService ·
+                  DataHub · UnifiedSignals · AdaptiveNutrition · TrainingAnalytics ·
+                  WeeklyReport · TrainingExperience · Notifications · ProductionReadiness
+                  — 149 tests, run with ⌘U
 ```
 
 ## The daily loop (the product thesis)
@@ -89,13 +100,17 @@ over HTTPS (Swift has no official Anthropic SDK) using `claude-opus-4-8`, with a
 prompt assembled from the athlete's real data. On no-key, network error, or non-200 it
 falls back to the rule-based mock — the chat is identical offline.
 
-**Turn it on:** set `ANTHROPIC_API_KEY` in the Xcode scheme (Edit Scheme → Run →
-Arguments → Environment Variables), or drop an `AnthropicAPIKey` string into a
-`Secrets.plist` (gitignored). Empty = mock mode. Swap `ForgeConfig.coachModel` to
-`claude-sonnet-4-6` / `claude-haiku-4-5` to trade intelligence for cost/latency.
+**Turn it on (production path):** deploy `supabase/functions/coach-proxy` and set
+`FORGE_COACH_PROXY_URL` in the Xcode scheme (or `CoachProxyURL` in a gitignored
+`Secrets.plist`) — the key lives server-side and the client sends none. **Local dev
+only:** `ANTHROPIC_API_KEY` env / `AnthropicAPIKey` in Secrets.plist talks to the API
+directly. A configured proxy always beats a local key; with neither, mock mode. Swap
+`ForgeConfig.coachModel` to `claude-sonnet-4-6` / `claude-haiku-4-5` for cost/latency.
+The system prompt is grounded in `EvidenceBase` (real position stands & landmark
+studies) and forbids invented citations — see the book icon in the Coach header.
 
-> **Security:** a key shipped in an app binary is extractable. For production, **proxy
-> these calls through your own backend** and point `ForgeConfig.messagesEndpoint` at it.
+> **Security:** a key shipped in an app binary is extractable — that's why the proxy
+> is the default production path (`ForgeConfig.aiMode == .liveProxy`).
 
 ## Notifications
 
@@ -110,7 +125,8 @@ notification" fires one in 4 seconds.
 - **Auth:** `AuthService` async signatures are Supabase/Firebase-shaped — replace bodies.
 - **Data sync:** every `@Observable` service owns its domain; introduce a repository
   beneath each and the views never change.
-- **AI:** swap `ForgeConfig.messagesEndpoint` for your backend proxy; the contract is unchanged.
+- **AI:** done — `supabase/functions/coach-proxy` ships in this repo; point
+  `CoachProxyURL` at the deployed function.
 - **Subscriptions / analytics / crash reporting:** Free/Pro/Elite ladder in Profile;
   add StoreKit 2 + your SDK of choice at the AppState layer.
 

@@ -56,6 +56,7 @@ final class HealthKitService {
 
     // MARK: - Authorization
 
+    @MainActor
     func connect() async {
         guard isAvailable else {
             authState = .unavailable
@@ -84,6 +85,7 @@ final class HealthKitService {
 
     // MARK: - Reads
 
+    @MainActor
     func refresh() async {
         guard authState == .authorized else { return }
         isLoading = true
@@ -108,6 +110,7 @@ final class HealthKitService {
     // MARK: - Writes
 
     /// Save a strength workout to Apple Health via HKWorkoutBuilder.
+    @MainActor
     @discardableResult
     func saveWorkout(start: Date, end: Date, calories: Double) async -> Bool {
         guard authState == .authorized else {
@@ -138,6 +141,7 @@ final class HealthKitService {
     }
 
     /// Save a body-mass measurement to Apple Health.
+    @MainActor
     @discardableResult
     func saveBodyMass(_ pounds: Double) async -> Bool {
         guard authState == .authorized else {

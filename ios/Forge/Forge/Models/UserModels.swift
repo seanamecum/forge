@@ -79,6 +79,14 @@ enum DietPreference: String, CaseIterable, Codable, Identifiable {
 struct UserProfile: Identifiable, Codable {
     let id = UUID()
     var name: String
+
+    // `id` is identity-per-launch, not persisted — excluding it from Codable
+    // also silences the immutable-decode warning.
+    private enum CodingKeys: String, CodingKey {
+        case name, age, sex, heightInches, weightLb, fitnessLevel, activityLevel
+        case goals, experienceYears, equipment, diet, sport, level, xp, xpToNext
+        case streakDays, usesImperial
+    }
     var age: Int
     var sex: Sex
     var heightInches: Double

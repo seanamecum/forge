@@ -53,29 +53,63 @@ enum MockData {
     static let strainTrend: [Double] = [12, 15, 17, 9, 14, 18, 16, 11, 13, 16, 18, 12, 14, 14.2]
     static let weightTrend: [Double] = [196.8, 197.2, 197.6, 197.4, 198.1, 198.4, 198.2, 198.8, 199.1, 199.0, 199.4, 199.6, 199.8, 200.0]
 
+    // MARK: - Unified stream (per-device readings)
+
+    /// What each device reports today. Values intentionally disagree a little —
+    /// that's the reality the DataHub exists to arbitrate. WHOOP's numbers match
+    /// the seeded snapshot so the default demo is unchanged until the user picks
+    /// a different preferred source (or disconnects a device).
+    static func deviceReadings(for source: DataSource) -> [MetricReading] {
+        func r(_ kind: MetricKind, _ value: Double, _ unit: String, age: Double = 0.3) -> MetricReading {
+            MetricReading(kind: kind, value: value, unit: unit, source: source, ageHours: age)
+        }
+        switch source {
+        case .whoop:
+            return [r(.sleep, 7.2, "h"), r(.hrv, 58, "ms"), r(.restingHR, 56, "bpm"),
+                    r(.recovery, 78, ""), r(.strain, 14.2, "")]
+        case .appleWatch:
+            return [r(.sleep, 7.9, "h"), r(.hrv, 61, "ms"), r(.restingHR, 58, "bpm"),
+                    r(.heartRate, 61, "bpm"), r(.steps, 7840, ""), r(.calories, 2950, "kcal")]
+        case .oura:
+            return [r(.sleep, 7.5, "h"), r(.hrv, 60, "ms"), r(.restingHR, 55, "bpm"),
+                    r(.temperature, 97.9, "°F")]
+        case .garmin:
+            return [r(.trainingLoad, 612, ""), r(.vo2Max, 52, ""), r(.sleep, 7.6, "h")]
+        case .fitbit:
+            return [r(.sleep, 7.7, "h"), r(.steps, 7615, "")]
+        case .polar:
+            return [r(.heartRate, 60, "bpm"), r(.hrv, 59, "ms")]
+        case .smartScale:
+            return [r(.weight, 200, "lb", age: 6), r(.bodyFat, 15.2, "%", age: 6),
+                    r(.leanMass, 169.6, "lb", age: 6)]
+        case .forgeBand:
+            return []
+        }
+    }
+
     // MARK: - Wearables
 
     static let wearables: [WearableDevice] = [
         WearableDevice(name: "Apple Watch Ultra", brand: "Apple", icon: "applewatch",
-                       connected: true, lastSync: "2 min ago",
+                       source: .appleWatch, connected: true, lastSync: "2 min ago", lastSyncAgeHours: 0.03,
                        permissions: ["Heart Rate", "Workouts", "Sleep", "Steps", "Energy"], battery: 76),
         WearableDevice(name: "WHOOP 5.0", brand: "WHOOP", icon: "waveform.path.ecg",
-                       connected: true, lastSync: "6 min ago",
+                       source: .whoop, connected: true, lastSync: "6 min ago", lastSyncAgeHours: 0.1,
                        permissions: ["HRV", "RHR", "Sleep Stages", "Strain", "Recovery"], battery: 58),
         WearableDevice(name: "Oura Ring Gen 4", brand: "Oura", icon: "circle.circle",
-                       connected: false, lastSync: nil,
+                       source: .oura, connected: false, lastSync: nil, lastSyncAgeHours: nil,
                        permissions: ["HRV", "Temperature", "Readiness"]),
         WearableDevice(name: "Garmin Fenix 8", brand: "Garmin", icon: "location.north.circle",
-                       connected: false, lastSync: nil,
+                       source: .garmin, connected: false, lastSync: nil, lastSyncAgeHours: nil,
                        permissions: ["GPS", "Running Power", "VO₂ Max"]),
         WearableDevice(name: "Fitbit Charge 7", brand: "Fitbit", icon: "heart.circle",
-                       connected: false, lastSync: nil,
+                       source: .fitbit, connected: false, lastSync: nil, lastSyncAgeHours: nil,
                        permissions: ["Heart Rate", "Sleep", "Steps"]),
         WearableDevice(name: "Polar H10", brand: "Polar", icon: "bolt.heart",
-                       connected: false, lastSync: nil,
+                       source: .polar, connected: false, lastSync: nil, lastSyncAgeHours: nil,
                        permissions: ["Live HR", "HRV Training"]),
         WearableDevice(name: "Withings Body Scan", brand: "Withings", icon: "scalemass",
-                       connected: true, lastSync: "this morning",
+                       source: .smartScale, connected: true, lastSync: "this morning", lastSyncAgeHours: 6,
                        permissions: ["Weight", "Body Fat", "Lean Mass"], battery: 91),
     ]
 
@@ -425,12 +459,15 @@ enum MockData {
     ]
 
     static let products: [StoreProduct] = [
-        StoreProduct(name: "Whey Isolate 5 lb", brand: "Ascent", price: "$74", rating: 4.8, tag: "Best Value", icon: "takeoutbag.and.cup.and.straw.fill"),
-        StoreProduct(name: "Creatine Mono 1 kg", brand: "BulkSupps", price: "$28", rating: 4.9, tag: "Forge Pick", icon: "aqi.medium"),
-        StoreProduct(name: "Resistance Band Set", brand: "Forge Gear", price: "$48", rating: 4.7, icon: "figure.flexibility"),
-        StoreProduct(name: "Adjustable Dumbbells", brand: "Bowflex", price: "$429", rating: 4.5, icon: "dumbbell.fill"),
-        StoreProduct(name: "Electrolytes 30 ct", brand: "LMNT", price: "$45", rating: 4.85, icon: "drop.fill"),
-        StoreProduct(name: "Mobility Tool Kit", brand: "TriggerPoint", price: "$58", rating: 4.7, icon: "circle.hexagongrid.fill"),
+        StoreProduct(name: "Whey Isolate 5 lb", brand: "Ascent", price: "$74", rating: 4.8, tag: "Best Value", icon: "takeoutbag.and.cup.and.straw.fill", category: "Supplements"),
+        StoreProduct(name: "Creatine Mono 1 kg", brand: "BulkSupps", price: "$28", rating: 4.9, tag: "Forge Pick", icon: "aqi.medium", category: "Supplements"),
+        StoreProduct(name: "Electrolytes 30 ct", brand: "LMNT", price: "$45", rating: 4.85, icon: "drop.fill", category: "Supplements"),
+        StoreProduct(name: "Mg-Glycinate 400 mg", brand: "Thorne", price: "$32", rating: 4.9, tag: "Coach Pick", icon: "pills.fill", category: "Supplements"),
+        StoreProduct(name: "Mobility Tool Kit", brand: "TriggerPoint", price: "$58", rating: 4.7, icon: "circle.hexagongrid.fill", category: "Recovery"),
+        StoreProduct(name: "Percussion Massager", brand: "Theragun", price: "$299", rating: 4.6, icon: "waveform", category: "Recovery"),
+        StoreProduct(name: "Resistance Band Set", brand: "Forge Gear", price: "$48", rating: 4.7, tag: "Forge", icon: "figure.flexibility", category: "Equipment"),
+        StoreProduct(name: "Adjustable Dumbbells", brand: "Bowflex", price: "$429", rating: 4.5, icon: "dumbbell.fill", category: "Equipment"),
+        StoreProduct(name: "Training Tee", brand: "Forge Apparel", price: "$38", rating: 4.8, tag: "Forge", icon: "tshirt.fill", category: "Apparel"),
     ]
 
     // MARK: - Notifications

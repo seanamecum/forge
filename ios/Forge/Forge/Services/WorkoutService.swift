@@ -10,7 +10,50 @@ final class WorkoutService {
     var exercises: [Exercise] = MockData.exercises
 
     var weeklyVolumeLb: Double {
-        history.reduce(0) { $0 + $1.totalVolumeLb }
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now
+        return history.filter { $0.date >= cutoff }.reduce(0) { $0 + $1.totalVolumeLb }
+    }
+
+    /// Lifts that have stopped progressing, with the diagnosis and the fix.
+    var plateaus: [PlateauFinding] {
+        TrainingAnalyticsEngine.plateaus(history: history)
+    }
+
+    /// Muscle groups below their effective-volume floor.
+    var weakPoints: [MuscleVolume] {
+        TrainingAnalyticsEngine.weakPoints(volume: muscleVolume)
+    }
+
+    // MARK: - Hevy-grade logging intelligence
+
+    /// The best completed set from the most recent session containing this
+    /// exercise — powers the "last time" ghost values in the logger.
+    func lastPerformance(of exerciseName: String) -> WorkoutSet? {
+        for workout in history {   // newest-first
+            guard let logged = workout.exercises.first(where: { $0.exercise.name == exerciseName })
+            else { continue }
+            let done = logged.sets.filter { $0.completed && $0.reps > 0 }
+            if let best = done.max(by: { $0.estimatedOneRepMax < $1.estimatedOneRepMax }) {
+                return best
+            }
+        }
+        return nil
+    }
+
+    /// Current estimated-1RM record for an exercise (nil = no record yet).
+    func prBaseline(for exerciseName: String) -> Double? {
+        personalRecords
+            .filter { $0.exerciseName == exerciseName }
+            .map { $0.weightLb * (1 + Double($0.reps) / 30) }
+            .max()
+    }
+
+    /// Does this set beat the athlete's standing record? Drives the live PR
+    /// flag, celebration haptic, and record promotion on finish.
+    func isPRCandidate(_ set: WorkoutSet, exerciseName: String) -> Bool {
+        guard set.weightLb > 0, set.reps > 0 else { return false }
+        guard let baseline = prBaseline(for: exerciseName) else { return true }
+        return set.estimatedOneRepMax > baseline
     }
 
     func finish(_ workout: Workout) {
@@ -26,14 +69,9 @@ final class WorkoutService {
         }
     }
 
-    /// Today's plan — pre-generated with Sean's live constraints (recovery 78, knee phase 2).
-    var todaysPlan: GeneratedWorkout {
-        generate(goal: .buildMuscle, minutes: 60, equipment: .fullGym,
-                 recovery: MockData.today.recovery,
-                 injuries: [.knee], level: .intermediate)
-    }
-
     // MARK: - AI Generator
+    // (Today's plan lives on AppState.todaysPlan, generated from the live
+    //  profile, recovery, and injuries — this service stays a pure engine.)
 
     func generate(goal: Goal, minutes: Int, equipment: Equipment,
                   recovery: Int, injuries: [InjuryType], level: FitnessLevel) -> GeneratedWorkout {

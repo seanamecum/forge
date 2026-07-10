@@ -4,6 +4,7 @@ struct CoachView: View {
     @Environment(AppState.self) private var app
     @State private var vm = CoachViewModel()
     @State private var input = ""
+    @State private var showEvidence = false
 
     var body: some View {
         NavigationStack {
@@ -61,11 +62,24 @@ struct CoachView: View {
                 }
             }
             Spacer()
+
+            Button {
+                showEvidence = true
+            } label: {
+                Image(systemName: "text.book.closed")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.gold)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Theme.card))
+                    .overlay(Circle().stroke(Theme.hairline, lineWidth: 1))
+            }
+            .accessibilityLabel("The science behind Forge's coaching")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Theme.bgElevated)
         .overlay(Rectangle().fill(Theme.hairline).frame(height: 1), alignment: .bottom)
+        .sheet(isPresented: $showEvidence) { EvidenceSheet() }
     }
 
     private var composer: some View {
@@ -96,7 +110,8 @@ struct CoachView: View {
     }
 
     private func send(_ text: String) {
-        vm.send(text)
+        Haptics.tap()
+        vm.send(text, context: app.coachContext)
         input = ""
     }
 }
@@ -113,7 +128,7 @@ struct CoachBubble: View {
             HStack {
                 Spacer(minLength: 60)
                 Text(message.text)
-                    .font(.system(size: 14))
+                    .font(Theme.text(14))
                     .foregroundStyle(Theme.cream)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(RoundedRectangle(cornerRadius: 16).fill(Theme.gold.opacity(0.12)))
@@ -127,7 +142,7 @@ struct CoachBubble: View {
                         .foregroundStyle(Theme.gold)
                         .padding(.top, 4)
                     Text(message.text)
-                        .font(.system(size: 14))
+                        .font(Theme.text(14))
                         .lineSpacing(3)
                         .foregroundStyle(Theme.creamDim)
                         .fixedSize(horizontal: false, vertical: true)
@@ -213,6 +228,57 @@ struct ThinkingIndicator: View {
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 0.7).repeatForever()) { pulse = true }
+        }
+    }
+}
+
+// MARK: - Evidence sheet
+
+/// "Grounded in sport science" — the vetted references behind Forge's
+/// recommendations, shown to the athlete instead of asked to be trusted.
+struct EvidenceSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Forge's recommendations are grounded in position stands and landmark studies. The live coach cites only from this vetted list — it is never allowed to invent a reference.")
+                        .font(Theme.text(12.5))
+                        .foregroundStyle(Theme.muted)
+                        .padding(.bottom, 4)
+
+                    ForEach(EvidenceBase.items) { item in
+                        Card {
+                            VStack(alignment: .leading, spacing: 6) {
+                                EyebrowLabel(text: item.topic)
+                                Text(item.claim)
+                                    .font(Theme.text(13))
+                                    .foregroundStyle(Theme.cream)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text(item.source)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(Theme.gold)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+
+                    Text("Educational guidance, not medical advice.")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Theme.faint)
+                        .padding(.top, 4)
+                }
+                .padding(16)
+            }
+            .background(Theme.bg)
+            .navigationTitle("The Science")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }.foregroundStyle(Theme.gold)
+                }
+            }
         }
     }
 }

@@ -22,6 +22,22 @@ final class AIServiceTests: XCTestCase {
         XCTAssertEqual(ForgeConfig.coachModel, "claude-opus-4-8")
     }
 
+    // MARK: - Mode resolution (proxy > direct key > mock)
+
+    func testModeResolutionPrefersProxyOverKey() {
+        XCTAssertEqual(ForgeConfig.mode(key: nil, proxy: nil), .mock)
+        XCTAssertEqual(ForgeConfig.mode(key: "  ", proxy: ""), .mock)
+        XCTAssertEqual(ForgeConfig.mode(key: "sk-ant-x", proxy: nil), .liveDirect)
+        XCTAssertEqual(ForgeConfig.mode(key: nil, proxy: "https://x.functions.supabase.co/coach-proxy"), .liveProxy)
+        XCTAssertEqual(ForgeConfig.mode(key: "sk-ant-x", proxy: "https://x.functions.supabase.co/coach-proxy"),
+                       .liveProxy, "A configured proxy must always beat an on-device key")
+    }
+
+    func testCoachEndpointFollowsMode() {
+        // Test environment has neither key nor proxy → direct endpoint default.
+        XCTAssertEqual(ForgeConfig.coachEndpoint, ForgeConfig.messagesEndpoint)
+    }
+
     // MARK: - System prompt carries the athlete's real data
 
     func testSystemPromptReferencesKeySignals() {
@@ -53,5 +69,26 @@ final class AIServiceTests: XCTestCase {
         XCTAssertTrue(AIService.quickPrompts.contains("Should I deload?"))
         XCTAssertTrue(AIService.quickPrompts.contains("What is holding me back?"))
         XCTAssertGreaterThanOrEqual(AIService.quickPrompts.count, 8)
+    }
+}
+
+// MARK: - Evidence grounding
+
+extension AIServiceTests {
+    func testEvidenceBaseEntriesAreWellFormed() {
+        XCTAssertGreaterThanOrEqual(EvidenceBase.items.count, 6)
+        XCTAssertEqual(Set(EvidenceBase.items.map(\.topic)).count, EvidenceBase.items.count,
+                       "Topics must be unique")
+        for item in EvidenceBase.items {
+            XCTAssertFalse(item.claim.isEmpty)
+            XCTAssertFalse(item.source.isEmpty)
+        }
+    }
+
+    func testSystemPromptGroundsClaimsAndForbidsInventedCitations() {
+        let p = AIService.systemPrompt(checkInNote: nil)
+        XCTAssertTrue(p.contains("NEVER invent a citation"))
+        XCTAssertTrue(p.contains("Jäger et al., JISSN 2017"))
+        XCTAssertTrue(p.contains("Gabbett"))
     }
 }

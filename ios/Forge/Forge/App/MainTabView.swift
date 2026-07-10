@@ -7,6 +7,18 @@ struct MainTabView: View {
     @Environment(AppState.self) private var app
 
     var body: some View {
+        // Demo/screenshot hook (no effect in normal use): FORGE_SCREEN jumps
+        // straight to a pushed screen.
+        switch ProcessInfo.processInfo.environment["FORGE_SCREEN"] {
+        case "ecosystem": NavigationStack { WearablesView() }
+        case "market": NavigationStack { MarketplaceView() }
+        case "weekly": NavigationStack { WeeklyReportView() }
+        case "logger": NavigationStack { WorkoutLoggerView(plan: app.todaysPlan) }
+        default: tabShell
+        }
+    }
+
+    private var tabShell: some View {
         ZStack(alignment: .bottom) {
             Group {
                 switch app.selectedTab {
@@ -35,16 +47,25 @@ struct ForgeTabBar: View {
                 tabButton(tab)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 10)
         .padding(.top, 10)
-        .padding(.bottom, 4)
+        .padding(.bottom, 8)
+        // Floating pill — glassy, detached from the screen edge.
         .background(
-            Rectangle()
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .overlay(Theme.bg.opacity(0.75))
-                .overlay(Rectangle().fill(Theme.hairline).frame(height: 1), alignment: .top)
-                .ignoresSafeArea(edges: .bottom)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(Theme.bg.opacity(0.55))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(Theme.hairline, lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.55), radius: 20, y: 10)
         )
+        .padding(.horizontal, 18)
+        .padding(.bottom, 4)
     }
 
     @ViewBuilder
@@ -53,6 +74,8 @@ struct ForgeTabBar: View {
         let isCoach = tab == .coach
 
         Button {
+            guard app.selectedTab != tab else { return }
+            Haptics.selection()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 app.selectedTab = tab
             }
