@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Forge design tokens — obsidian / gold / cream luxury athletic palette.
 enum Theme {
@@ -42,12 +43,25 @@ enum Theme {
 
     /// Luxury serif display font (New York).
     static func display(_ size: CGFloat, _ weight: Font.Weight = .medium) -> Font {
-        .system(size: size, weight: weight, design: .serif)
+        .system(size: scaled(size, .title2), weight: weight, design: .serif)
     }
 
     /// Tiny tracked-out uppercase eyebrow label font.
     static func eyebrow(_ size: CGFloat = 10) -> Font {
-        .system(size: size, weight: .semibold)
+        .system(size: scaled(size, .caption2), weight: .semibold)
+    }
+
+    /// Dynamic-Type-aware body text. New code should prefer this over raw
+    /// `.system(size:)`; existing call sites migrate screen by screen.
+    static func text(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        .system(size: scaled(size, .body), weight: weight)
+    }
+
+    /// Scale a design-point size with the user's content size category.
+    /// Views re-evaluate `body` when Dynamic Type changes, so fonts built
+    /// through these factories track the setting automatically.
+    private static func scaled(_ size: CGFloat, _ style: UIFont.TextStyle) -> CGFloat {
+        UIFontMetrics(forTextStyle: style).scaledValue(for: size)
     }
 }
 

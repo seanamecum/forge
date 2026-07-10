@@ -85,8 +85,12 @@ struct WearableDevice: Identifiable {
     let name: String
     let brand: String
     let icon: String          // SF Symbol
+    /// Which unified data source this device maps to in the DataHub.
+    let source: DataSource
     var connected: Bool
     var lastSync: String?
+    /// Hours since last successful sync (nil = never) — drives the quality badge.
+    var lastSyncAgeHours: Double? = nil
     let permissions: [String]
     var battery: Int? = nil
 }

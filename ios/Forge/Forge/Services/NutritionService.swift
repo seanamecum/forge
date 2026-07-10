@@ -13,6 +13,16 @@ final class NutritionService {
 
     let user = MockData.sean
 
+    /// Today's coached plan (set by AppState from live cross-module signals).
+    /// When present, IT defines the targets; base TargetEngine numbers otherwise.
+    var activePlan: FuelPlan?
+
+    var calorieTarget: Int { activePlan?.calories ?? user.calorieTarget }
+    var proteinTarget: Int { activePlan?.protein ?? user.proteinTarget }
+    var waterTargetOz: Int { activePlan?.waterOz ?? user.waterTargetOz }
+    var carbTarget: Int { activePlan?.carbs ?? user.carbTarget }
+    var fatTarget: Int { activePlan?.fat ?? user.fatTarget }
+
     // MARK: - Totals
 
     var calories: Int { entries.reduce(0) { $0 + $1.calories } }
@@ -20,15 +30,18 @@ final class NutritionService {
     var carbs: Int { Int(entries.reduce(0) { $0 + $1.carbs }) }
     var fat: Int { Int(entries.reduce(0) { $0 + $1.fat }) }
 
-    var caloriesRemaining: Int { max(0, user.calorieTarget - calories) }
-    var proteinRemaining: Int { max(0, user.proteinTarget - protein) }
+    var caloriesRemaining: Int { max(0, calorieTarget - calories) }
+    var proteinRemaining: Int { max(0, proteinTarget - protein) }
 
-    var hydrationPct: Int { Int(waterOz / Double(user.waterTargetOz) * 100) }
+    var hydrationPct: Int {
+        guard waterTargetOz > 0 else { return 100 }
+        return Int(waterOz / Double(waterTargetOz) * 100)
+    }
 
     // Scores feeding the Forge Score
     var nutritionScore: Int {
-        let calPct = min(1, Double(calories) / Double(user.calorieTarget))
-        let proPct = min(1, Double(protein) / Double(user.proteinTarget))
+        let calPct = min(1, Double(calories) / Double(calorieTarget))
+        let proPct = min(1, Double(protein) / Double(proteinTarget))
         // Pace-adjusted: by evening these approach 100.
         return Int((calPct * 0.4 + proPct * 0.6) * 100 * 1.15).clamped(to: 0...100)
     }
@@ -50,13 +63,14 @@ final class NutritionService {
     }
 
     func addWater(_ oz: Double) {
-        waterOz = min(Double(user.waterTargetOz) * 1.5, waterOz + oz)
+        waterOz = min(Double(waterTargetOz) * 1.5, waterOz + oz)
     }
 
     func toggleSupplement(_ supplement: Supplement) {
         guard let idx = supplements.firstIndex(where: { $0.id == supplement.id }) else { return }
         supplements[idx].loggedToday.toggle()
-        supplements[idx].streak += supplements[idx].loggedToday ? 1 : -1
+        // Streak never goes negative, even if a user un-logs an item that started at 0.
+        supplements[idx].streak = max(0, supplements[idx].streak + (supplements[idx].loggedToday ? 1 : -1))
     }
 
     func search(_ query: String) -> [Food] {

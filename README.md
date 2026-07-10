@@ -18,9 +18,14 @@ data into one clear directive every morning.
 > in any browser. No install, no server, works on phones.
 >
 > **Full iOS source in one file:** [`Forge-iOS-Source-Bundle.txt`](Forge-iOS-Source-Bundle.txt)
-> packs all 73 iOS files into a single self-extracting text file. A developer runs
-> `python3 Forge-iOS-Source-Bundle.txt` to rebuild the real Xcode project, then opens it
-> in Xcode 16+.
+> packs all 116 iOS files — app, home-screen widget, workout Live Activity, Apple
+> Watch companion app, privacy manifest, tests — into a single self-extracting text file. A developer runs
+> `python3 Forge-iOS-Source-Bundle.txt` to rebuild the real Xcode project (verified:
+> the extracted copy compiles), then opens it in Xcode 16+.
+>
+> **Backend & launch collateral:** [`supabase/functions/coach-proxy`](supabase/functions/coach-proxy)
+> holds the AI key server-side; [`appstore/`](appstore/metadata.md) has the ready-to-paste
+> App Store metadata and the required 6.9" screenshot set.
 
 ## Stack
 

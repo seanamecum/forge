@@ -23,8 +23,8 @@ struct ForgeScoreHero: View {
                             .font(Theme.eyebrow(9))
                             .kerning(1.6)
                             .foregroundStyle(Theme.muted)
-                        Text(AIService.dailyBrief(forgeScore: app.forgeScore))
-                            .font(.system(size: 12.5))
+                        Text(AIService.dailyBrief(context: app.coachContext))
+                            .font(Theme.text(12.5))
                             .foregroundStyle(Theme.creamDim)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -208,13 +208,18 @@ struct TodaysWorkoutCard: View {
     @Environment(AppState.self) private var app
 
     var body: some View {
-        let plan = app.workouts.todaysPlan
+        let plan = app.todaysPlan
         return Card {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     EyebrowLabel(text: "Today's Session")
                     Spacer()
-                    Chip(text: "Knee-Safe", tone: .amber)
+                    // Safety chip reflects the ACTUAL active injuries, not a fixed label.
+                    if let injury = app.injuries.active.first {
+                        Chip(text: "\(injury.type.rawValue)-Safe", tone: .amber)
+                    } else {
+                        Chip(text: "Full Clearance", tone: .green)
+                    }
                 }
                 Text(plan.name)
                     .font(Theme.display(21))
@@ -248,12 +253,12 @@ struct FuelCard: View {
                     Spacer()
                     Chip(text: "\(n.caloriesRemaining) kcal left", tone: .gold)
                 }
-                LabeledBar(label: "Calories", valueText: "\(n.calories) / \(n.user.calorieTarget)",
-                           value: Double(n.calories), target: Double(n.user.calorieTarget), tone: .gold)
-                LabeledBar(label: "Protein", valueText: "\(n.protein) / \(n.user.proteinTarget) g",
-                           value: Double(n.protein), target: Double(n.user.proteinTarget), tone: .green)
-                LabeledBar(label: "Water", valueText: "\(Int(n.waterOz)) / \(n.user.waterTargetOz) oz",
-                           value: n.waterOz, target: Double(n.user.waterTargetOz), tone: .royal)
+                LabeledBar(label: "Calories", valueText: "\(n.calories) / \(n.calorieTarget)",
+                           value: Double(n.calories), target: Double(n.calorieTarget), tone: .gold)
+                LabeledBar(label: "Protein", valueText: "\(n.protein) / \(n.proteinTarget) g",
+                           value: Double(n.protein), target: Double(n.proteinTarget), tone: .green)
+                LabeledBar(label: "Water", valueText: "\(Int(n.waterOz)) / \(n.waterTargetOz) oz",
+                           value: n.waterOz, target: Double(n.waterTargetOz), tone: .royal)
 
                 HStack {
                     Chip(text: "+\(n.proteinRemaining) g protein to go", tone: .amber)

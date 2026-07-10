@@ -24,6 +24,10 @@ struct Sparkline: View {
         .chartYAxis(.hidden)
         .chartYScale(domain: yDomain)
         .frame(height: height)
+        // AreaMark fills toward the zero position, which sits far below a
+        // non-zero domain — clip to the frame so the wash can't bleed into
+        // whatever is rendered underneath.
+        .clipped()
     }
 
     private var yDomain: ClosedRange<Double> {

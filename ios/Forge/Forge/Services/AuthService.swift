@@ -8,6 +8,7 @@ final class AuthService {
     var isAuthenticated = false
     var lastError: String?
 
+    @MainActor
     @discardableResult
     func signIn(email: String, password: String) async -> Bool {
         lastError = nil
@@ -20,6 +21,7 @@ final class AuthService {
         return true
     }
 
+    @MainActor
     @discardableResult
     func signUp(name: String, email: String, password: String) async -> Bool {
         lastError = nil

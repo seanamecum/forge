@@ -61,6 +61,14 @@ final class AppState {
         if UserDefaults.standard.bool(forKey: "forge.hasOnboarded") {
             phase = .main
         }
+        // Demo/screenshot hook (no effect in normal use): FORGE_TAB selects the
+        // initial tab; -demoAutoLogin skips straight to the dashboard.
+        if CommandLine.arguments.contains("-demoAutoLogin") { phase = .main }
+        if let raw = ProcessInfo.processInfo.environment["FORGE_TAB"],
+           let tab = MainTab(rawValue: raw) {
+            selectedTab = tab
+        }
+        refreshFuelPlan()
     }
 
     // MARK: - Profile persistence
@@ -177,6 +185,19 @@ final class AppState {
         return "\(c.label) is your biggest lever — up to +\(gain) points on the table."
     }
 
+    /// Today's generated session — built from THIS athlete's goal, equipment,
+    /// live recovery, and active injuries (not a canned demo plan). The workout
+    /// generator stays a pure engine; this is where its live inputs come from.
+    var todaysPlan: GeneratedWorkout {
+        workouts.generate(
+            goal: user.primaryGoal,
+            minutes: 60,
+            equipment: user.equipment.first ?? .fullGym,
+            recovery: recovery.today.recovery,
+            injuries: injuries.active.map(\.type),
+            level: user.fitnessLevel)
+    }
+
     /// Today's directive — the full prescribed plan, synthesized by DirectiveEngine
     /// from every live signal. This is the single source the dashboard AND the coach read.
     var dailyDirective: DailyDirective {
@@ -191,15 +212,125 @@ final class AppState {
             injuryRiskBand: injuries.risk.band,
             activeInjuryName: injury?.type.rawValue,
             activeInjuryPain: injury?.painToday,
-            workoutName: workouts.todaysPlan.name,
+            workoutName: todaysPlan.name,
             soreness: checkIn?.soreness,
-            calorieTarget: user.calorieTarget,
-            proteinTarget: user.proteinTarget,
+            calorieTarget: nutrition.calorieTarget,
+            proteinTarget: nutrition.proteinTarget,
             mobilityMinutes: injury != nil ? 20 : 12,
             rehabPlanSummary: injuryRehabPlan?.summary,
             keySupplement: keySupplementTonight,
             sleepTargetHours: 8.0 + min(d.sleepDebtHours * 0.08, 1.0)
         )
+    }
+
+    /// Recompute the coached fuel plan from live cross-module signals.
+    /// MacroFactor-style adaptivity, Forge-style integration: training load,
+    /// weight trend, recovery, and injuries move the targets — with reasons.
+    func refreshFuelPlan() {
+        let strain = recovery.trends.first { $0.name == "Strain" }?.values ?? []
+        let strainAvg7 = strain.suffix(7).isEmpty ? 0
+            : strain.suffix(7).reduce(0, +) / Double(strain.suffix(7).count)
+        nutrition.activePlan = AdaptiveNutritionEngine.plan(.init(
+            baseCalories: user.calorieTarget,
+            baseProtein: user.proteinTarget,
+            baseWaterOz: user.waterTargetOz,
+            baseFat: user.fatTarget,
+            goal: user.primaryGoal,
+            weightTrend: MockData.weightTrend,
+            strainAvg7: strainAvg7,
+            recoveryToday: recovery.today.recovery,
+            injuryActive: !injuries.active.isEmpty,
+            enduranceTomorrow: user.primaryGoal == .endurance))
+    }
+
+    /// Publish today's directive to the home-screen widget's shared container
+    /// and push it to the paired Apple Watch.
+    func publishWidgetSnapshot() {
+        let d = dailyDirective
+        let snapshot = WidgetSnapshot(
+            forgeScore: forgeScore,
+            headline: d.headline,
+            priority: d.priorityAction,
+            rows: d.actions.prefix(3).map {
+                WidgetSnapshot.Row(icon: $0.icon, label: $0.label, value: $0.value)
+            },
+            generatedAt: .now)
+        WidgetBridge.save(snapshot)
+        PhoneWatchSync.shared.push(snapshot)
+    }
+
+    // MARK: - Connected ecosystem
+
+    /// Which unified data sources currently feed Forge.
+    var connectedSources: Set<DataSource> { recovery.connectedSources }
+
+    /// Feed real HealthKit values into the unified stream as Apple Watch readings.
+    /// From here the DataHub's priority/preference rules decide whether they win —
+    /// live data enters the same pipeline as every other source, never a side door.
+    func ingestHealthKitSignals() {
+        guard healthKit.authState == .authorized, !healthKit.usingMockData else { return }
+        recovery.updateReading(.sleep, value: healthKit.sleepHoursLastNight, unit: "h", source: .appleWatch)
+        recovery.updateReading(.hrv, value: Double(healthKit.hrvMs), unit: "ms", source: .appleWatch)
+        recovery.updateReading(.restingHR, value: Double(healthKit.restingHeartRate), unit: "bpm", source: .appleWatch)
+        recovery.updateReading(.heartRate, value: Double(healthKit.heartRate), unit: "bpm", source: .appleWatch)
+        recovery.updateReading(.steps, value: Double(healthKit.steps), unit: "", source: .appleWatch)
+        recovery.updateReading(.calories, value: Double(healthKit.activeEnergy), unit: "kcal", source: .appleWatch)
+    }
+
+    /// The cross-device story for today — "WHOOP HRV dropped, sleep was short…" —
+    /// shown in the hub and injected into the coach so it reasons across devices.
+    var deviceNarrative: String {
+        let d = recovery.today
+        let hrvDelta = d.hrvBaseline > 0
+            ? Int((Double(d.hrv - d.hrvBaseline) / Double(d.hrvBaseline) * 100).rounded())
+            : 0
+        let strainRatio = d.strainYesterday > 0 ? d.strainYesterday / 12.0 : 1.0
+        return DataHub.narrative(
+            connected: connectedSources,
+            hrvDeltaPct: hrvDelta,
+            sleepHours: d.sleep.hours,
+            loadRatio: strainRatio,
+            volumeAdjustPct: dailyDirective.tone == .ruby ? -25 : (d.recovery < 80 ? -20 : 0))
+    }
+
+    /// One line per connected device and what it contributes — for the coach prompt.
+    var dataSourceSummary: String {
+        let devices = recovery.wearables.filter(\.connected).map { device in
+            "\(device.source.displayName) (\(device.source.capabilities.prefix(5).map { $0.label.lowercased() }.joined(separator: ", ")))"
+        }
+        var summary = devices.joined(separator: " · ")
+        let prefs = recovery.preferredSources
+            .filter { recovery.connectedSources.contains($0.value) }
+            .map { "\($0.key.label.lowercased()) ← \($0.value.displayName)" }
+        if !prefs.isEmpty {
+            summary += ". Preferred sources: " + prefs.joined(separator: ", ")
+        }
+        return summary
+    }
+
+    /// Live snapshot handed to the AI coach — every number the system prompt cites
+    /// comes from current service state, so chat and UI can never disagree.
+    var coachContext: CoachContext {
+        let d = recovery.today
+        let mg = magnesiumStatus
+        return CoachContext(
+            name: user.name, age: user.age, sport: user.sport,
+            goals: user.goals.map(\.rawValue).joined(separator: ", "),
+            level: user.fitnessLevel.rawValue, streakDays: user.streakDays,
+            forgeScore: forgeScore, recovery: d.recovery, readiness: d.readiness.rawValue,
+            hrv: d.hrv, hrvBaseline: d.hrvBaseline, restingHR: d.restingHR,
+            sleepHours: d.sleep.hours, sleepDebtHours: d.sleepDebtHours,
+            strainYesterday: d.strainYesterday,
+            calorieTarget: nutrition.calorieTarget, proteinTarget: nutrition.proteinTarget,
+            waterTargetOz: nutrition.waterTargetOz,
+            proteinRemaining: nutrition.proteinRemaining, hydrationPct: nutrition.hydrationPct,
+            magnesiumPct: mg.pct, magnesiumDaysLow: mg.days,
+            directive: dailyDirective,
+            dataSources: dataSourceSummary,
+            deviceNarrative: deviceNarrative,
+            plateauNote: workouts.plateaus.first.map {
+                "\($0.exerciseName) flat \($0.sessions) sessions at e1RM \(Int($0.bestE1RM)) lb (avg top-set RPE \(String(format: "%.1f", $0.avgTopRPE)))."
+            } ?? "")
     }
 
     /// The most valuable supplement not yet taken today — bedtime-relevant first.
@@ -249,6 +380,21 @@ final class AppState {
             .first { $0.name.contains("Magnesium") }?.percentOfTarget ?? 100
         let days = nutrition.deficiencies.first { $0.nutrient.contains("Magnesium") }?.daysLow ?? 0
         return (pct, days)
+    }
+
+    /// The weekly recap — trend windows synthesized into wins, watch-outs, and
+    /// next week's single focus. The Directive's longer-horizon sibling.
+    var weeklyReport: WeeklyReport {
+        func series(_ name: String) -> [Double] {
+            recovery.trends.first { $0.name == name }?.values ?? []
+        }
+        return WeeklyReportEngine.make(
+            recovery: series("Recovery"),
+            sleep: series("Sleep"),
+            strain: series("Strain"),
+            hrv: series("HRV"),
+            streakDays: user.streakDays,
+            lever: forgeScoreLever)
     }
 
     // MARK: - Injury rehab

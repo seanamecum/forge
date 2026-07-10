@@ -11,12 +11,61 @@ struct TrainHomeView: View {
 
                 quickActions
                 todayCard
+                insightsCard
                 programCard
                 volumeCard
                 prCard
                 historyList
             }
             .navigationBarHidden(true)
+        }
+    }
+
+    /// Plateau + weak-point verdicts — charts tell you what happened;
+    /// this tells you what to do about it.
+    @ViewBuilder
+    private var insightsCard: some View {
+        let plateaus = app.workouts.plateaus
+        let weak = app.workouts.weakPoints
+        if !plateaus.isEmpty || !weak.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chart.line.flattrend.xyaxis")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.gold)
+                        EyebrowLabel(text: "Training Intelligence")
+                    }
+                    ForEach(plateaus) { finding in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(finding.exerciseName)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(Theme.cream)
+                                Spacer()
+                                Chip(text: "Flat \(finding.sessions) sessions", tone: .amber)
+                            }
+                            Text("e1RM stuck at \(Int(finding.bestE1RM)) lb. \(finding.recommendation)")
+                                .font(Theme.text(12))
+                                .foregroundStyle(Theme.creamDim)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if !weak.isEmpty {
+                        Divider().overlay(Theme.hairline.opacity(0.5))
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "scalemass")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.amber)
+                                .padding(.top, 2)
+                            Text("Under-trained: " + weak.map { "\($0.muscle) (\($0.sets) of \($0.optimalLow)+ sets)" }.joined(separator: ", ") + ". The generator biases toward these until they recover their floor.")
+                                .font(Theme.text(12))
+                                .foregroundStyle(Theme.creamDim)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -30,7 +79,7 @@ struct TrainHomeView: View {
     }
 
     private var todayCard: some View {
-        let plan = app.workouts.todaysPlan
+        let plan = app.todaysPlan
         return Card(gold: true) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {

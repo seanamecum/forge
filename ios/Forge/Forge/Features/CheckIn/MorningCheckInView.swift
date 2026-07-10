@@ -93,6 +93,7 @@ struct MorningCheckInView: View {
     }
 
     private func save() {
+        Haptics.success()
         let snap = CheckInSnapshot(sleepQuality: sleepQuality, soreness: soreness,
                                    energy: energy, stress: stress)
         app.checkIn = snap

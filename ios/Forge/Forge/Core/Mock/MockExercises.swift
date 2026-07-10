@@ -165,13 +165,15 @@ extension MockData {
 
     // MARK: - Workout history
 
+    // Names MUST match the exercise database exactly — PR baselines, "last
+    // time" ghosts, and live PR detection all join on the name.
     static let personalRecords: [PersonalRecord] = [
-        PersonalRecord(exerciseName: "Bench Press", weightLb: 180, reps: 5, date: "Jun 3"),
-        PersonalRecord(exerciseName: "Back Squat", weightLb: 230, reps: 5, date: "May 27"),
-        PersonalRecord(exerciseName: "Deadlift", weightLb: 280, reps: 3, date: "Jun 7"),
+        PersonalRecord(exerciseName: "Barbell Bench Press", weightLb: 180, reps: 5, date: "Jun 3"),
+        PersonalRecord(exerciseName: "Barbell Back Squat", weightLb: 230, reps: 5, date: "May 27"),
+        PersonalRecord(exerciseName: "Conventional Deadlift", weightLb: 280, reps: 3, date: "Jun 7"),
         PersonalRecord(exerciseName: "Overhead Press", weightLb: 115, reps: 5, date: "May 20"),
-        PersonalRecord(exerciseName: "Hip Thrust", weightLb: 250, reps: 8, date: "Jun 5"),
-        PersonalRecord(exerciseName: "Weighted Pull-Up", weightLb: 45, reps: 5, date: "May 30"),
+        PersonalRecord(exerciseName: "Barbell Hip Thrust", weightLb: 250, reps: 8, date: "Jun 5"),
+        PersonalRecord(exerciseName: "Pull-Up", weightLb: 45, reps: 5, date: "May 30"),
     ]
 
     static let muscleVolume: [MuscleVolume] = [
@@ -238,6 +240,33 @@ extension MockData {
                         ], note: "10 × 30s/30s · avg 410W. Knee felt clean."),
                     ],
                     avgRPE: 9.0, feel: .fine),
+            Workout(name: "Upper — Push Strength",
+                    date: Calendar.current.date(byAdding: .day, value: -9, to: .now) ?? .now,
+                    durationMin: 62,
+                    exercises: [
+                        LoggedExercise(exercise: exercise("bench"), sets: [
+                            WorkoutSet(weightLb: 135, reps: 8, rpe: 6, completed: true),
+                            WorkoutSet(weightLb: 180, reps: 5, rpe: 9, completed: true),
+                            WorkoutSet(weightLb: 180, reps: 4, rpe: 9.5, completed: true),
+                        ]),
+                        LoggedExercise(exercise: exercise("ohp"), sets: [
+                            WorkoutSet(weightLb: 105, reps: 6, rpe: 8.5, completed: true),
+                        ]),
+                    ],
+                    avgRPE: 8.5, feel: .fine),
+            Workout(name: "Upper — Push Strength",
+                    date: Calendar.current.date(byAdding: .day, value: -16, to: .now) ?? .now,
+                    durationMin: 60,
+                    exercises: [
+                        LoggedExercise(exercise: exercise("bench"), sets: [
+                            WorkoutSet(weightLb: 135, reps: 8, rpe: 6, completed: true),
+                            WorkoutSet(weightLb: 180, reps: 5, rpe: 8.5, completed: true),
+                        ]),
+                        LoggedExercise(exercise: exercise("ohp"), sets: [
+                            WorkoutSet(weightLb: 100, reps: 8, rpe: 8, completed: true),
+                        ]),
+                    ],
+                    avgRPE: 8.2, feel: .fine),
         ]
     }
 

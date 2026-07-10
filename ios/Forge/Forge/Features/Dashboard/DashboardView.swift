@@ -9,10 +9,12 @@ struct DashboardView: View {
         NavigationStack {
             ScreenScaffold {
                 header
+                QuickActionsRow()
                 MorningCheckInCard()
                 TodaysDirectiveCard()
                 IntelligenceCard()
                 ForgeScoreHero()
+                WeeklyReportCard()
                 metricRow
                 TodaysWorkoutCard()
                 FuelCard()
@@ -23,6 +25,8 @@ struct DashboardView: View {
             }
             .navigationBarHidden(true)
             .onAppear {
+                app.refreshFuelPlan()
+                app.publishWidgetSnapshot()
                 // Snapshot today's Forge Score so trends build from real history.
                 PersistenceService.recordTodayScore(app.forgeScore, context: modelContext)
             }
@@ -47,9 +51,11 @@ struct DashboardView: View {
                     .font(Theme.eyebrow(9))
                     .kerning(1.6)
                     .foregroundStyle(Theme.faint)
-                Text("Good morning, \(app.user.name.split(separator: " ").first.map(String.init) ?? app.user.name)")
-                    .font(Theme.display(19))
+                Text("Good \(Daypart.now.lowercased()), \(app.user.name.split(separator: " ").first.map(String.init) ?? app.user.name)")
+                    .font(Theme.display(24))
                     .foregroundStyle(Theme.cream)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
 
             Spacer()
@@ -94,5 +100,67 @@ struct DashboardView: View {
                        detail: "Injury risk \(app.injuries.risk.percent)%",
                        tone: app.injuries.risk.percent > 35 ? .ruby : .amber)
         }
+    }
+}
+
+// MARK: - Quick actions
+
+/// Four circular one-tap actions under the greeting — the reference-style
+/// "do the thing now" row. Big targets, zero navigation depth.
+private struct QuickActionsRow: View {
+    @Environment(AppState.self) private var app
+    @State private var waterLogged = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            actionButton("dumbbell.fill", "Workout") { app.selectedTab = .train }
+            actionButton("fork.knife", "Meal") { app.selectedTab = .fuel }
+            actionButton(waterLogged ? "checkmark" : "drop.fill", waterLogged ? "+16 oz" : "Water") {
+                guard !waterLogged else { return }
+                app.nutrition.addWater(16)
+                Haptics.success()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { waterLogged = true }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2))
+                    withAnimation { waterLogged = false }
+                }
+            }
+            NavigationLink { WearablesView() } label: {
+                circleLabel("arrow.triangle.2.circlepath", "Sync")
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel("Sync devices")
+        }
+    }
+
+    private func actionButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.tap()
+            action()
+        } label: {
+            circleLabel(icon, label)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .accessibilityLabel(label)
+    }
+
+    private func circleLabel(_ icon: String, _ label: String) -> some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .fill(Theme.card)
+                    .overlay(Circle().stroke(Theme.hairline, lineWidth: 1))
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Theme.gold)
+            }
+            .frame(width: 52, height: 52)
+            Text(label)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(Theme.muted)
+        }
+        .contentShape(Rectangle())
     }
 }

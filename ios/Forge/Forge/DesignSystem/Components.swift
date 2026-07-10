@@ -100,6 +100,8 @@ struct StatTile: View {
                 Text(value)
                     .font(Theme.display(24))
                     .foregroundStyle(tone == .neutral ? Theme.cream : tone.color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
                 if let unit {
                     Text(unit)
                         .font(.system(size: 11))

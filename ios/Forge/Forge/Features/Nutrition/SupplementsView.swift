@@ -18,6 +18,7 @@ struct SupplementsView: View {
                             }
                             Spacer()
                             Button {
+                                Haptics.tap()
                                 app.nutrition.toggleSupplement(s)
                             } label: {
                                 Image(systemName: s.loggedToday ? "checkmark.circle.fill" : "circle")

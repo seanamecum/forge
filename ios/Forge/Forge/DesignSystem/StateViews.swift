@@ -85,6 +85,55 @@ struct ComingSoonButton: View {
     }
 }
 
+/// Persistent local interest capture — the pre-backend waitlist. Joining flips
+/// once, survives launches, and syncs to the server when accounts ship.
+enum Waitlist {
+    static func key(_ feature: String) -> String {
+        "forge.waitlist." + feature.lowercased().replacingOccurrences(of: " ", with: "-")
+    }
+    static func isJoined(_ feature: String) -> Bool {
+        UserDefaults.standard.bool(forKey: key(feature))
+    }
+    static func join(_ feature: String) {
+        UserDefaults.standard.set(true, forKey: key(feature))
+    }
+    static func leave(_ feature: String) {
+        UserDefaults.standard.removeObject(forKey: key(feature))
+    }
+}
+
+/// One-tap waitlist button: joins locally, confirms with state + haptic, and
+/// never dead-ends. Distinct from ComingSoonButton — this one records intent.
+struct WaitlistButton: View {
+    let feature: String
+    @State private var joined: Bool
+
+    init(feature: String) {
+        self.feature = feature
+        _joined = State(initialValue: Waitlist.isJoined(feature))
+    }
+
+    var body: some View {
+        if joined {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 12)).foregroundStyle(Theme.green)
+                Text("You're on the list")
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.green)
+            }
+            .accessibilityLabel("On the \(feature) waitlist")
+        } else {
+            Button("Join the waitlist") {
+                Haptics.success()
+                Waitlist.join(feature)
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { joined = true }
+            }
+            .buttonStyle(GoldButtonStyle(compact: true))
+            .accessibilityHint("Registers your interest in \(feature)")
+        }
+    }
+}
+
 struct ErrorBanner: View {
     let message: String
     var onDismiss: (() -> Void)? = nil

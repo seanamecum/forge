@@ -6,6 +6,74 @@ import Foundation
 ///   • Mock  — the rule-based engine below; used when no API key is configured,
 ///             and as the offline-safe fallback whenever a live call fails.
 /// The app behaves identically with or without a key — it never breaks offline.
+/// Everything the coach knows about the athlete *right now*. Built by AppState
+/// from live service state so the system prompt (and the dashboard brief) always
+/// reflect what the app is actually showing — never a stale snapshot.
+struct CoachContext {
+    // Athlete
+    var name: String
+    var age: Int
+    var sport: String
+    var goals: String
+    var level: String
+    var streakDays: Int
+    // Today's signals
+    var forgeScore: Int
+    var recovery: Int
+    var readiness: String
+    var hrv: Int
+    var hrvBaseline: Int
+    var restingHR: Int
+    var sleepHours: Double
+    var sleepDebtHours: Double
+    var strainYesterday: Double
+    // Fuel
+    var calorieTarget: Int
+    var proteinTarget: Int
+    var waterTargetOz: Int
+    var proteinRemaining: Int
+    var hydrationPct: Int
+    var magnesiumPct: Int
+    var magnesiumDaysLow: Int
+    // The plan the app is showing
+    var directive: DailyDirective
+    // Connected ecosystem — which devices feed Forge, and the cross-device read.
+    var dataSources: String = ""
+    var deviceNarrative: String = ""
+    // Lift watch — the current plateau, if any, so the coach diagnoses it.
+    var plateauNote: String = ""
+
+    /// Demo snapshot mirroring the mock athlete — used by previews and tests.
+    static var demo: CoachContext {
+        let u = MockData.sean
+        let d = MockData.today
+        let knee = MockData.knee
+        let directive = DirectiveEngine.make(
+            recovery: d.recovery, sleepDebtHours: d.sleepDebtHours,
+            proteinRemaining: 72, hydrationPct: 62,
+            injuryRiskPercent: MockData.injuryRisk.percent,
+            injuryRiskBand: MockData.injuryRisk.band,
+            activeInjuryName: knee.type.rawValue, activeInjuryPain: knee.painToday,
+            workoutName: "Upper Push + Knee-Safe Lower",
+            calorieTarget: u.calorieTarget, proteinTarget: u.proteinTarget,
+            mobilityMinutes: 20, keySupplement: "Magnesium 400 mg",
+            sleepTargetHours: 8.0 + min(d.sleepDebtHours * 0.08, 1.0))
+        return CoachContext(
+            name: u.name, age: u.age, sport: u.sport,
+            goals: u.goals.map(\.rawValue).joined(separator: ", "),
+            level: u.fitnessLevel.rawValue, streakDays: u.streakDays,
+            forgeScore: 78, recovery: d.recovery, readiness: d.readiness.rawValue,
+            hrv: d.hrv, hrvBaseline: d.hrvBaseline, restingHR: d.restingHR,
+            sleepHours: d.sleep.hours, sleepDebtHours: d.sleepDebtHours,
+            strainYesterday: d.strainYesterday,
+            calorieTarget: u.calorieTarget, proteinTarget: u.proteinTarget,
+            waterTargetOz: u.waterTargetOz,
+            proteinRemaining: 72, hydrationPct: 62,
+            magnesiumPct: 52, magnesiumDaysLow: 6,
+            directive: directive)
+    }
+}
+
 enum AIService {
 
     static let quickPrompts = [
@@ -17,22 +85,34 @@ enum AIService {
 
     // MARK: - Daily brief (dashboard hero)
 
-    static func dailyBrief(forgeScore: Int) -> String {
-        let d = MockData.today
-        return "Forge Score \(forgeScore). Recovery \(d.recovery) — you're cleared to push upper body. " +
-        "Knee stays in rehab loading (no plyo). Close the 72 g protein gap by 9 PM, and get lights-out by 22:30 — sleep is your one lagging input."
+    /// One-paragraph morning brief, synthesized from the live directive so the
+    /// hero text always agrees with the plan below it.
+    static func dailyBrief(context c: CoachContext) -> String {
+        var brief = "Forge Score \(c.forgeScore). Recovery \(c.recovery) — \(c.directive.headline.lowercased().dropLast())."
+        if c.proteinRemaining > 0 {
+            brief += " Close the \(c.proteinRemaining) g protein gap by 9 PM."
+        }
+        if let sleep = c.directive.actions.first(where: { $0.kind == .sleep }) {
+            brief += " Tonight: \(sleep.value.lowercased())"
+            brief += c.sleepDebtHours >= 2 ? " — sleep is your one lagging input." : "."
+        }
+        return brief
     }
 
     // MARK: - Unified entry point
 
     /// Returns a coach reply. Tries the live model when configured; otherwise (or on
     /// any error) returns the rich mock so the chat always works.
+    /// `history` is the conversation *before* the new question — the question is
+    /// appended exactly once here.
     static func reply(to question: String,
                       history: [CoachMessage] = [],
+                      context: CoachContext = .demo,
                       checkInNote: String? = nil) async -> CoachMessage {
-        guard ForgeConfig.aiMode == .live else { return mockReply(to: question) }
+        guard ForgeConfig.aiMode != .mock else { return mockReply(to: question) }
         do {
-            let text = try await callClaude(question: question, history: history, checkInNote: checkInNote)
+            let text = try await callClaude(question: question, history: history,
+                                            context: context, checkInNote: checkInNote)
             return CoachMessage(role: .coach, text: text, suggestions: Array(quickPrompts.prefix(4)))
         } catch {
             return mockReply(to: question)
@@ -43,7 +123,7 @@ enum AIService {
 
     private enum AIError: Error { case badStatus, emptyBody }
 
-    private struct APIMessage: Codable { let role: String; let content: String }
+    struct APIMessage: Codable, Equatable { let role: String; let content: String }
     private struct APIRequest: Codable {
         let model: String
         let max_tokens: Int
@@ -55,30 +135,46 @@ enum AIService {
         let content: [Block]
     }
 
-    private static func callClaude(question: String,
-                                   history: [CoachMessage],
-                                   checkInNote: String?) async throws -> String {
-        var request = URLRequest(url: URL(string: ForgeConfig.messagesEndpoint)!)
-        request.httpMethod = "POST"
-        request.setValue(ForgeConfig.anthropicAPIKey, forHTTPHeaderField: "x-api-key")
-        request.setValue(ForgeConfig.anthropicVersion, forHTTPHeaderField: "anthropic-version")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.timeoutInterval = 30
-
-        // Build the message list. The API requires the first message to be `user`,
-        // so drop the leading coach/seed turns; consecutive same-role turns are fine.
+    /// Build the API message list. The API requires the first message to be `user`,
+    /// so leading coach/seed turns are dropped; a trailing history entry that
+    /// duplicates the new question is skipped so the question is sent exactly once.
+    /// Internal (not private) so the shape rules are unit-tested.
+    static func buildAPIMessages(question: String, history: [CoachMessage]) -> [APIMessage] {
         var messages: [APIMessage] = []
         for m in history.suffix(12) {
             let role = m.role == .user ? "user" : "assistant"
             if messages.isEmpty && role != "user" { continue }
             messages.append(APIMessage(role: role, content: m.text))
         }
+        if messages.last?.role == "user" && messages.last?.content == question {
+            messages.removeLast()
+        }
         messages.append(APIMessage(role: "user", content: question))
+        return messages
+    }
+
+    private static func callClaude(question: String,
+                                   history: [CoachMessage],
+                                   context: CoachContext,
+                                   checkInNote: String?) async throws -> String {
+        guard let endpoint = URL(string: ForgeConfig.coachEndpoint) else { throw AIError.badStatus }
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        // Proxy mode: the backend holds the Anthropic key — the client sends none.
+        // Direct mode (local dev only): authenticate straight to the API.
+        if ForgeConfig.aiMode == .liveDirect {
+            request.setValue(ForgeConfig.anthropicAPIKey, forHTTPHeaderField: "x-api-key")
+        }
+        request.setValue(ForgeConfig.anthropicVersion, forHTTPHeaderField: "anthropic-version")
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.timeoutInterval = 30
+
+        let messages = buildAPIMessages(question: question, history: history)
 
         // Opus 4.8: no temperature/top_p (removed); thinking omitted for a snappy chat.
         let body = APIRequest(model: ForgeConfig.coachModel,
                               max_tokens: ForgeConfig.coachMaxTokens,
-                              system: systemPrompt(checkInNote: checkInNote),
+                              system: systemPrompt(context: context, checkInNote: checkInNote),
                               messages: messages)
         request.httpBody = try JSONEncoder().encode(body)
 
@@ -92,32 +188,21 @@ enum AIService {
         return text
     }
 
-    /// The system prompt — Forge's coaching persona plus the athlete's live data.
-    /// Exposed `internal` so tests can assert it carries the right signals.
+    /// Back-compat convenience — demo-context prompt (previews, tests).
     static func systemPrompt(checkInNote: String?) -> String {
-        let u = MockData.sean
-        let d = MockData.today
+        systemPrompt(context: .demo, checkInNote: checkInNote)
+    }
+
+    /// The system prompt — Forge's coaching persona plus the athlete's LIVE data.
+    /// Every number comes from `context`, which AppState builds from current service
+    /// state, so the coach and the on-screen app can never disagree.
+    /// Exposed `internal` so tests can assert it carries the right signals.
+    static func systemPrompt(context c: CoachContext, checkInNote: String?) -> String {
         let knee = MockData.knee
         let defs = MockData.deficiencies.prefix(3).map { "\($0.nutrient) \($0.current)/\($0.target) (\($0.daysLow)d low)" }.joined(separator: ", ")
         let vitD = MockData.bloodwork.first { $0.name.contains("Vitamin D") }
         let benchForecast = MockData.forecasts.first { $0.metric == "Bench Press" }
-
-        // The same directive the dashboard shows — so the coach and the app are one brain.
-        let directive = DirectiveEngine.make(
-            recovery: d.recovery,
-            sleepDebtHours: d.sleepDebtHours,
-            proteinRemaining: 72,
-            hydrationPct: 62,
-            injuryRiskPercent: MockData.injuryRisk.percent,
-            injuryRiskBand: MockData.injuryRisk.band,
-            activeInjuryName: knee.type.rawValue,
-            activeInjuryPain: knee.painToday,
-            workoutName: "Upper Push + Knee-Safe Lower",
-            calorieTarget: u.calorieTarget,
-            proteinTarget: u.proteinTarget,
-            mobilityMinutes: 20,
-            keySupplement: "Magnesium 400 mg",
-            sleepTargetHours: 8.0 + min(d.sleepDebtHours * 0.08, 1.0))
+        let directive = c.directive
 
         var ctx = """
         You are Forge — an elite, premium AI performance coach inside a human-performance app. \
@@ -125,16 +210,17 @@ enum AIService {
         Give one clear directive plus the reasoning, in 2–4 short sentences. Avoid bullet lists unless asked.
 
         ATHLETE
-        - \(u.name), \(u.age), \(u.sport). Goals: \(u.goals.map(\.rawValue).joined(separator: ", ")). Level: \(u.fitnessLevel.rawValue).
-        - Lifts: bench 180, squat 230, deadlift 280. \(u.streakDays)-day streak.
+        - \(c.name), \(c.age), \(c.sport). Goals: \(c.goals). Level: \(c.level).
+        - Lifts: bench 180, squat 230, deadlift 280. \(c.streakDays)-day streak.\(c.plateauNote.isEmpty ? "" : "\n- Lift watch: \(c.plateauNote)")
 
         TODAY
-        - Recovery \(d.recovery)/100, readiness \(d.readiness.rawValue), HRV \(d.hrv)ms (baseline \(d.hrvBaseline)), resting HR \(d.restingHR).
-        - Sleep \(String(format: "%.1f", d.sleep.hours))h last night; sleep debt \(String(format: "%.1f", d.sleepDebtHours))h this week.
-        - Strain yesterday \(String(format: "%.1f", d.strainYesterday))/21.
+        - Forge Score \(c.forgeScore)/100. Recovery \(c.recovery)/100, readiness \(c.readiness), HRV \(c.hrv)ms (baseline \(c.hrvBaseline)), resting HR \(c.restingHR).
+        - Sleep \(String(format: "%.1f", c.sleepHours))h last night; sleep debt \(String(format: "%.1f", c.sleepDebtHours))h this week.
+        - Strain yesterday \(String(format: "%.1f", c.strainYesterday))/21.
 
         FUEL
-        - Targets: \(u.calorieTarget) kcal / \(u.proteinTarget)g protein / \(u.waterTargetOz)oz water.
+        - Targets: \(c.calorieTarget) kcal / \(c.proteinTarget)g protein / \(c.waterTargetOz)oz water.
+        - Right now: \(c.proteinRemaining)g protein still to go today; hydration at \(c.hydrationPct)% of target.
         - Deficiencies (7-day): \(defs).\(vitD.map { " Bloodwork Vitamin D \(Int($0.value)) ng/mL (low)." } ?? "")
 
         INJURY
@@ -145,7 +231,19 @@ enum AIService {
 
         SAFETY
         - You provide educational guidance, not medical advice. For severe pain, swelling, head injury, chest pain, or neurological symptoms, tell the athlete to see a physician or physical therapist.
+
+        EVIDENCE (when you make a physiological or training claim, cite from this vetted list when relevant, e.g. "(Jäger et al., JISSN 2017)". NEVER invent a citation; if the list doesn't cover a claim, speak from consensus without one.)
+        \(EvidenceBase.promptBlock)
         """
+        // Connected ecosystem — the coach reasons ACROSS devices and credits each one.
+        if !c.dataSources.isEmpty {
+            ctx += "\n\nDATA SOURCES (name the device that measured a signal when you cite it — e.g. \"your WHOOP HRV\", \"Apple Watch sleep\")"
+            ctx += "\n- Connected: \(c.dataSources)"
+            if !c.deviceNarrative.isEmpty {
+                ctx += "\n- Cross-device read: \(c.deviceNarrative)"
+            }
+        }
+
         // Today's directive — keep the coach perfectly aligned with the on-screen plan.
         ctx += "\n\nTODAY'S DIRECTIVE (the app is showing the athlete this exact plan — stay consistent with it)"
         ctx += "\n- \(directive.headline) \(directive.priorityAction)"
@@ -153,22 +251,22 @@ enum AIService {
 
         // Cross-module intelligence — the coach reasons in causal chains, never in silos.
         let drivers = InsightEngine.recoveryDrivers(
-            recovery: d.recovery, sleepHours: d.sleep.hours, sleepReference: 8.5,
-            hrv: d.hrv, hrvBaseline: d.hrvBaseline,
-            strainYesterday: d.strainYesterday, strainAvg: 13.9,
-            restingHR: d.restingHR, restingHRBaseline: 52,
-            magnesiumPct: 52, magnesiumDaysLow: 6)
+            recovery: c.recovery, sleepHours: c.sleepHours, sleepReference: 8.5,
+            hrv: c.hrv, hrvBaseline: c.hrvBaseline,
+            strainYesterday: c.strainYesterday, strainAvg: 13.9,
+            restingHR: c.restingHR, restingHRBaseline: 52,
+            magnesiumPct: c.magnesiumPct, magnesiumDaysLow: c.magnesiumDaysLow)
         if !drivers.isEmpty {
-            ctx += "\n\nWHY RECOVERY IS \(d.recovery) (cite these specifics when asked about fatigue or recovery)"
+            ctx += "\n\nWHY RECOVERY IS \(c.recovery) (cite these specifics when asked about fatigue or recovery)"
             for dr in drivers.prefix(3) { ctx += "\n- \(dr.factor): \(dr.detail)" }
         }
         let insights = InsightEngine.crossModule(
-            recovery: d.recovery, sleepDebtHours: d.sleepDebtHours,
-            hrv: d.hrv, hrvBaseline: d.hrvBaseline,
-            proteinRemaining: 72, hydrationPct: 62,
+            recovery: c.recovery, sleepDebtHours: c.sleepDebtHours,
+            hrv: c.hrv, hrvBaseline: c.hrvBaseline,
+            proteinRemaining: c.proteinRemaining, hydrationPct: c.hydrationPct,
             injuryName: knee.type.rawValue, injuryPhase: knee.phase.rawValue, injuryPain: knee.painToday,
             injuryRiskPercent: MockData.injuryRisk.percent, injuryRiskBand: MockData.injuryRisk.band,
-            magnesiumPct: 52, magnesiumDaysLow: 6)
+            magnesiumPct: c.magnesiumPct, magnesiumDaysLow: c.magnesiumDaysLow)
         if !insights.isEmpty {
             ctx += "\n\nCROSS-MODULE CONNECTIONS (reason in these chains — this is how Forge thinks)"
             for ins in insights.prefix(3) { ctx += "\n- \(ins.chain) → \(ins.action)" }
