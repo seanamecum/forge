@@ -1,77 +1,192 @@
 import SwiftUI
+import MapKit
+import CoreLocation
 
 /// Running — weekly mileage, recent runs, readiness-aware pace guidance,
-/// and a live (simulated) run session with timer.
+/// and a REAL GPS run session: live map, distance, pace, and km splits.
 struct RunningView: View {
     @Environment(AppState.self) private var app
-    @State private var running = false
-    @State private var elapsed = 0
-    @State private var distance = 0.0
-
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    @State private var tracker = RunTrackerService()
+    @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
 
     var body: some View {
         ScreenScaffold {
             SectionHeader(eyebrow: "Train · Endurance", title: "Running",
                           subtitle: "Engine work, tuned to your recovery and the knee.")
 
-            if running { activeRunCard } else { startCard }
-            weeklyCard
-            paceGuidance
-            recentRuns
+            switch tracker.state {
+            case .idle: startCard
+            case .tracking, .paused: activeRunSection
+            case .finished: summaryCard
+            }
+
+            if tracker.state == .idle {
+                weeklyCard
+                paceGuidance
+                recentRuns
+            }
         }
         .navigationTitle("Running")
         .navigationBarTitleDisplayMode(.inline)
-        .onReceive(timer) { _ in
-            guard running else { return }
-            elapsed += 1
-            distance += 0.0023 // ~8:50/mi simulated pace
-        }
+        .onAppear { tracker.requestPermission() }
     }
+
+    // MARK: - Start
 
     private var startCard: some View {
         Card(gold: true) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    EyebrowLabel(text: "Today's Call")
+                    EyebrowLabel(text: "Today's call")
                     Spacer()
                     Chip(text: "Knee: bike preferred", tone: .amber)
                 }
-                Text("Zone 2 · 25 min easy").font(Theme.display(21)).foregroundStyle(Theme.cream)
+                Text("Zone 2 · 25 min easy").font(Theme.display(22)).foregroundStyle(Theme.cream)
                 CoachNote(text: "Recovery 78 allows a run, but the patellar tendon is mid-rehab — keep it flat, conversational pace, and stop if pain passes 3/10. The bike covers conditioning with zero tendon cost if the knee talks.")
-                Button("Start Run") {
-                    running = true
-                    elapsed = 0
-                    distance = 0
+                if tracker.authorization == .denied, let err = tracker.lastError {
+                    ErrorBanner(message: err)
+                }
+                Button("Start GPS Run") {
+                    Haptics.success()
+                    tracker.start()
                 }
                 .buttonStyle(GoldButtonStyle())
             }
         }
     }
 
-    private var activeRunCard: some View {
-        Card(gold: true) {
-            VStack(spacing: 14) {
-                EyebrowLabel(text: "Run in progress · GPS simulated")
-                HStack(spacing: 24) {
-                    StatTile(label: "Time", value: timeLabel, tone: .gold)
-                    StatTile(label: "Distance", value: String(format: "%.2f", distance), unit: "mi")
-                    StatTile(label: "Pace", value: paceLabel, unit: "/mi")
-                    StatTile(label: "HR", value: "\(142 + (elapsed % 9))", unit: "bpm", tone: .green)
+    // MARK: - Live run
+
+    @ViewBuilder
+    private var activeRunSection: some View {
+        Card {
+            VStack(spacing: 16) {
+                Map(position: $camera) {
+                    UserAnnotation()
+                    if tracker.route.count > 1 {
+                        MapPolyline(coordinates: tracker.route)
+                            .stroke(Theme.gold, lineWidth: 4)
+                    }
                 }
-                Button("End Run") {
-                    running = false
+                .frame(height: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .mapControlVisibility(.hidden)
+
+                HStack(spacing: 0) {
+                    runStat(timeLabel, "Time")
+                    runStat(RunMath.distanceLabel(meters: tracker.distanceMeters,
+                                                  imperial: app.user.usesImperial),
+                            app.user.usesImperial ? "Miles" : "Kilometers")
+                    runStat(RunMath.paceLabel(secPerKm: tracker.paceSecPerKm,
+                                              imperial: app.user.usesImperial),
+                            app.user.usesImperial ? "Pace /mi" : "Pace /km")
                 }
-                .buttonStyle(GhostButtonStyle())
+
+                if !tracker.splitsSecPerKm.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(Array(tracker.splitsSecPerKm.suffix(5).enumerated()), id: \.offset) { i, split in
+                            Chip(text: "km \(tracker.splitsSecPerKm.count - tracker.splitsSecPerKm.suffix(5).count + i + 1) · \(RunMath.paceLabel(secPerKm: split, imperial: false))",
+                                 tone: .neutral)
+                        }
+                        Spacer()
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    if tracker.state == .tracking {
+                        Button("Pause") { Haptics.tap(); tracker.pause() }
+                            .buttonStyle(GhostButtonStyle())
+                    } else {
+                        Button("Resume") { Haptics.tap(); tracker.resume() }
+                            .buttonStyle(GhostButtonStyle())
+                    }
+                    Button("Finish") {
+                        Haptics.success()
+                        tracker.stop()
+                        saveRun()
+                    }
+                    .buttonStyle(GoldButtonStyle())
+                }
             }
         }
     }
+
+    private func runStat(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(Theme.display(26))
+                .foregroundStyle(Theme.cream)
+                .monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.6)
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Theme.muted)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Summary
+
+    private var summaryCard: some View {
+        Card(gold: true) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Run complete").font(Theme.display(24)).foregroundStyle(Theme.cream)
+                HStack(spacing: 14) {
+                    StatTile(label: "Distance",
+                             value: RunMath.distanceLabel(meters: tracker.distanceMeters,
+                                                          imperial: app.user.usesImperial),
+                             unit: app.user.usesImperial ? "mi" : "km", tone: .gold)
+                    StatTile(label: "Time", value: timeLabel)
+                    StatTile(label: "Avg pace",
+                             value: RunMath.paceLabel(secPerKm: tracker.paceSecPerKm,
+                                                      imperial: app.user.usesImperial),
+                             unit: app.user.usesImperial ? "/mi" : "/km")
+                }
+                Text(app.healthKit.authState == .authorized
+                     ? "Saved to your training history and Apple Health."
+                     : "Saved to your training history.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.muted)
+                Button("Done") { tracker.reset() }
+                    .buttonStyle(GoldButtonStyle())
+            }
+        }
+    }
+
+    private func saveRun() {
+        // Training history — the rest of Forge reacts to this run.
+        let minutes = max(1, Int(tracker.elapsedSeconds / 60))
+        let miles = tracker.distanceMeters / 1609.344
+        let workout = Workout(
+            name: String(format: "Run · %.2f %@",
+                         app.user.usesImperial ? miles : tracker.distanceMeters / 1000,
+                         app.user.usesImperial ? "mi" : "km"),
+            date: .now, durationMin: minutes, exercises: [],
+            avgRPE: 6, feel: .fine)
+        app.workouts.finish(workout)
+
+        // Mirror to Apple Health as a real running workout.
+        if app.healthKit.authState == .authorized, let start = tracker.startedAt {
+            let meters = tracker.distanceMeters
+            Task {
+                await app.healthKit.saveRun(start: start, end: .now, meters: meters,
+                                            calories: Double(minutes) * 11)
+            }
+        }
+    }
+
+    private var timeLabel: String {
+        let s = Int(tracker.elapsedSeconds)
+        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
+                         : String(format: "%d:%02d", s / 60, s % 60)
+    }
+
+    // MARK: - Context (idle)
 
     private var weeklyCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    EyebrowLabel(text: "Weekly Mileage")
+                    EyebrowLabel(text: "Weekly mileage")
                     Spacer()
                     Chip(text: "12.4 mi this week", tone: .gold)
                 }
@@ -85,7 +200,7 @@ struct RunningView: View {
     private var paceGuidance: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
-                EyebrowLabel(text: "Training Paces · from your 21:42 5K")
+                EyebrowLabel(text: "Training paces · from your 21:42 5K")
                 InfoRow(label: "Zone 2 / easy", value: "9:40–10:20 /mi", valueTone: .green)
                 InfoRow(label: "Tempo", value: "7:55–8:10 /mi", valueTone: .gold)
                 InfoRow(label: "Intervals (800s)", value: "6:55 /mi", valueTone: .amber)
@@ -97,7 +212,7 @@ struct RunningView: View {
     private var recentRuns: some View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
-                EyebrowLabel(text: "Recent Runs")
+                EyebrowLabel(text: "Recent runs")
                 ForEach(RunLog.recent) { run in
                     HStack {
                         VStack(alignment: .leading, spacing: 1) {
@@ -115,16 +230,6 @@ struct RunningView: View {
                 }
             }
         }
-    }
-
-    private var timeLabel: String {
-        String(format: "%d:%02d", elapsed / 60, elapsed % 60)
-    }
-
-    private var paceLabel: String {
-        guard distance > 0.01 else { return "–:––" }
-        let secPerMile = Double(elapsed) / distance
-        return String(format: "%d:%02d", Int(secPerMile) / 60, Int(secPerMile) % 60)
     }
 }
 

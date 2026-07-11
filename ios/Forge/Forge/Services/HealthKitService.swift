@@ -51,7 +51,8 @@ final class HealthKitService {
     }
 
     private var writeTypes: Set<HKSampleType> {
-        [HKObjectType.workoutType(), HKQuantityType(.bodyMass)]
+        [HKObjectType.workoutType(), HKQuantityType(.bodyMass),
+         HKQuantityType(.distanceWalkingRunning), HKQuantityType(.activeEnergyBurned)]
     }
 
     // MARK: - Authorization
@@ -136,6 +137,39 @@ final class HealthKitService {
             return true
         } catch {
             lastError = "Couldn't save workout: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// Save a GPS run to Apple Health with distance.
+    @discardableResult
+    func saveRun(start: Date, end: Date, meters: Double, calories: Double) async -> Bool {
+        guard authState == .authorized else { return false }
+        let config = HKWorkoutConfiguration()
+        config.activityType = .running
+        config.locationType = .outdoor
+        let builder = HKWorkoutBuilder(healthStore: store, configuration: config, device: .local())
+        do {
+            try await builder.beginCollection(at: start)
+            var samples: [HKSample] = []
+            if meters > 0 {
+                samples.append(HKQuantitySample(
+                    type: HKQuantityType(.distanceWalkingRunning),
+                    quantity: HKQuantity(unit: .meter(), doubleValue: meters),
+                    start: start, end: end))
+            }
+            if calories > 0 {
+                samples.append(HKQuantitySample(
+                    type: HKQuantityType(.activeEnergyBurned),
+                    quantity: HKQuantity(unit: .kilocalorie(), doubleValue: calories),
+                    start: start, end: end))
+            }
+            if !samples.isEmpty { try await builder.addSamples(samples) }
+            try await builder.endCollection(at: end)
+            _ = try await builder.finishWorkout()
+            return true
+        } catch {
+            lastError = "Couldn't save run: \(error.localizedDescription)"
             return false
         }
     }

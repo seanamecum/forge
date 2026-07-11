@@ -514,6 +514,7 @@
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Forge reads your steps, heart rate, resting heart rate, HRV, sleep, workouts, energy, and weight to compute your Forge Score, recovery, and daily recommendations.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Forge saves workouts and body measurements you log back to Apple Health.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Forge uses your location during runs to track your route, distance, pace, and splits. Location is only accessed while a run is active.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -546,6 +547,7 @@
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Forge reads your steps, heart rate, resting heart rate, HRV, sleep, workouts, energy, and weight to compute your Forge Score, recovery, and daily recommendations.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Forge saves workouts and body measurements you log back to Apple Health.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Forge uses your location during runs to track your route, distance, pace, and splits. Location is only accessed while a run is active.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

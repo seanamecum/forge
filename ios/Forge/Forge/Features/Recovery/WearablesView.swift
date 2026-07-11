@@ -339,6 +339,7 @@ private struct PreferredSourceRow: View {
 struct WearableRow: View {
     @Environment(AppState.self) private var app
     let device: WearableDevice
+    @State private var showConnectInfo = false
 
     var body: some View {
         Card {
@@ -367,11 +368,28 @@ struct WearableRow: View {
                     if device.connected {
                         qualityChip
                     }
-                    Button(device.connected ? "Sync" : "Pair") {
-                        Haptics.tap()
-                        app.recovery.toggleConnection(device)
+                    if device.source == .appleWatch || device.source == .smartScale {
+                        // Real path: these flow through Apple Health today.
+                        Button(device.connected ? "Sync" : "Pair") {
+                            Haptics.tap()
+                            app.recovery.toggleConnection(device)
+                        }
+                        .buttonStyle(GhostButtonStyle(compact: true))
+                    } else {
+                        Button(device.connected ? "Demo" : "Connect") {
+                            showConnectInfo = true
+                        }
+                        .buttonStyle(GhostButtonStyle(compact: true))
+                        .confirmationDialog("\(device.source.displayName) sync", isPresented: $showConnectInfo, titleVisibility: .visible) {
+                            Button(device.connected ? "Stop demo preview" : "Preview with demo data") {
+                                Haptics.tap()
+                                app.recovery.toggleConnection(device)
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("Direct \(device.source.displayName) sync needs their cloud API and a Forge account — it lands with the backend launch. If \(device.source.displayName) writes to Apple Health, connect Apple Health above and the data flows today.")
+                        }
                     }
-                    .buttonStyle(GhostButtonStyle(compact: true))
                 }
 
                 if device.connected {

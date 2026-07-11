@@ -5,6 +5,7 @@ struct CoachView: View {
     @State private var vm = CoachViewModel()
     @State private var input = ""
     @State private var showEvidence = false
+    @FocusState private var inputFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -24,6 +25,7 @@ struct CoachView: View {
                         }
                         .padding(16)
                     }
+                    .scrollDismissesKeyboard(.interactively)
                     .onChange(of: vm.messages.count) {
                         withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
@@ -33,6 +35,13 @@ struct CoachView: View {
             }
             .background(Theme.bg)
             .navigationBarHidden(true)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { inputFocused = false }
+                        .foregroundStyle(Theme.gold)
+                }
+            }
             .onAppear {
                 vm.checkInNote = app.checkIn?.coachNote
                 vm.seedIfNeeded(userName: app.user.name)
@@ -85,6 +94,7 @@ struct CoachView: View {
     private var composer: some View {
         HStack(spacing: 10) {
             TextField("Ask the Coach…", text: $input)
+                .focused($inputFocused)
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.cream)
                 .padding(12)
