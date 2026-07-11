@@ -18,7 +18,7 @@ final class CoachViewModel {
         messages.append(CoachMessage(
             role: .coach,
             text: "\(hello), \(first). I'm reading everything — last night's sleep, your HRV, the knee, yesterday's bench session, today's protein pace\(mode). Ask me anything.",
-            suggestions: Array(AIService.quickPrompts.prefix(6))
+            suggestions: Array(AIService.quickPrompts.prefix(3))
         ))
     }
 

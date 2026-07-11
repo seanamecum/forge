@@ -9,17 +9,9 @@ struct DashboardView: View {
         NavigationStack {
             ScreenScaffold {
                 header
-                QuickActionsRow()
                 MorningCheckInCard()
-                TodaysDirectiveCard()
-                IntelligenceCard()
-                ForgeScoreHero()
-                WeeklyReportCard()
-                metricRow
-                TodaysWorkoutCard()
-                FuelCard()
-                InjuryRiskCard()
-                WearableStatusStrip()
+                heroCard
+                todayCard
                 ModulesGrid()
                 DisclaimerNote()
             }
@@ -83,6 +75,56 @@ struct DashboardView: View {
                 : "Notifications")
         }
         .padding(.top, 6)
+    }
+
+    /// The one number that matters, dominating the screen.
+    private var heroCard: some View {
+        let directive = app.dailyDirective
+        return Card {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(app.forgeScore)")
+                        .font(.system(size: 72, weight: .bold, design: .rounded))
+                        .foregroundStyle(Theme.cream)
+                    Text("Forge Score")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.muted)
+                }
+                Sparkline(values: app.recovery.forgeScoreTrend, height: 72)
+                Text(directive.headline)
+                    .font(Theme.text(14))
+                    .foregroundStyle(Theme.creamDim)
+            }
+        }
+    }
+
+    /// Today, in three quiet rows + the single priority.
+    private var todayCard: some View {
+        let directive = app.dailyDirective
+        return Card {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Today")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.muted)
+                ForEach(directive.actions.prefix(3)) { action in
+                    HStack(spacing: 12) {
+                        Image(systemName: action.icon)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.creamDim)
+                            .frame(width: 22)
+                        Text(action.value)
+                            .font(Theme.text(14))
+                            .foregroundStyle(Theme.cream)
+                        Spacer()
+                    }
+                }
+                Divider().overlay(Theme.hairline)
+                Text(directive.priorityAction)
+                    .font(Theme.text(13, .medium))
+                    .foregroundStyle(Theme.gold)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var metricRow: some View {

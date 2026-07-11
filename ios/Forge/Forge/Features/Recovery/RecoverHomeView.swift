@@ -9,13 +9,27 @@ struct RecoverHomeView: View {
                 SectionHeader(eyebrow: "Recover", title: "Recovery & Sleep",
                               subtitle: "HRV, RHR, sleep stages, debt, strain — synthesized into one readiness call.")
 
-                ringsRow
-                sleepCard
-                debtCard
+                heroCard
                 trendsCard
+                sleepCard
                 navLinks
             }
             .navigationBarHidden(true)
+        }
+    }
+
+    /// One dominant number; the story beneath it.
+    private var heroCard: some View {
+        let d = app.recovery.today
+        return Card {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("\(d.recovery)")
+                    .font(.system(size: 72, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.gold)
+                Text("Recovery today · HRV \(d.hrv) ms · sleep \(String(format: "%.1f", d.sleep.hours)) h")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.muted)
+            }
         }
     }
 
