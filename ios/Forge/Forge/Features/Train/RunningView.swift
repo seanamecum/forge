@@ -61,53 +61,68 @@ struct RunningView: View {
     private var activeRunSection: some View {
         Card {
             VStack(spacing: 16) {
-                Map(position: $camera) {
-                    UserAnnotation()
-                    if tracker.route.count > 1 {
-                        MapPolyline(coordinates: tracker.route)
-                            .stroke(Theme.gold, lineWidth: 4)
-                    }
-                }
-                .frame(height: 220)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .mapControlVisibility(.hidden)
-
-                HStack(spacing: 0) {
-                    runStat(timeLabel, "Time")
-                    runStat(RunMath.distanceLabel(meters: tracker.distanceMeters,
-                                                  imperial: app.user.usesImperial),
-                            app.user.usesImperial ? "Miles" : "Kilometers")
-                    runStat(RunMath.paceLabel(secPerKm: tracker.paceSecPerKm,
-                                              imperial: app.user.usesImperial),
-                            app.user.usesImperial ? "Pace /mi" : "Pace /km")
-                }
-
-                if !tracker.splitsSecPerKm.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(Array(tracker.splitsSecPerKm.suffix(5).enumerated()), id: \.offset) { i, split in
-                            Chip(text: "km \(tracker.splitsSecPerKm.count - tracker.splitsSecPerKm.suffix(5).count + i + 1) · \(RunMath.paceLabel(secPerKm: split, imperial: false))",
-                                 tone: .neutral)
-                        }
-                        Spacer()
-                    }
-                }
-
-                HStack(spacing: 10) {
-                    if tracker.state == .tracking {
-                        Button("Pause") { Haptics.tap(); tracker.pause() }
-                            .buttonStyle(GhostButtonStyle())
-                    } else {
-                        Button("Resume") { Haptics.tap(); tracker.resume() }
-                            .buttonStyle(GhostButtonStyle())
-                    }
-                    Button("Finish") {
-                        Haptics.success()
-                        tracker.stop()
-                        saveRun()
-                    }
-                    .buttonStyle(GoldButtonStyle())
-                }
+                runMap
+                liveStatsRow
+                splitChips
+                runControls
             }
+        }
+    }
+
+    private var runMap: some View {
+        Map(position: $camera) {
+            UserAnnotation()
+            if tracker.route.count > 1 {
+                MapPolyline(coordinates: tracker.route)
+                    .stroke(Theme.gold, lineWidth: 4)
+            }
+        }
+        .frame(height: 220)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .mapControlVisibility(.hidden)
+    }
+
+    private var liveStatsRow: some View {
+        let imperial = app.user.usesImperial
+        let distance = RunMath.distanceLabel(meters: tracker.distanceMeters, imperial: imperial)
+        let pace = RunMath.paceLabel(secPerKm: tracker.paceSecPerKm, imperial: imperial)
+        return HStack(spacing: 0) {
+            runStat(timeLabel, "Time")
+            runStat(distance, imperial ? "Miles" : "Kilometers")
+            runStat(pace, imperial ? "Pace /mi" : "Pace /km")
+        }
+    }
+
+    @ViewBuilder
+    private var splitChips: some View {
+        if !tracker.splitsSecPerKm.isEmpty {
+            let recent = Array(tracker.splitsSecPerKm.suffix(5))
+            let offset = tracker.splitsSecPerKm.count - recent.count
+            HStack(spacing: 6) {
+                ForEach(Array(recent.enumerated()), id: \.offset) { i, split in
+                    let label = "km \(offset + i + 1) · \(RunMath.paceLabel(secPerKm: split, imperial: false))"
+                    Chip(text: label, tone: .neutral)
+                }
+                Spacer()
+            }
+        }
+    }
+
+    private var runControls: some View {
+        HStack(spacing: 10) {
+            if tracker.state == .tracking {
+                Button("Pause") { Haptics.tap(); tracker.pause() }
+                    .buttonStyle(GhostButtonStyle())
+            } else {
+                Button("Resume") { Haptics.tap(); tracker.resume() }
+                    .buttonStyle(GhostButtonStyle())
+            }
+            Button("Finish") {
+                Haptics.success()
+                tracker.stop()
+                saveRun()
+            }
+            .buttonStyle(GoldButtonStyle())
         }
     }
 
