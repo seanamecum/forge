@@ -145,7 +145,7 @@ function Body({ data, update }: any) {
         <Field label="Height (cm)">
           <input type="number" className="input" value={data.heightCm} onChange={(e) => update("heightCm", +e.target.value)} />
         </Field>
-        <Field label="Weight (kg)">
+        <Field label="Weight (lb)">
           <input type="number" className="input" value={data.weightKg} onChange={(e) => update("weightKg", +e.target.value)} />
         </Field>
       </div>
