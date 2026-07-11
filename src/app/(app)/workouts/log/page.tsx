@@ -45,7 +45,7 @@ export default function LogPage() {
       sets: done.length,
     });
     forge.addXp(180);
-    toast(`Session saved · ${done.length} sets · ${volumeKg.toLocaleString()} kg volume · +180 XP`);
+    toast(`Session saved · ${done.length} sets · ${volumeKg.toLocaleString()} lb volume · +180 XP`);
     router.push("/workouts");
   }
 
@@ -141,7 +141,7 @@ export default function LogPage() {
                   <input
                     value={s.weight}
                     onChange={(e) => updateSet(exIdx, setIdx, "weight", e.target.value)}
-                    placeholder="kg"
+                    placeholder="lb"
                     className="input !py-1.5 !text-sm"
                   />
                   <input

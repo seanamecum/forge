@@ -208,16 +208,16 @@ const SAMPLE = {
       label: "Main · Strength",
       note: "Rest 2:30",
       items: [
-        { name: "Barbell Hip Thrust", scheme: "4 × 6 @ 170 kg · RPE 8" },
-        { name: "Romanian Deadlift", scheme: "4 × 8 @ 130 kg · RPE 8" },
+        { name: "Barbell Hip Thrust", scheme: "4 × 6 @ 375 lb · RPE 8" },
+        { name: "Romanian Deadlift", scheme: "4 × 8 @ 285 lb · RPE 8" },
       ],
     },
     {
       label: "Accessory",
       note: "Rest 1:30",
       items: [
-        { name: "Bulgarian Split Squat", scheme: "3 × 10 ea @ 24 kg DBs" },
-        { name: "Leg Press · Quads", scheme: "3 × 12 @ 220 kg" },
+        { name: "Bulgarian Split Squat", scheme: "3 × 10 ea @ 55 lb DBs" },
+        { name: "Leg Press · Quads", scheme: "3 × 12 @ 485 lb" },
       ],
     },
     {

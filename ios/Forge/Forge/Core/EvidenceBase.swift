@@ -16,7 +16,7 @@ enum EvidenceBase {
     static let items: [EvidenceItem] = [
         EvidenceItem(
             topic: "Protein for muscle gain",
-            claim: "1.6–2.2 g/kg/day supports muscle growth in training athletes; distribution across meals matters.",
+            claim: "0.7–1.0 g per lb of bodyweight daily (1.6–2.2 g/kg) supports muscle growth; distribution across meals matters.",
             source: "ISSN Position Stand: Protein & Exercise — Jäger et al., JISSN 2017"),
         EvidenceItem(
             topic: "Creatine",

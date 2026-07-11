@@ -79,7 +79,7 @@ export default function WorkoutsPage() {
       {/* Weekly stats */}
       <div className="grid gap-4 lg:grid-cols-4">
         <StatCard title="Sessions / wk" value={`${5 + forge.sessions.length}`} sub="this week · target 5" />
-        <StatCard title="Total volume" value={(42180 + forge.sessions.reduce((s, x) => s + x.volumeKg, 0)).toLocaleString()} unit="kg" sub="-3% vs 4-wk avg (deload)" />
+        <StatCard title="Total volume" value={Math.round((42180 + forge.sessions.reduce((s, x) => s + x.volumeKg, 0)) * 2.20462).toLocaleString()} unit="lb" sub="-3% vs 4-wk avg (deload)" />
         <StatCard title="Avg RPE" value="8.1" sub="last 7 sessions" />
         <StatCard title="Strain" value="18.6" sub="yesterday · high" />
       </div>
@@ -118,7 +118,7 @@ export default function WorkoutsPage() {
                   <div className="text-[11px] text-obsidian-200">{p.date}</div>
                 </div>
                 <div className="stat-num text-xl text-gold-grad">
-                  {p.weightKg}<span className="ml-1 text-xs text-obsidian-200">kg</span>
+                  {Math.round(p.weightKg * 2.20462)}<span className="ml-1 text-xs text-obsidian-200">lb</span>
                 </div>
               </div>
             ))}
@@ -128,7 +128,7 @@ export default function WorkoutsPage() {
         <div className="card p-5">
           <div className="mb-3 flex items-center justify-between">
             <div className="text-[10px] uppercase tracking-[0.22em] text-gold-300">Body weight · 14d</div>
-            <span className="chip chip-green">−2.8 kg</span>
+            <span className="chip chip-green">−6.2 lb</span>
           </div>
           <Sparkline data={weightTrend} width={280} height={80} />
           <div className="hairline my-4" />
@@ -155,7 +155,7 @@ export default function WorkoutsPage() {
                     {s.date} · {s.durationMin} min · {s.sets} sets completed
                   </div>
                 </div>
-                <div className="text-[11px] text-gold-200">Volume {s.volumeKg.toLocaleString()} kg · just logged</div>
+                <div className="text-[11px] text-gold-200">Volume {Math.round(s.volumeKg * 2.20462).toLocaleString()} lb · just logged</div>
               </div>
             </div>
           ))}
@@ -168,7 +168,7 @@ export default function WorkoutsPage() {
                     {w.date} · {w.durationMin} min · RPE {w.rpeAvg} · strain {w.strain} · felt {w.feel}
                   </div>
                 </div>
-                <div className="text-[11px] text-gold-200">Volume {w.totalVolumeKg.toLocaleString()} kg</div>
+                <div className="text-[11px] text-gold-200">Volume {Math.round(w.totalVolumeKg * 2.20462).toLocaleString()} lb</div>
               </div>
               <div className="space-y-1">
                 {w.exercises.map((ex, i) => (

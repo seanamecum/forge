@@ -41,6 +41,8 @@ final class RunTrackerService: NSObject, CLLocationManagerDelegate {
     var route: [CLLocationCoordinate2D] = []
     var distanceMeters: Double = 0
     var elapsedSeconds: Double = 0
+    /// Split length in meters — 1609.344 (mile) for imperial athletes, 1000 otherwise.
+    var splitLengthMeters: Double = 1609.344
     var splitsSecPerKm: [Double] = []
     var lastError: String?
 
@@ -137,10 +139,10 @@ final class RunTrackerService: NSObject, CLLocationManagerDelegate {
                 guard RunMath.isUsable(accuracy: location.horizontalAccuracy, jumpMeters: jump, dt: dt)
                 else { continue }
                 distanceMeters += jump
-                // Close a split every kilometer.
-                if distanceMeters - lastSplitMark >= 1000 {
+                // Close a split every mile (imperial) or kilometer.
+                if distanceMeters - lastSplitMark >= splitLengthMeters {
                     splitsSecPerKm.append(elapsedSeconds - lastSplitTime)
-                    lastSplitMark += 1000
+                    lastSplitMark += splitLengthMeters
                     lastSplitTime = elapsedSeconds
                 }
             } else if !RunMath.isUsable(accuracy: location.horizontalAccuracy, jumpMeters: 0, dt: 1) {

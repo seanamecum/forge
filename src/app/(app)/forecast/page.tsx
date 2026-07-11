@@ -41,7 +41,7 @@ export default function ForecastPage() {
         </p>
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
           {[
-            { lever: "Deficit", value: "−540 kcal", impact: "Weight at 84.1 kg in 8 wks" },
+            { lever: "Deficit", value: "−540 kcal", impact: "Weight at 185.4 lb in 8 wks" },
             { lever: "Sleep", value: "8 h / night", impact: "+6 Forge points in 30 d" },
             { lever: "Volume", value: "Hold flat", impact: "Injury risk → 12% (2 wk)" },
           ].map((s) => (

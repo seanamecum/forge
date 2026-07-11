@@ -28,7 +28,10 @@ struct RunningView: View {
         }
         .navigationTitle("Running")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { tracker.requestPermission() }
+        .onAppear {
+            tracker.requestPermission()
+            tracker.splitLengthMeters = app.user.usesImperial ? 1609.344 : 1000
+        }
     }
 
     // MARK: - Start
@@ -100,7 +103,9 @@ struct RunningView: View {
             let offset = tracker.splitsSecPerKm.count - recent.count
             HStack(spacing: 6) {
                 ForEach(Array(recent.enumerated()), id: \.offset) { i, split in
-                    let label = "km \(offset + i + 1) · \(RunMath.paceLabel(secPerKm: split, imperial: false))"
+                    let unit = app.user.usesImperial ? "mi" : "km"
+                    let m = Int(split) / 60, s = Int(split) % 60
+                    let label = "\(unit) \(offset + i + 1) · \(m)'\(String(format: "%02d", s))\""
                     Chip(text: label, tone: .neutral)
                 }
                 Spacer()

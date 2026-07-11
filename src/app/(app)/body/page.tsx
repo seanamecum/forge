@@ -22,13 +22,13 @@ export default function BodyPage() {
         <div className="card card-gold p-5">
           <div className="text-[10px] uppercase tracking-[0.22em] text-gold-300">Weight</div>
           <div className="mt-1 stat-num text-4xl text-cream-50">
-            {bodyMetrics.weightKg}<span className="ml-1 text-sm text-obsidian-200">kg</span>
+            {Math.round(bodyMetrics.weightKg * 2.20462 * 10) / 10}<span className="ml-1 text-sm text-obsidian-200">lb</span>
           </div>
-          <div className="mt-1 text-xs text-forge-green">▼ 2.8 kg / 30d</div>
+          <div className="mt-1 text-xs text-forge-green">▼ 6.2 lb / 30d</div>
           <div className="mt-3"><Sparkline data={weightTrend} width={240} height={36} /></div>
         </div>
         <Stat label="Body Fat" value={bodyMetrics.bodyFatPct} unit="%" delta={-1.6} deltaTone="good" hint="30-day Δ" size="lg" />
-        <Stat label="Lean Mass" value={bodyMetrics.leanMassKg} unit="kg" delta={-0.9} deltaTone="neutral" hint="protected in deficit" size="lg" />
+        <Stat label="Lean Mass" value={Math.round(bodyMetrics.leanMassKg * 2.20462 * 10) / 10} unit="lb" delta={-0.9} deltaTone="neutral" hint="protected in deficit" size="lg" />
         <Stat label="BMR" value={bodyMetrics.bmr} unit="kcal" hint="resting energy" size="lg" />
       </div>
 
@@ -39,18 +39,18 @@ export default function BodyPage() {
           <button className="btn-ghost text-xs" onClick={() => toast("Measurement logged — 30-day deltas recalculated")}>+ Log measurement</button>
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6">
-          <Measurement label="Neck" value={`${m.neckCm} cm`} delta="−1.5" />
-          <Measurement label="Chest" value={`${m.chestCm} cm`} delta="−2.0" />
-          <Measurement label="Waist" value={`${m.waistCm} cm`} delta="−4.5" />
-          <Measurement label="Hips" value={`${m.hipsCm} cm`} delta="−1.5" />
-          <Measurement label="L Arm" value={`${m.leftArmCm} cm`} delta="+0.5" />
-          <Measurement label="R Arm" value={`${m.rightArmCm} cm`} delta="+0.5" />
-          <Measurement label="L Forearm" value={`${m.leftForearmCm} cm`} />
-          <Measurement label="R Forearm" value={`${m.rightForearmCm} cm`} />
-          <Measurement label="L Thigh" value={`${m.leftThighCm} cm`} delta="−1.0" />
-          <Measurement label="R Thigh" value={`${m.rightThighCm} cm`} delta="−1.0" />
-          <Measurement label="L Calf" value={`${m.leftCalfCm} cm`} />
-          <Measurement label="R Calf" value={`${m.rightCalfCm} cm`} />
+          <Measurement label="Neck" value={`${Math.round((m.neckCm / 2.54) * 10) / 10}"`} delta="−0.6" />
+          <Measurement label="Chest" value={`${Math.round((m.chestCm / 2.54) * 10) / 10}"`} delta="−0.8" />
+          <Measurement label="Waist" value={`${Math.round((m.waistCm / 2.54) * 10) / 10}"`} delta="−1.8" />
+          <Measurement label="Hips" value={`${Math.round((m.hipsCm / 2.54) * 10) / 10}"`} delta="−0.6" />
+          <Measurement label="L Arm" value={`${Math.round((m.leftArmCm / 2.54) * 10) / 10}"`} delta="+0.2" />
+          <Measurement label="R Arm" value={`${Math.round((m.rightArmCm / 2.54) * 10) / 10}"`} delta="+0.2" />
+          <Measurement label="L Forearm" value={`${Math.round((m.leftForearmCm / 2.54) * 10) / 10}"`} />
+          <Measurement label="R Forearm" value={`${Math.round((m.rightForearmCm / 2.54) * 10) / 10}"`} />
+          <Measurement label="L Thigh" value={`${Math.round((m.leftThighCm / 2.54) * 10) / 10}"`} delta="−0.4" />
+          <Measurement label="R Thigh" value={`${Math.round((m.rightThighCm / 2.54) * 10) / 10}"`} delta="−0.4" />
+          <Measurement label="L Calf" value={`${Math.round((m.leftCalfCm / 2.54) * 10) / 10}"`} />
+          <Measurement label="R Calf" value={`${Math.round((m.rightCalfCm / 2.54) * 10) / 10}"`} />
         </div>
       </div>
 
@@ -62,10 +62,10 @@ export default function BodyPage() {
         </div>
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {[
-            { date: "Mar 12", weight: "91.2 kg", bf: "16.4%" },
-            { date: "Apr 12", weight: "90.1 kg", bf: "15.9%" },
-            { date: "May 12", weight: "89.0 kg", bf: "15.3%" },
-            { date: "Jun 10", weight: "88.4 kg", bf: "14.8%" },
+            { date: "Mar 12", weight: "201.1 lb", bf: "16.4%" },
+            { date: "Apr 12", weight: "198.6 lb", bf: "15.9%" },
+            { date: "May 12", weight: "196.2 lb", bf: "15.3%" },
+            { date: "Jun 10", weight: "194.9 lb", bf: "14.8%" },
           ].map((p, i) => (
             <div key={p.date} className="card-hover rounded-lg border border-gold-400/10 bg-obsidian-800/40 p-3">
               <div className="aspect-[3/4] rounded-md bg-obsidian-700/60 grid place-items-center text-3xl text-gold-300/20">
@@ -82,7 +82,7 @@ export default function BodyPage() {
       <div className="card p-6">
         <div className="mb-3 flex items-baseline justify-between">
           <div className="display text-xl text-cream-50">90-day composition</div>
-          <span className="chip chip-green">−2.8 kg fat · LM preserved</span>
+          <span className="chip chip-green">−6.2 lb fat · LM preserved</span>
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
           {bodyMetrics.history.map((h) => (
@@ -105,7 +105,7 @@ function Measurement({ label, value, delta }: { label: string; value: string; de
       <div className="mt-1 text-sm text-cream-100">{value}</div>
       {delta && (
         <div className={`text-[11px] ${delta.startsWith("−") ? "text-forge-green" : "text-gold-300"}`}>
-          {delta} cm / 30d
+          {delta}" / 30d
         </div>
       )}
     </div>
