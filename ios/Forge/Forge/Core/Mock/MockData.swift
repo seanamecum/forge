@@ -460,7 +460,7 @@ enum MockData {
 
     static let products: [StoreProduct] = [
         StoreProduct(name: "Whey Isolate 5 lb", brand: "Ascent", price: "$74", rating: 4.8, tag: "Best Value", icon: "takeoutbag.and.cup.and.straw.fill", category: "Supplements"),
-        StoreProduct(name: "Creatine Mono 1 kg", brand: "BulkSupps", price: "$28", rating: 4.9, tag: "Forge Pick", icon: "aqi.medium", category: "Supplements"),
+        StoreProduct(name: "Creatine Mono 2.2 lb", brand: "BulkSupps", price: "$28", rating: 4.9, tag: "Forge Pick", icon: "aqi.medium", category: "Supplements"),
         StoreProduct(name: "Electrolytes 30 ct", brand: "LMNT", price: "$45", rating: 4.85, icon: "drop.fill", category: "Supplements"),
         StoreProduct(name: "Mg-Glycinate 400 mg", brand: "Thorne", price: "$32", rating: 4.9, tag: "Coach Pick", icon: "pills.fill", category: "Supplements"),
         StoreProduct(name: "Mobility Tool Kit", brand: "TriggerPoint", price: "$58", rating: 4.7, icon: "circle.hexagongrid.fill", category: "Recovery"),

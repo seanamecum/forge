@@ -142,7 +142,7 @@ function Body({ data, update }: any) {
     <>
       <Heading title="Body" sub="Height and current weight. We'll let your wearable track changes." />
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Height (cm)">
+        <Field label="Height (ft′in″, e.g. 6′3″)">
           <input type="number" className="input" value={data.heightCm} onChange={(e) => update("heightCm", +e.target.value)} />
         </Field>
         <Field label="Weight (lb)">
@@ -272,7 +272,7 @@ function Finalize({ data }: any) {
       <div className="mt-6 grid gap-2 text-left text-[12px] text-cream-200">
         {data.name && <Line k="Name" v={data.name} />}
         <Line k="Age / Sex" v={`${data.age} · ${data.sex}`} />
-        <Line k="Body" v={`${data.heightCm} cm · ${data.weightKg} kg`} />
+        <Line k="Body" v={`${Math.floor(data.heightCm / 2.54 / 12)}′${Math.round(data.heightCm / 2.54 % 12)}″ · ${Math.round(data.weightKg * 2.20462)} lb`} />
         <Line k="Level" v={`${data.fitnessLevel} · ${data.activityLevel}`} />
         <Line k="Goals" v={data.goals.join(", ") || "—"} />
         <Line k="Equipment" v={data.equipment.join(", ") || "—"} />

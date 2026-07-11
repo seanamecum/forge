@@ -57,6 +57,8 @@ final class AppState {
     init() {
         // Restore the saved profile so a returning user never reverts to the demo athlete.
         if let saved = Self.loadUser() { user = saved }
+        // Forge speaks imperial — migrate any previously saved metric preference.
+        user.usesImperial = true
         // Returning users skip straight to the dashboard.
         if UserDefaults.standard.bool(forKey: "forge.hasOnboarded") {
             phase = .main

@@ -81,12 +81,11 @@ struct ProfileView: View {
         Card {
             VStack(alignment: .leading, spacing: 4) {
                 EyebrowLabel(text: "Units")
-                Toggle(isOn: Binding(
-                    get: { app.user.usesImperial },
-                    set: { app.user.usesImperial = $0 }
-                )) {
-                    Text(app.user.usesImperial ? "Imperial (lb · in · oz)" : "Metric (kg · cm · mL)")
-                        .font(.system(size: 13.5)).foregroundStyle(Theme.cream)
+                HStack {
+                    Text("Units").font(.system(size: 13.5)).foregroundStyle(Theme.cream)
+                    Spacer()
+                    Text("Imperial (lb · in · oz)")
+                        .font(.system(size: 12.5)).foregroundStyle(Theme.muted)
                 }
                 .tint(Theme.gold)
             }
