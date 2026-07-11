@@ -8,20 +8,17 @@ struct Card<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
-            .padding(16)
+            .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(gold
-                          ? AnyShapeStyle(LinearGradient(colors: [Theme.gold.opacity(0.10), Theme.card],
-                                                         startPoint: .top, endPoint: .bottom))
-                          : AnyShapeStyle(Theme.cardGradient))
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Theme.card)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(gold ? Theme.gold.opacity(0.30) : Theme.hairline, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(gold ? Theme.gold.opacity(0.22) : Theme.hairline, lineWidth: 1)
             )
-            .shadow(color: gold ? Theme.gold.opacity(0.10) : .clear, radius: 16)
+            .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
     }
 }
 
@@ -33,20 +30,18 @@ struct SectionHeader: View {
     var subtitle: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(eyebrow.uppercased())
-                .font(Theme.eyebrow())
-                .kerning(2.2)
-                .foregroundStyle(Theme.gold)
+        VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(Theme.display(26))
+                .font(Theme.display(28))
                 .foregroundStyle(Theme.cream)
             if let subtitle {
                 Text(subtitle)
-                    .font(.system(size: 13))
+                    .font(.system(size: 13.5))
                     .foregroundStyle(Theme.muted)
+                    .lineSpacing(2)
             }
         }
+        .padding(.top, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -56,10 +51,9 @@ struct EyebrowLabel: View {
     var tone: Tone = .gold
 
     var body: some View {
-        Text(text.uppercased())
-            .font(Theme.eyebrow())
-            .kerning(2)
-            .foregroundStyle(tone.color)
+        Text(text)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(tone == .gold ? Theme.creamDim : tone.color)
     }
 }
 
@@ -70,14 +64,12 @@ struct Chip: View {
     var tone: Tone = .neutral
 
     var body: some View {
-        Text(text.uppercased())
-            .font(.system(size: 9, weight: .semibold))
-            .kerning(1.2)
-            .foregroundStyle(tone.color)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(tone.color.opacity(0.08)))
-            .overlay(Capsule().stroke(tone.color.opacity(0.35), lineWidth: 1))
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(tone == .neutral ? Theme.creamDim : tone.color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(tone == .neutral ? Color.white.opacity(0.06) : tone.color.opacity(0.10)))
     }
 }
 
@@ -91,10 +83,9 @@ struct StatTile: View {
     var tone: Tone = .neutral
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label.uppercased())
-                .font(.system(size: 9, weight: .semibold))
-                .kerning(1.4)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Theme.muted)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
@@ -132,7 +123,7 @@ struct GoldButtonStyle: ButtonStyle {
             .padding(.horizontal, compact ? 16 : 22)
             .frame(maxWidth: compact ? nil : .infinity)
             .background(Capsule().fill(Theme.goldGradient))
-            .shadow(color: Theme.gold.opacity(0.35), radius: 12, y: 3)
+            .shadow(color: Theme.gold.opacity(0.18), radius: 8, y: 2)
             .opacity(configuration.isPressed ? 0.8 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
@@ -149,8 +140,8 @@ struct GhostButtonStyle: ButtonStyle {
             .padding(.vertical, compact ? 9 : 13)
             .padding(.horizontal, compact ? 16 : 22)
             .frame(maxWidth: compact ? nil : .infinity)
-            .background(Capsule().fill(Theme.gold.opacity(configuration.isPressed ? 0.10 : 0.04)))
-            .overlay(Capsule().stroke(Theme.gold.opacity(0.25), lineWidth: 1))
+            .background(Capsule().fill(Color.white.opacity(configuration.isPressed ? 0.10 : 0.05)))
+            .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1))
     }
 }
 

@@ -11,22 +11,16 @@ struct TodaysDirectiveCard: View {
         return Card(gold: true) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.gold)
-                        Text("TODAY'S DIRECTIVE")
-                            .font(Theme.eyebrow())
-                            .kerning(2.2)
-                            .foregroundStyle(Theme.gold)
-                    }
+                    Text("Today's Directive")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.gold)
                     Spacer()
                     Chip(text: dayLabel(directive.tone), tone: chipTone(directive.tone))
                 }
 
                 Text(directive.headline)
-                    .font(Theme.display(24))
-                    .foregroundStyle(directive.tone.color)
+                    .font(Theme.display(27))
+                    .foregroundStyle(Theme.cream)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(directive.rationale)
@@ -37,9 +31,8 @@ struct TodaysDirectiveCard: View {
                 // The prescribed plan — concrete, checkable targets for today.
                 if !directive.actions.isEmpty {
                     Divider().overlay(Theme.hairline)
-                    Text("YOUR PLAN TODAY")
-                        .font(.system(size: 8.5, weight: .semibold))
-                        .kerning(1.4)
+                    Text("Your plan")
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Theme.muted)
                     VStack(spacing: 0) {
                         ForEach(directive.actions) { action in
@@ -59,9 +52,8 @@ struct TodaysDirectiveCard: View {
                         .foregroundStyle(Theme.gold)
                         .padding(.top, 2)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("PRIORITY")
-                            .font(.system(size: 8.5, weight: .semibold))
-                            .kerning(1.4)
+                        Text("Priority")
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.muted)
                         Text(directive.priorityAction)
                             .font(Theme.text(13, .medium))
@@ -104,9 +96,8 @@ private struct DirectiveActionRow: View {
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(action.tone.color.opacity(0.14)))
             VStack(alignment: .leading, spacing: 1) {
-                Text(action.label.uppercased())
-                    .font(.system(size: 8.5, weight: .semibold))
-                    .kerning(1.2)
+                Text(action.label)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.muted)
                 Text(action.value)
                     .font(Theme.text(13.5, .medium))

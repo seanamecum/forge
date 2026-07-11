@@ -27,7 +27,7 @@ enum Theme {
     static let amber = Color(red: 0.914, green: 0.725, blue: 0.286)       // #E9B949
     static let royal = Color(red: 0.420, green: 0.561, blue: 0.800)       // #6B8FCC
 
-    static let hairline = gold.opacity(0.12)
+    static let hairline = Color.white.opacity(0.06)
 
     static let goldGradient = LinearGradient(
         colors: [goldBright, gold, goldDeep],
@@ -35,15 +35,16 @@ enum Theme {
         endPoint: .bottomTrailing
     )
 
+    /// Flat, calm card surface (gradient retired in the clean redesign).
     static let cardGradient = LinearGradient(
-        colors: [cardHigh.opacity(0.85), card.opacity(0.7)],
+        colors: [card, card],
         startPoint: .top,
         endPoint: .bottom
     )
 
-    /// Luxury serif display font (New York).
-    static func display(_ size: CGFloat, _ weight: Font.Weight = .medium) -> Font {
-        .system(size: scaled(size, .title2), weight: weight, design: .serif)
+    /// Display type — modern, confident, rounded.
+    static func display(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
+        .system(size: scaled(size, .title2), weight: weight, design: .rounded)
     }
 
     /// Tiny tracked-out uppercase eyebrow label font.
