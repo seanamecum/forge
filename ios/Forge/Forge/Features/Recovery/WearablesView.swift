@@ -9,24 +9,27 @@ struct WearablesView: View {
 
     var body: some View {
         ScreenScaffold {
-            SectionHeader(eyebrow: "Connected Ecosystem", title: "Wearable Hub",
-                          subtitle: "Every device feeds one signal stream. Forge turns whatever you wear into coaching.")
+            SectionHeader(eyebrow: "Health Data", title: "Apple Health",
+                          subtitle: "Forge runs on Apple Health. Anything that writes there — Apple Watch, scales, straps, other apps — feeds your score automatically.")
 
-            coverageCard
-            crossDeviceCard
             healthKitCard
+            crossDeviceCard
 
-            SectionHeader(eyebrow: "Devices", title: "Your stack",
-                          subtitle: "Connected devices sync automatically. Each card shows exactly what it contributes.")
-            ForEach(app.recovery.wearables) { device in
+            // 1.0 ships Apple-Health-only. Direct third-party cloud sync
+            // (WHOOP/Oura/Garmin APIs) returns post-launch — the rows, the
+            // coverage engine, and the roadmap cards are all still below,
+            // just not in the body.
+            SectionHeader(eyebrow: "Devices", title: "Your devices",
+                          subtitle: "These sync through Apple Health today.")
+            ForEach(app.recovery.wearables.filter {
+                $0.source == .appleWatch || $0.source == .smartScale
+            }) { device in
                 WearableRow(device: device)
             }
 
             preferredSourcesCard
-            recommendedStackCard
-            forgeBandCard
         }
-        .navigationTitle("Ecosystem")
+        .navigationTitle("Apple Health")
         .navigationBarTitleDisplayMode(.inline)
     }
 

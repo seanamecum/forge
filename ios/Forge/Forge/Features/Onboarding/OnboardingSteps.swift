@@ -158,12 +158,12 @@ struct EquipmentStep: View {
 
 struct WearableStep: View {
     @Binding var selected: Set<String>
-    private let devices = ["Apple Watch", "WHOOP", "Oura Ring", "Garmin", "Fitbit", "Polar", "Smart Scale"]
+    private let devices = ["Apple Watch", "iPhone only", "Smart scale (writes to Health)", "Other device that syncs to Apple Health"]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            StepHeading(title: "Connect your hardware",
-                        subtitle: "Pick what you wear — pairing happens inside the app.")
+            StepHeading(title: "Your health data",
+                        subtitle: "Forge runs on Apple Health — anything that writes there feeds your score. You'll connect it on the dashboard.")
             ForEach(devices, id: \.self) { device in
                 SelectableRow(title: device, selected: selected.contains(device)) {
                     if selected.contains(device) { selected.remove(device) } else { selected.insert(device) }

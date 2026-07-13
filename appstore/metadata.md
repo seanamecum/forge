@@ -11,7 +11,7 @@ marked `TODO`.
 |---|---|
 | Name | **Forge: Performance OS** |
 | Subtitle (30 chars) | `Your AI performance coach` |
-| Bundle ID | `com.forge.performance` |
+| Bundle ID | `com.seanmecum.forge` (com.forge.performance is taken on the App Store) |
 | Primary category | Health & Fitness |
 | Secondary category | Sports |
 | Age rating | 4+ (no objectionable content; health guidance is educational with medical disclaimers) |
@@ -19,16 +19,16 @@ marked `TODO`.
 
 ## Promotional Text (170 chars, updatable without review)
 
-> Forge turns your wearable data into one daily plan: what to train, what to eat, how to recover — with the reasoning behind every call. One brain, every device.
+> Forge turns your Apple Health data into one daily plan: what to train, what to eat, how to recover — with the reasoning behind every call.
 
 ## Description
 
 **Forge is the operating system for human performance.**
 
 Stop juggling a recovery app, a workout tracker, a nutrition log, and a rehab
-plan. Forge connects the tools you already use — Apple Watch, Apple Health,
-WHOOP, Garmin, Oura, Fitbit, Polar, and smart scales — and turns their data
-into one clear answer every morning: **what should I do today to improve?**
+plan. Forge runs on Apple Health — your Apple Watch, your scale, and any
+device or app that writes there — and turns that data into one clear answer
+every morning: **what should I do today to improve?**
 
 **TODAY'S DIRECTIVE**
 One card with your whole day: training intensity, calories and protein,
@@ -46,27 +46,26 @@ Ask anything — "Should I deload?", "Why is my recovery low?", "How do I hit
 225 on bench?" — and get answers grounded in your actual numbers: your HRV
 trend, your protein pace, your rehab phase, your forecast.
 
-**ONE ECOSYSTEM, EVERY DEVICE**
-Forge unifies your stack instead of replacing it. When two devices disagree,
-you choose the preferred source; when one stops syncing, Forge falls back
-automatically. Your WHOOP recovery, Garmin training load, and Apple Watch
-sleep finally work together.
+**BUILT ON APPLE HEALTH**
+Sleep, HRV, resting heart rate, steps, and workouts flow straight from Apple
+Health — read on-device, with your permission, and never sold. Workouts,
+runs, and body weight you log in Forge write back to Health.
 
 **EVERYTHING ELSE YOU'D NEED FIVE APPS FOR**
-• Workout logging with PR detection, and an AI generator that trains around
-  your injuries
-• Nutrition, macro, micronutrient, supplement, and hydration tracking
+• Workout logging with PR detection, one-tap repeat of your last session,
+  and an AI generator that trains around your injuries
+• GPS run tracking with mile splits and shareable finish cards
+• Nutrition with real barcode scanning (OpenFoodFacts), photo recognition,
+  macro/supplement/hydration tracking
 • Recovery and sleep analysis with trend charts
 • Injury rehab with phased PT plans and return-to-sport readiness
-• Bloodwork insights explained in performance terms
 • Forecasting: see where your lifts, weight, and recovery are heading
-• Teams, challenges, and a curated coach & program marketplace
 
 Forge provides educational guidance, not medical advice.
 
 ## Keywords (100 chars)
 
-`recovery,HRV,whoop,garmin,oura,workout,AI coach,nutrition,sleep,readiness,rehab,performance`
+`recovery,HRV,apple health,workout,AI coach,nutrition,barcode,sleep,readiness,rehab,running`
 
 ## URLs
 
@@ -83,32 +82,34 @@ Matches `ios/Forge/Forge/PrivacyInfo.xcprivacy`.
 - **Data collected:** Health & Fitness (App Functionality), Other User Content
   — chat messages (App Functionality). Only transmitted when live AI coaching
   is enabled; requests go to Forge's backend proxy.
-- **Linked to identity:** No (no accounts in this build).
+- **Linked to identity:** Yes if an account is created — email address
+  (Contact Info, App Functionality). The demo mode collects nothing.
 - **Used for tracking:** No. No tracking domains, no third-party ads or analytics.
 - HealthKit data is read on-device with permission and is never sold or shared
   beyond the AI request described above.
 
 ## App Review Notes
 
-> Forge runs fully offline with a built-in demo athlete — no account needed.
-> Tap **"Enter demo"** on the welcome screen to explore every feature.
-> HealthKit: read permissions personalize the recovery/score pipeline; the app
-> functions identically if permission is denied (demo data, clearly labeled).
+> Forge works without an account — tap **"Explore the demo"** on the welcome
+> screen to try every feature with a built-in demo athlete. Accounts (email
+> sign-up via our Supabase backend) are optional.
+> HealthKit: read permissions personalize the recovery/score pipeline; until
+> connected, recovery numbers show a visible "Demo data" label.
 > Notifications are optional and configured in-app. AI coaching runs in an
 > offline rule-based mode in this build; live AI routes through our backend —
 > no API keys ship in the binary.
 
 ## Version 1.0 "What's New"
 
-> Meet Forge: your Daily Directive, Forge Score, AI coach, and every wearable
-> unified into one plan. Open it tomorrow morning — it'll tell you exactly
-> what to do.
+> Meet Forge: your Daily Directive, Forge Score, and AI coach — built on your
+> Apple Health data. Open it tomorrow morning — it'll tell you exactly what
+> to do.
 
 ## Screenshot plan (6.9" required set — see appstore/screenshots/)
 
 1. **Dashboard** — "One answer every morning." (directive card hero)
 2. **Coach** — "A coach who's read your data."
-3. **Ecosystem hub** — "Every wearable. One brain."
+3. **Apple Health hub** — "Your data, one brain."
 4. **Recover** — "Know when to push."
 5. **Fuel** — "Targets, not spreadsheets."
 6. **Train** — "Workouts that respect your injuries."

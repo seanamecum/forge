@@ -9,6 +9,7 @@ struct DashboardView: View {
         NavigationStack {
             ScreenScaffold {
                 header
+                connectHealthBanner
                 MorningCheckInCard()
                 heroCard
                 todayCard
@@ -21,6 +22,35 @@ struct DashboardView: View {
                 app.publishWidgetSnapshot()
                 // Snapshot today's Forge Score so trends build from real history.
                 PersistenceService.recordTodayScore(app.forgeScore, context: modelContext)
+            }
+        }
+    }
+
+    /// The 1.0 data story is Apple Health. Until it's connected the recovery
+    /// numbers are demo values — say so, and make connecting one tap.
+    @ViewBuilder
+    private var connectHealthBanner: some View {
+        if app.healthKit.authState == .notDetermined {
+            Card(gold: true) {
+                HStack(spacing: 12) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 18)).foregroundStyle(Theme.rubyBright)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Connect Apple Health")
+                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.cream)
+                        Text("Your score runs on demo data until Forge can read your sleep, HRV, and activity.")
+                            .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Button("Connect") {
+                        Task {
+                            await app.healthKit.connect()
+                            app.ingestHealthKitSignals()
+                        }
+                    }
+                    .buttonStyle(GoldButtonStyle(compact: true))
+                }
             }
         }
     }
@@ -83,9 +113,15 @@ struct DashboardView: View {
         return Card {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(app.forgeScore)")
-                        .font(.system(size: 72, weight: .bold, design: .rounded))
-                        .foregroundStyle(Theme.cream)
+                    HStack(alignment: .top) {
+                        Text("\(app.forgeScore)")
+                            .font(.system(size: 72, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.cream)
+                        Spacer()
+                        if app.healthKit.authState != .authorized {
+                            Chip(text: "Demo data", tone: .amber)
+                        }
+                    }
                     Text("Forge Score")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.muted)

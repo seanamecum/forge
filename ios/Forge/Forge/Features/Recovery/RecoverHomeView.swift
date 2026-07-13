@@ -23,9 +23,15 @@ struct RecoverHomeView: View {
         let d = app.recovery.today
         return Card {
             VStack(alignment: .leading, spacing: 10) {
-                Text("\(d.recovery)")
-                    .font(.system(size: 72, weight: .bold, design: .rounded))
-                    .foregroundStyle(Theme.gold)
+                HStack(alignment: .top) {
+                    Text("\(d.recovery)")
+                        .font(.system(size: 72, weight: .bold, design: .rounded))
+                        .foregroundStyle(Theme.gold)
+                    Spacer()
+                    if app.healthKit.authState != .authorized {
+                        Chip(text: "Demo data", tone: .amber)
+                    }
+                }
                 Text("Recovery today · HRV \(d.hrv) ms · sleep \(String(format: "%.1f", d.sleep.hours)) h")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.muted)
@@ -36,7 +42,7 @@ struct RecoverHomeView: View {
     private var ringsRow: some View {
         let d = app.recovery.today
         return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            MetricRing(value: d.recovery, label: "Recovery", detail: "WHOOP-weighted blend", tone: .green)
+            MetricRing(value: d.recovery, label: "Recovery", detail: "HRV-weighted blend", tone: .green)
             MetricRing(value: d.sleepScore, label: "Sleep Score",
                        detail: String(format: "%.1f h total", d.sleep.hours), tone: .royal)
             MetricRing(value: min(100, Int(Double(d.hrv) / Double(d.hrvBaseline) * 100)),

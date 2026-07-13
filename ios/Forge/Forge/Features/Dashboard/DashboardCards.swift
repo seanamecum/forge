@@ -317,12 +317,16 @@ struct WearableStatusStrip: View {
                 HStack(spacing: 12) {
                     Image(systemName: "dot.radiowaves.left.and.right")
                         .font(.system(size: 16))
-                        .foregroundStyle(Theme.green)
+                        .foregroundStyle(app.healthKit.authState == .authorized ? Theme.green : Theme.amber)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(app.recovery.connectedCount) devices connected")
+                        Text(app.healthKit.authState == .authorized
+                             ? "Apple Health connected"
+                             : "Apple Health not connected")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Theme.cream)
-                        Text("Apple Watch · WHOOP · Withings — synced minutes ago")
+                        Text(app.healthKit.authState == .authorized
+                             ? "Sleep, HRV, activity, and workouts flowing"
+                             : "Connect to replace demo data with yours")
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.muted)
                     }
@@ -346,18 +350,15 @@ struct ModulesGrid: View {
         VStack(alignment: .leading, spacing: 10) {
             EyebrowLabel(text: "Explore Forge")
             LazyVGrid(columns: columns, spacing: 10) {
+                // 1.0 grid: everything here works with real data today.
+                // Social/Compete/Teams/Marketplace/Bloodwork/Achievements
+                // return post-launch (views still exist, just unlinked).
                 ModuleTile(icon: "target", title: "Goals", subtitle: "Targets · deadlines · progress") { GoalsView() }
-                ModuleTile(icon: "figure.run", title: "Running", subtitle: "Mileage · paces · live runs") { RunningView() }
-                ModuleTile(icon: "heart.text.square.fill", title: "Bloodwork", subtitle: "14 markers · AI read") { BloodworkView() }
-                ModuleTile(icon: "figure.arms.open", title: "Body", subtitle: "Composition · photos") { BodyTrackingView() }
+                ModuleTile(icon: "figure.run", title: "Running", subtitle: "GPS runs · paces · splits") { RunningView() }
+                ModuleTile(icon: "figure.arms.open", title: "Body", subtitle: "Weight · measurements") { BodyTrackingView() }
                 ModuleTile(icon: "wand.and.stars", title: "Digital Twin", subtitle: "Your 12-week forecast") { ForecastView() }
-                ModuleTile(icon: "camera.viewfinder", title: "Form Analysis", subtitle: "AI lift review") { FormAnalysisView() }
-                ModuleTile(icon: "person.3.fill", title: "Social", subtitle: "Feed · groups") { SocialHubView() }
-                ModuleTile(icon: "trophy.fill", title: "Compete", subtitle: "Boards · challenges") { CompeteView() }
-                ModuleTile(icon: "star.circle.fill", title: "Achievements", subtitle: "XP · badges · missions") { AchievementsView() }
-                ModuleTile(icon: "bag.fill", title: "Marketplace", subtitle: "Coaches · programs") { MarketplaceView() }
-                ModuleTile(icon: "shield.lefthalf.filled", title: "Forge Teams", subtitle: "Squad dashboards") { TeamsView() }
-                ModuleTile(icon: "applewatch.radiowaves.left.and.right", title: "Wearables", subtitle: "7-device hub") { WearablesView() }
+                ModuleTile(icon: "camera.viewfinder", title: "Form Analysis", subtitle: "Sample preview") { FormAnalysisView() }
+                ModuleTile(icon: "heart.fill", title: "Apple Health", subtitle: "Your data source") { WearablesView() }
             }
         }
     }
