@@ -56,6 +56,34 @@ final class WorkoutService {
         return set.estimatedOneRepMax > baseline
     }
 
+    /// Hevy-style repeat: turn the most recent session into a ready-to-log
+    /// plan — same exercises, same set counts, loads prefilled from last time.
+    func planFromLastSession() -> GeneratedWorkout? {
+        guard let last = history.first, !last.exercises.isEmpty else { return nil }
+        let items = last.exercises.map { logged -> GeneratedItem in
+            let done = logged.sets.filter { $0.completed && $0.reps > 0 }
+            let sets = done.isEmpty ? logged.sets : done
+            let top = sets.max { $0.estimatedOneRepMax < $1.estimatedOneRepMax }
+            let scheme: String
+            if let top, top.weightLb > 0 {
+                scheme = "\(sets.count) × \(top.reps) @ \(Int(top.weightLb)) lb"
+            } else {
+                scheme = "\(sets.count) sets · match last time"
+            }
+            return GeneratedItem(exerciseID: logged.exercise.id,
+                                 name: logged.exercise.name,
+                                 scheme: scheme,
+                                 note: "Beat one rep or 5 lb to progress.")
+        }
+        let days = Calendar.current.dateComponents([.day], from: last.date, to: .now).day ?? 0
+        let when = days <= 0 ? "today" : (days == 1 ? "yesterday" : "\(days) days ago")
+        return GeneratedWorkout(
+            name: last.name,
+            rationale: "Repeat of your session from \(when) — loads prefilled from last time. Add a rep or 5 lb where it moves well.",
+            estMinutes: last.durationMin,
+            blocks: [GeneratedBlock(label: "Main · Repeat", note: "Progress where you can", items: items)])
+    }
+
     func finish(_ workout: Workout) {
         history.insert(workout, at: 0)
         for logged in workout.exercises {

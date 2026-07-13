@@ -10,6 +10,7 @@ struct TrainHomeView: View {
                               subtitle: "Tuned daily for recovery \(app.recovery.today.recovery) and the knee.")
 
                 quickActions
+                repeatLastCard
                 todayCard
                 insightsCard
                 programCard
@@ -64,6 +65,32 @@ struct TrainHomeView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /// Hevy's most-used feature: one tap re-opens your last session with the
+    /// same exercises and set counts, loads prefilled from last time.
+    @ViewBuilder
+    private var repeatLastCard: some View {
+        if let plan = app.workouts.planFromLastSession(),
+           let last = app.workouts.history.first {
+            Card {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        EyebrowLabel(text: "Repeat Last Session")
+                        Text(last.name)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.cream)
+                        Text("\(last.exercises.count) exercises · \(Int(last.totalVolumeLb).formatted()) lb")
+                            .font(.system(size: 11)).foregroundStyle(Theme.muted)
+                    }
+                    Spacer()
+                    NavigationLink { WorkoutLoggerView(plan: plan) } label: {
+                        Text("Repeat")
+                    }
+                    .buttonStyle(GoldButtonStyle(compact: true))
                 }
             }
         }

@@ -166,10 +166,29 @@ struct RunningView: View {
                      ? "Saved to your training history and Apple Health."
                      : "Saved to your training history.")
                     .font(.system(size: 12)).foregroundStyle(Theme.muted)
+                if let image = shareCard.rendered() {
+                    ShareLink(item: image,
+                              preview: SharePreview("Forge run", image: image)) {
+                        Label("Share run", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                }
                 Button("Done") { tracker.reset() }
                     .buttonStyle(GoldButtonStyle())
             }
         }
+    }
+
+    private var shareCard: RunShareCard {
+        RunShareCard(
+            distance: RunMath.distanceLabel(meters: tracker.distanceMeters,
+                                            imperial: app.user.usesImperial),
+            distanceUnit: app.user.usesImperial ? "mi" : "km",
+            time: timeLabel,
+            pace: RunMath.paceLabel(secPerKm: tracker.paceSecPerKm,
+                                    imperial: app.user.usesImperial),
+            paceUnit: app.user.usesImperial ? "/mi" : "/km",
+            date: tracker.startedAt ?? .now)
     }
 
     private func saveRun() {
