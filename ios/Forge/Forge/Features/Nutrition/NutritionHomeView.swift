@@ -26,11 +26,7 @@ struct NutritionHomeView: View {
                 FoodSearchSheet(meal: pickedMeal)
             }
             .sheet(isPresented: $showScanner) {
-                SimulatedCaptureSheet(
-                    icon: "barcode.viewfinder", title: "Barcode Scanner",
-                    line1: "Ascent Whey Isolate — 1 scoop",
-                    line2: "120 kcal · 25 P · 3 C · 1 F",
-                    onAdd: { app.nutrition.add(food: MockData.food("whey"), to: .snack) })
+                BarcodeScanSheet(meal: pickedMeal)
             }
             .sheet(isPresented: $showPhoto) {
                 SimulatedCaptureSheet(
@@ -145,7 +141,9 @@ struct NutritionHomeView: View {
             CaptureButton(icon: "magnifyingglass", label: "Search") {
                 pickedMeal = .snack; showFoodSearch = true
             }
-            CaptureButton(icon: "barcode.viewfinder", label: "Scan") { showScanner = true }
+            CaptureButton(icon: "barcode.viewfinder", label: "Scan") {
+                pickedMeal = .snack; showScanner = true
+            }
             CaptureButton(icon: "camera.fill", label: "Photo AI") { showPhoto = true }
         }
     }

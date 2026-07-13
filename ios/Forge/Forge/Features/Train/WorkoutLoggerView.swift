@@ -116,10 +116,18 @@ struct WorkoutLoggerView: View {
                 let reps = last?.reps ?? 0
                 logged.append(LoggedExercise(
                     exercise: exercise,
-                    sets: (0..<3).map { _ in WorkoutSet(weightLb: weight, reps: reps) }
+                    sets: (0..<setCount(for: item)).map { _ in WorkoutSet(weightLb: weight, reps: reps) }
                 ))
             }
         }
+    }
+
+    /// Honor the plan's set count when the scheme leads with one
+    /// ("4 × 8 @ 185 lb"); anything unparseable falls back to 3.
+    private func setCount(for item: GeneratedItem) -> Int {
+        let leading = item.scheme.prefix(while: \.isNumber)
+        guard let n = Int(leading), (1...10).contains(n) else { return 3 }
+        return n
     }
 
     private func defaultWeight(for exercise: Exercise) -> Double {
