@@ -55,15 +55,19 @@ final class NutritionService {
     }
 
     func add(food: Food, to meal: MealType, servings: Double = 1) {
-        entries.append(FoodEntry(meal: meal, food: food, servings: servings, time: "Now"))
+        let entry = FoodEntry(meal: meal, food: food, servings: servings, time: "Now")
+        entries.append(entry)
+        Task { @MainActor in PersistenceService.saveEntry(entry) }
     }
 
     func remove(_ entry: FoodEntry) {
         entries.removeAll { $0.id == entry.id }
+        Task { @MainActor in PersistenceService.deleteEntry(id: entry.id) }
     }
 
     func addWater(_ oz: Double) {
         waterOz = min(Double(waterTargetOz) * 1.5, waterOz + oz)
+        PersistenceService.saveWater(waterOz)
     }
 
     func toggleSupplement(_ supplement: Supplement) {

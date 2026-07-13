@@ -57,9 +57,12 @@ final class WorkoutRecord {
     var avgRPE: Double
     var exerciseSummary: String   // "Bench 180×5 · Row 155×8 · …"
     var savedToHealthKit: Bool
+    // Full set detail (JSON) so repeat/ghost-values/analytics survive relaunch.
+    var exercisesJSON: String = ""
 
     init(name: String, date: Date, durationMin: Int, totalVolumeLb: Double,
-         setCount: Int, avgRPE: Double, exerciseSummary: String, savedToHealthKit: Bool = false) {
+         setCount: Int, avgRPE: Double, exerciseSummary: String,
+         savedToHealthKit: Bool = false, exercisesJSON: String = "") {
         self.name = name
         self.date = date
         self.durationMin = durationMin
@@ -68,6 +71,7 @@ final class WorkoutRecord {
         self.avgRPE = avgRPE
         self.exerciseSummary = exerciseSummary
         self.savedToHealthKit = savedToHealthKit
+        self.exercisesJSON = exercisesJSON
     }
 }
 
@@ -78,13 +82,24 @@ final class NutritionEntryRecord {
     var name: String
     var calories: Int
     var protein: Double
+    // Added for full-fidelity restore; defaults keep old stores migrating cleanly.
+    var entryID: String = ""
+    var carbs: Double = 0
+    var fat: Double = 0
+    var servings: Double = 1
 
-    init(date: Date, meal: String, name: String, calories: Int, protein: Double) {
+    init(entryID: String = "", date: Date, meal: String, name: String,
+         calories: Int, protein: Double, carbs: Double = 0, fat: Double = 0,
+         servings: Double = 1) {
+        self.entryID = entryID
         self.date = date
         self.meal = meal
         self.name = name
         self.calories = calories
         self.protein = protein
+        self.carbs = carbs
+        self.fat = fat
+        self.servings = servings
     }
 }
 

@@ -177,7 +177,8 @@ struct WorkoutLoggerView: View {
             .joined(separator: " · ")
         let record = WorkoutRecord(name: plan.name, date: .now, durationMin: durationMin,
                                    totalVolumeLb: totalVolume, setCount: completedSets,
-                                   avgRPE: averageRPE, exerciseSummary: summary)
+                                   avgRPE: averageRPE, exerciseSummary: summary,
+                                   exercisesJSON: PersistenceService.encodeExercises(completed))
         PersistenceService.saveWorkout(record, context: modelContext)
 
         // Mirror to Apple Health when connected (best-effort, never blocks the UI).

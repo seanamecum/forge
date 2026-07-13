@@ -22,10 +22,8 @@ struct ForgeApp: App {
                     }
                 }
         }
-        .modelContainer(for: [
-            UserRecord.self, GoalRecord.self, WorkoutRecord.self,
-            NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
-            ScoreRecord.self, CheckInRecord.self,
-        ])
+        // One shared container: views get it from the environment, services
+        // reach it via PersistenceService — same store either way.
+        .modelContainer(PersistenceService.container)
     }
 }
