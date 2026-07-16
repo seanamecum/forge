@@ -24,6 +24,28 @@ final class AuthService {
     }
 
     var sessionEmail: String? { Self.loadSession()?.email }
+    var sessionToken: String? { Self.loadSession()?.accessToken }
+
+    /// Self-service account deletion (App Store 5.1.1(v)) via the
+    /// delete-account edge function — the server deletes whoever the JWT
+    /// belongs to; no id ever comes from the client.
+    @MainActor
+    func deleteAccount() async -> Bool {
+        guard let token = sessionToken else { return false }
+        var request = URLRequest(url: SupabaseConfig.url.appending(path: "/functions/v1/delete-account"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (_, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode)
+        else {
+            lastError = "Couldn't delete the account — check your connection and try again."
+            return false
+        }
+        signOut()
+        return true
+    }
 
     // MARK: - API
 

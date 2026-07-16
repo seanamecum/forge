@@ -61,6 +61,46 @@ enum PersistenceService {
         }
     }
 
+    /// Every day the app snapshotted a score — the streak's raw material.
+    @MainActor
+    static func scoreDays() -> [Date] {
+        let descriptor = FetchDescriptor<ScoreRecord>(sortBy: [SortDescriptor(\.date)])
+        return ((try? context.fetch(descriptor)) ?? []).map(\.date)
+    }
+
+    /// Everything the athlete owns, as a shareable JSON document.
+    @MainActor
+    static func exportJSON() -> String {
+        func iso(_ d: Date) -> String { d.formatted(.iso8601) }
+        var export: [String: Any] = ["exported_at": iso(.now), "app": "Forge"]
+        if let workouts = try? context.fetch(FetchDescriptor<WorkoutRecord>(sortBy: [SortDescriptor(\.date)])) {
+            export["workouts"] = workouts.map {
+                ["name": $0.name, "date": iso($0.date), "duration_min": $0.durationMin,
+                 "volume_lb": $0.totalVolumeLb, "sets": $0.setCount, "avg_rpe": $0.avgRPE,
+                 "summary": $0.exerciseSummary] as [String: Any]
+            }
+        }
+        if let meals = try? context.fetch(FetchDescriptor<NutritionEntryRecord>(sortBy: [SortDescriptor(\.date)])) {
+            export["nutrition"] = meals.map {
+                ["date": iso($0.date), "meal": $0.meal, "food": $0.name, "calories": $0.calories,
+                 "protein_g": $0.protein, "carbs_g": $0.carbs, "fat_g": $0.fat,
+                 "servings": $0.servings] as [String: Any]
+            }
+        }
+        if let scores = try? context.fetch(FetchDescriptor<ScoreRecord>(sortBy: [SortDescriptor(\.date)])) {
+            export["forge_scores"] = scores.map { ["date": iso($0.date), "score": $0.score] as [String: Any] }
+        }
+        if let checkIns = try? context.fetch(FetchDescriptor<CheckInRecord>(sortBy: [SortDescriptor(\.date)])) {
+            export["check_ins"] = checkIns.map {
+                ["date": iso($0.date), "sleep_quality": $0.sleepQuality, "soreness": $0.soreness,
+                 "energy": $0.energy, "stress": $0.stress] as [String: Any]
+            }
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: export, options: [.prettyPrinted, .sortedKeys])
+        else { return "{}" }
+        return String(decoding: data, as: UTF8.self)
+    }
+
     // MARK: - Workouts
 
     static func saveWorkout(_ record: WorkoutRecord, context: ModelContext) {
