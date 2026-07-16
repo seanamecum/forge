@@ -3,6 +3,7 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(AppState.self) private var app
     @State private var showDisclaimer = false
+    @State private var showFeedback = false
 
     var body: some View {
         ScreenScaffold {
@@ -13,6 +14,13 @@ struct ProfileView: View {
             notificationPrefs
             subscriptionCard
             privacyCard
+
+            Button {
+                showFeedback = true
+            } label: {
+                Label("Send Feedback", systemImage: "envelope")
+            }
+            .buttonStyle(GoldButtonStyle())
 
             Button {
                 showDisclaimer = true
@@ -34,6 +42,7 @@ struct ProfileView: View {
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showDisclaimer) { DisclaimerSheet() }
+        .sheet(isPresented: $showFeedback) { FeedbackSheet() }
     }
 
     private var profileHeader: some View {

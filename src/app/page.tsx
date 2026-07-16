@@ -218,6 +218,11 @@ export default function Landing() {
       <footer className="border-t border-gold-400/10 py-10">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-6 text-xs text-obsidian-200 sm:flex-row">
           <ForgeWordmark size={18} />
+          <nav className="flex gap-5">
+            <Link href="/feedback" className="hover:text-gold-300">Feedback</Link>
+            <Link href="/support" className="hover:text-gold-300">Support</Link>
+            <Link href="/privacy" className="hover:text-gold-300">Privacy</Link>
+          </nav>
           <div>© Forge Performance Systems · Educational guidance, not medical advice.</div>
         </div>
       </footer>
