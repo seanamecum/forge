@@ -14,7 +14,7 @@ export default function Landing() {
           <a href="#pricing" className="hover:text-gold-200">Pricing</a>
         </nav>
         <div className="flex items-center gap-3">
-          <Link href="/onboarding" className="btn-ghost text-xs">Sign in</Link>
+          <Link href="/auth" className="btn-ghost text-xs">Sign in</Link>
           <Link href="/onboarding" className="btn-gold text-xs">Begin</Link>
         </div>
       </header>
