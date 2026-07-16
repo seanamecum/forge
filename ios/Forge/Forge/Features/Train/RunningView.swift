@@ -203,6 +203,13 @@ struct RunningView: View {
             avgRPE: 6, feel: .fine)
         app.workouts.finish(workout)
 
+        // Persist locally — the run must still be there after a relaunch.
+        PersistenceService.saveWorkout(
+            WorkoutRecord(name: workout.name, date: .now, durationMin: minutes,
+                          totalVolumeLb: 0, setCount: 0, avgRPE: 6,
+                          exerciseSummary: String(format: "%.2f mi GPS run", miles)),
+            context: PersistenceService.context)
+
         // Mirror to Apple Health as a real running workout.
         if app.healthKit.authState == .authorized, let start = tracker.startedAt {
             let meters = tracker.distanceMeters

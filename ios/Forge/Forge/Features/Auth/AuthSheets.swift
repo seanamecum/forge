@@ -56,6 +56,10 @@ struct SignUpSheet: View {
             if let error = app.auth.lastError {
                 Text(error).font(.system(size: 12)).foregroundStyle(Theme.rubyBright)
             }
+            if let notice = app.auth.notice {
+                Text(notice).font(.system(size: 12)).foregroundStyle(Theme.gold)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Button(busy ? "Creating…" : "Begin") {
                 busy = true

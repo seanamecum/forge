@@ -29,15 +29,7 @@ struct NutritionHomeView: View {
                 BarcodeScanSheet(meal: pickedMeal)
             }
             .sheet(isPresented: $showPhoto) {
-                SimulatedCaptureSheet(
-                    icon: "camera.viewfinder", title: "Photo Recognition",
-                    line1: "Detected: grilled chicken, rice, broccoli",
-                    line2: "~737 kcal · 80 P · 78 C · 9 F · confidence 92%",
-                    onAdd: {
-                        app.nutrition.add(food: MockData.food("chicken"), to: .dinner)
-                        app.nutrition.add(food: MockData.food("rice"), to: .dinner)
-                        app.nutrition.add(food: MockData.food("broccoli"), to: .dinner)
-                    })
+                PhotoFoodScanSheet(meal: pickedMeal)
             }
         }
     }
@@ -144,7 +136,9 @@ struct NutritionHomeView: View {
             CaptureButton(icon: "barcode.viewfinder", label: "Scan") {
                 pickedMeal = .snack; showScanner = true
             }
-            CaptureButton(icon: "camera.fill", label: "Photo AI") { showPhoto = true }
+            CaptureButton(icon: "camera.fill", label: "Photo AI") {
+                pickedMeal = .snack; showPhoto = true
+            }
         }
     }
 
@@ -302,47 +296,3 @@ struct FoodSearchSheet: View {
     }
 }
 
-struct SimulatedCaptureSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let icon: String
-    let title: String
-    let line1: String
-    let line2: String
-    let onAdd: () -> Void
-    @State private var scanned = false
-
-    var body: some View {
-        ZStack {
-            Theme.bgElevated.ignoresSafeArea()
-            VStack(spacing: 18) {
-                Image(systemName: icon)
-                    .font(.system(size: 44))
-                    .foregroundStyle(scanned ? Theme.green : Theme.gold)
-                    .padding(.top, 40)
-                Text(title).font(Theme.display(24)).foregroundStyle(Theme.cream)
-
-                if scanned {
-                    VStack(spacing: 6) {
-                        Text(line1).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.cream)
-                        Text(line2).font(.system(size: 12)).foregroundStyle(Theme.muted)
-                    }
-                    Button("Add to log") {
-                        onAdd()
-                        dismiss()
-                    }
-                    .buttonStyle(GoldButtonStyle())
-                    .padding(.horizontal, 40)
-                } else {
-                    Text("Point at the target…").font(.system(size: 13)).foregroundStyle(Theme.muted)
-                    ProgressView().tint(Theme.gold)
-                }
-                Spacer()
-            }
-        }
-        .presentationDetents([.height(360)])
-        .task {
-            try? await Task.sleep(for: .milliseconds(1300))
-            scanned = true
-        }
-    }
-}

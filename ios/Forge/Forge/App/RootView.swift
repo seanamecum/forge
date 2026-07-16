@@ -19,6 +19,7 @@ struct RootView: View {
                     .transition(.opacity)
             }
         }
+        .task { app.rehydrate() }
         .animation(.easeInOut(duration: 0.35), value: phaseKey)
         // Dynamic Type: honor user text size up to AX2; larger sizes need a
         // dedicated reflow pass before they render acceptably in dense cards.

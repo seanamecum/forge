@@ -10,7 +10,7 @@ struct FormAnalysisView: View {
     var body: some View {
         ScreenScaffold {
             SectionHeader(eyebrow: "Train · Vision AI", title: "Form Analysis",
-                          subtitle: "Upload or record a set. Forge scores the movement and tells you what to fix.")
+                          subtitle: "Live video scoring is in development. Preview the report format with sample data below.")
 
             FlowChips(options: lifts,
                       isSelected: { $0 == lift },
@@ -23,7 +23,7 @@ struct FormAnalysisView: View {
                 FormResultCard(result: result)
             }
 
-            DisclaimerNote(text: "Form analysis is educational guidance from simulated pose estimation — not a substitute for in-person coaching. Sharp pain during a lift means stop.")
+            DisclaimerNote(text: "The report below is SAMPLE DATA showing what form analysis will look like — it is not scoring your lifts yet. Sharp pain during a lift means stop.")
         }
         .navigationTitle("Form Analysis")
         .navigationBarTitleDisplayMode(.inline)
@@ -35,11 +35,11 @@ struct FormAnalysisView: View {
                 Image(systemName: "video.badge.plus")
                     .font(.system(size: 34))
                     .foregroundStyle(Theme.gold.opacity(0.7))
-                Text("Drop a video of your \(lift.lowercased())")
+                Text("Video analysis — in development")
                     .font(Theme.display(17)).foregroundStyle(Theme.cream)
-                Text("Side angle · 2–5 reps · good lighting")
+                Text("When live: side angle · 2–5 reps · good lighting")
                     .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
-                Button(analyzing ? "Analyzing…" : "Upload sample (demo)") {
+                Button(analyzing ? "Loading sample…" : "See a sample \(lift.lowercased()) report") {
                     analyzed = false
                     analyzing = true
                     Task {
@@ -60,7 +60,7 @@ struct FormAnalysisView: View {
         Card {
             HStack(spacing: 10) {
                 ProgressView().tint(Theme.gold)
-                Text("Detecting 33 joints · tracking bar path · scoring 240 frames…")
+                Text("Loading sample report…")
                     .font(.system(size: 12)).foregroundStyle(Theme.muted)
             }
             .frame(maxWidth: .infinity)
@@ -109,7 +109,7 @@ struct FormResultCard: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(result.score >= 88 ? "Excellent" : result.score >= 80 ? "Strong" : "Needs work")
                             .font(Theme.display(20)).foregroundStyle(Theme.cream)
-                        Text("Scored against 1,200+ reference lifts")
+                        Text("Sample report — video scoring in development")
                             .font(.system(size: 11)).foregroundStyle(Theme.muted)
                     }
                 }

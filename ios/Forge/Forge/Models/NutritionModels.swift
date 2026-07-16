@@ -31,7 +31,7 @@ enum MealType: String, CaseIterable, Identifiable {
 }
 
 struct FoodEntry: Identifiable {
-    let id = UUID()
+    var id = UUID()
     let meal: MealType
     let food: Food
     var servings: Double = 1

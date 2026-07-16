@@ -73,6 +73,31 @@ final class AppState {
         refreshFuelPlan()
     }
 
+    /// Restore everything the user has actually done from disk — called once
+    /// from RootView. Real data replaces demo data; logging then relaunching
+    /// must never lose anything.
+    @MainActor
+    func rehydrate() {
+        guard !rehydrated else { return }
+        rehydrated = true
+
+        // Today's food + water: real log only. A fresh day starts honestly empty.
+        nutrition.entries = PersistenceService.loadTodayEntries()
+        nutrition.waterOz = PersistenceService.loadTodayWater()
+
+        // Real workout history layered over the demo baseline (newest first).
+        let saved = PersistenceService.loadWorkouts()
+        if !saved.isEmpty {
+            workouts.history = (saved + workouts.history).sorted { $0.date > $1.date }
+        }
+
+        // Morning check-in done earlier today survives relaunch.
+        checkIn = PersistenceService.loadTodayCheckIn()
+
+        refreshFuelPlan()
+    }
+    private var rehydrated = false
+
     // MARK: - Profile persistence
 
     private static let userKey = "forge.user.v1"
@@ -103,6 +128,7 @@ final class AppState {
     }
 
     func logout() {
+        auth.signOut()
         UserDefaults.standard.set(false, forKey: "forge.hasOnboarded")
         user = MockData.sean
         selectedTab = .home

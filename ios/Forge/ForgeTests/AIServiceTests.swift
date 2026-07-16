@@ -5,8 +5,12 @@ final class AIServiceTests: XCTestCase {
 
     // MARK: - Config gating (no network)
 
-    func testMockModeWhenNoKey() {
-        // The test environment has no ANTHROPIC_API_KEY / Secrets.plist.
+    func testMockModeWhenNoKey() throws {
+        // CI has no Secrets.plist, so this pins the no-config default to mock.
+        // A developer device may carry a gitignored Secrets.plist with the
+        // proxy URL — skip there rather than assert against local config.
+        try XCTSkipUnless(Bundle.main.url(forResource: "Secrets", withExtension: "plist") == nil,
+                          "Secrets.plist present — device is configured for the live proxy")
         XCTAssertTrue(ForgeConfig.anthropicAPIKey.isEmpty)
         XCTAssertEqual(ForgeConfig.aiMode, .mock)
     }
@@ -33,8 +37,11 @@ final class AIServiceTests: XCTestCase {
                        .liveProxy, "A configured proxy must always beat an on-device key")
     }
 
-    func testCoachEndpointFollowsMode() {
-        // Test environment has neither key nor proxy → direct endpoint default.
+    func testCoachEndpointFollowsMode() throws {
+        // No key and no proxy → direct endpoint default. A developer device
+        // with a gitignored Secrets.plist runs in proxy mode — skip there.
+        try XCTSkipUnless(Bundle.main.url(forResource: "Secrets", withExtension: "plist") == nil,
+                          "Secrets.plist present — device is configured for the live proxy")
         XCTAssertEqual(ForgeConfig.coachEndpoint, ForgeConfig.messagesEndpoint)
     }
 
