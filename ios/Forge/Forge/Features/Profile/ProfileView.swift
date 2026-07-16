@@ -4,6 +4,8 @@ struct ProfileView: View {
     @Environment(AppState.self) private var app
     @State private var showDisclaimer = false
     @State private var showFeedback = false
+    @State private var confirmDelete = false
+    @State private var deleting = false
 
     var body: some View {
         ScreenScaffold {
@@ -14,6 +16,7 @@ struct ProfileView: View {
             notificationPrefs
             subscriptionCard
             privacyCard
+            accountCard
 
             Button {
                 showFeedback = true
@@ -43,6 +46,51 @@ struct ProfileView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showDisclaimer) { DisclaimerSheet() }
         .sheet(isPresented: $showFeedback) { FeedbackSheet() }
+    }
+
+    /// Account & data ownership: export everything, delete the account
+    /// in-app (App Store 5.1.1(v)), or see you're in demo mode.
+    private var accountCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 12) {
+                EyebrowLabel(text: "Account & Data")
+                if let email = app.auth.sessionEmail {
+                    Text("Signed in as \(email)")
+                        .font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
+                } else {
+                    Text("Demo mode — no account, nothing leaves this phone.")
+                        .font(.system(size: 12.5)).foregroundStyle(Theme.muted)
+                }
+                if let error = app.auth.lastError {
+                    ErrorBanner(message: error) { app.auth.lastError = nil }
+                }
+                HStack(spacing: 8) {
+                    ShareLink(item: PersistenceService.exportJSON(),
+                              preview: SharePreview("Forge data export")) {
+                        Label("Export my data", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(GhostButtonStyle(compact: true))
+                    if app.auth.sessionEmail != nil {
+                        Button(deleting ? "Deleting…" : "Delete account") { confirmDelete = true }
+                            .buttonStyle(GhostButtonStyle(compact: true))
+                            .foregroundStyle(Theme.rubyBright)
+                            .disabled(deleting)
+                    }
+                }
+            }
+        }
+        .confirmationDialog("Delete your Forge account?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete account permanently", role: .destructive) {
+                deleting = true
+                Task { @MainActor in
+                    if await app.auth.deleteAccount() { app.logout() }
+                    deleting = false
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Removes your account and sign-in from Forge's servers. Data on this phone stays until you delete the app.")
+        }
     }
 
     private var profileHeader: some View {

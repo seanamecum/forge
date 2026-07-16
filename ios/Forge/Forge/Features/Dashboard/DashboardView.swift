@@ -108,6 +108,11 @@ struct DashboardView: View {
     }
 
     /// The one number that matters, dominating the screen.
+    /// Consecutive days the athlete showed up (score snapshots are daily).
+    private var streakDays: Int {
+        StreakEngine.streak(days: PersistenceService.scoreDays())
+    }
+
     private var heroCard: some View {
         let directive = app.dailyDirective
         return Card {
@@ -118,8 +123,13 @@ struct DashboardView: View {
                             .font(.system(size: 72, weight: .bold, design: .rounded))
                             .foregroundStyle(Theme.cream)
                         Spacer()
-                        if app.healthKit.authState != .authorized {
-                            Chip(text: "Demo data", tone: .amber)
+                        VStack(alignment: .trailing, spacing: 6) {
+                            if app.healthKit.authState != .authorized {
+                                Chip(text: "Demo data", tone: .amber)
+                            }
+                            if streakDays >= 2 {
+                                Chip(text: "\(streakDays)-day streak", tone: .gold)
+                            }
                         }
                     }
                     Text("Forge Score")

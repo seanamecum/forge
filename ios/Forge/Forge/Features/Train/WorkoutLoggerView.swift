@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import StoreKit
 
 /// Live session logger: sets, weight, reps, RPE/RIR, rest timer, completion, volume.
 /// Finishing persists to SwiftData and (when authorized) writes to Apple Health.
@@ -7,6 +8,7 @@ struct WorkoutLoggerView: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.requestReview) private var requestReview
 
     let plan: GeneratedWorkout
     @State private var logged: [LoggedExercise] = []
@@ -193,6 +195,13 @@ struct WorkoutLoggerView: View {
         }
 
         finished = true
+
+        // Ask for a rating at feel-good milestones only — right after a
+        // finished session, never mid-flow. The system caps frequency anyway.
+        let saved = PersistenceService.recentWorkouts(context: modelContext, limit: 30).count
+        if [3, 10, 25].contains(saved) {
+            requestReview()
+        }
     }
 
     private var averageRPE: Double {
