@@ -93,9 +93,11 @@ enum MockData {
         WearableDevice(name: "Apple Watch Ultra", brand: "Apple", icon: "applewatch",
                        source: .appleWatch, connected: true, lastSync: "2 min ago", lastSyncAgeHours: 0.03,
                        permissions: ["Heart Rate", "Workouts", "Sleep", "Steps", "Energy"], battery: 76),
+        // 1.0 ships Apple-Health-only: third-party devices start disconnected
+        // so the demo narrative never claims syncs that can't happen yet.
         WearableDevice(name: "WHOOP 5.0", brand: "WHOOP", icon: "waveform.path.ecg",
-                       source: .whoop, connected: true, lastSync: "6 min ago", lastSyncAgeHours: 0.1,
-                       permissions: ["HRV", "RHR", "Sleep Stages", "Strain", "Recovery"], battery: 58),
+                       source: .whoop, connected: false, lastSync: nil, lastSyncAgeHours: nil,
+                       permissions: ["HRV", "RHR", "Sleep Stages", "Strain", "Recovery"]),
         WearableDevice(name: "Oura Ring Gen 4", brand: "Oura", icon: "circle.circle",
                        source: .oura, connected: false, lastSync: nil, lastSyncAgeHours: nil,
                        permissions: ["HRV", "Temperature", "Readiness"]),

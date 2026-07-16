@@ -131,9 +131,17 @@ final class DataHubTests: XCTestCase {
 
     // MARK: - Service state (preferred sources + contenders)
 
+    /// 1.0 demo stack is Apple-only; multi-device tests pair WHOOP themselves.
+    private func connectWhoop(_ recovery: RecoveryService) {
+        guard let whoop = recovery.wearables.first(where: { $0.source == .whoop }),
+              !whoop.connected else { return }
+        recovery.toggleConnection(whoop)
+    }
+
     func testContendersOnlyIncludeConnectedSources() {
         let recovery = RecoveryService()
-        // Demo stack: Watch + WHOOP + scale connected; Oura is not.
+        connectWhoop(recovery)
+        // Stack now: Watch + WHOOP + scale connected; Oura is not.
         let sleepContenders = recovery.contenders(for: .sleep)
         XCTAssertTrue(sleepContenders.contains(.whoop))
         XCTAssertTrue(sleepContenders.contains(.appleWatch))
@@ -142,6 +150,7 @@ final class DataHubTests: XCTestCase {
 
     func testPreferredSourceRoundTripsAndFallsBackWhenDisconnected() {
         let recovery = RecoveryService()
+        connectWhoop(recovery)
         recovery.setPreferred(.appleWatch, for: .sleep)
         XCTAssertEqual(recovery.activeSource(for: .sleep), .appleWatch)
 
@@ -156,6 +165,7 @@ final class DataHubTests: XCTestCase {
 
     func testCoachContextCarriesEcosystem() {
         let app = AppState()
+        connectWhoop(app.recovery)
         let ctx = app.coachContext
         XCTAssertTrue(ctx.dataSources.contains("WHOOP"))
         XCTAssertTrue(ctx.dataSources.contains("Apple Watch"))

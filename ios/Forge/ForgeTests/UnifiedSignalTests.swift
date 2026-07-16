@@ -4,6 +4,10 @@ import XCTest
 /// The unified stream actually DRIVING the app: today's snapshot — and therefore
 /// the Forge Score, Directive, and Coach — follows source priority, the user's
 /// preferred source, disconnections, and live HealthKit readings.
+///
+/// 1.0 ships Apple-Health-only, so the demo stack starts with just Apple
+/// devices connected; tests that exercise multi-device arbitration connect
+/// WHOOP themselves.
 final class UnifiedSignalTests: XCTestCase {
 
     override func setUp() {
@@ -16,18 +20,27 @@ final class UnifiedSignalTests: XCTestCase {
         super.tearDown()
     }
 
-    func testDefaultResolutionMatchesSeededSnapshot() {
-        // WHOOP wins sleep/HRV/RHR by default and its seeds equal the snapshot —
-        // the demo must be bit-identical until the user makes a choice.
+    private func connectWhoop(_ recovery: RecoveryService) {
+        guard let whoop = recovery.wearables.first(where: { $0.source == .whoop }),
+              !whoop.connected else { return }
+        recovery.toggleConnection(whoop)
+    }
+
+    func testDefaultResolutionIsAppleOnly() {
+        // 1.0 default: Apple Watch is the source of truth for sleep/HRV/RHR.
         let recovery = RecoveryService()
-        XCTAssertEqual(recovery.today.sleep.hours, 7.2, accuracy: 0.001)
-        XCTAssertEqual(recovery.today.sleep.score, 81)
-        XCTAssertEqual(recovery.today.hrv, 58)
-        XCTAssertEqual(recovery.today.restingHR, 56)
+        XCTAssertEqual(recovery.today.sleep.hours, 7.9, accuracy: 0.001)
+        XCTAssertEqual(recovery.today.sleep.score, 89)
+        XCTAssertEqual(recovery.today.hrv, 61)
+        XCTAssertEqual(recovery.today.restingHR, 58)
     }
 
     func testPreferredSleepSourceRewiresTheSnapshot() {
         let recovery = RecoveryService()
+        connectWhoop(recovery)
+        XCTAssertEqual(recovery.today.sleep.hours, 7.2, accuracy: 0.001,
+                       "With WHOOP connected it outranks the Watch by default priority")
+
         recovery.setPreferred(.appleWatch, for: .sleep)
         XCTAssertEqual(recovery.today.sleep.hours, 7.9, accuracy: 0.001,
                        "Choosing Apple Watch for sleep must change what the whole app sees")
@@ -40,32 +53,35 @@ final class UnifiedSignalTests: XCTestCase {
 
     func testDisconnectingWhoopFallsBackForAllItsMetrics() {
         let recovery = RecoveryService()
-        guard let whoop = recovery.wearables.first(where: { $0.source == .whoop }) else {
-            return XCTFail("demo stack should include WHOOP")
-        }
-        recovery.toggleConnection(whoop)   // unpair
+        connectWhoop(recovery)
+        XCTAssertEqual(recovery.today.hrv, 58, "WHOOP wins HRV while connected")
+
+        recovery.toggleConnection(recovery.wearables.first(where: { $0.source == .whoop })!)  // unpair
         XCTAssertEqual(recovery.today.sleep.hours, 7.9, accuracy: 0.001, "Sleep falls back to Apple Watch")
         XCTAssertEqual(recovery.today.hrv, 61)
         XCTAssertEqual(recovery.today.restingHR, 58)
-
-        recovery.toggleConnection(recovery.wearables.first(where: { $0.source == .whoop })!)  // re-pair
-        XCTAssertEqual(recovery.today.hrv, 58, "Re-pairing restores WHOOP as the HRV winner")
     }
 
     func testLiveHealthKitReadingEntersThePipeline() {
+        // Apple-only stack: a live Watch sample must drive the app directly.
         let recovery = RecoveryService()
-        // A real Apple Watch sleep sample arrives (fresher than every seed)…
         recovery.updateReading(.sleep, value: 6.4, unit: "h", source: .appleWatch)
-        // …but WHOOP still outranks it by default priority.
+        XCTAssertEqual(recovery.today.sleep.hours, 6.4, accuracy: 0.001,
+                       "The live reading replaces the seed for the winning source")
+
+        // A connected WHOOP outranks the Watch again — until the user chooses.
+        connectWhoop(recovery)
         XCTAssertEqual(recovery.today.sleep.hours, 7.2, accuracy: 0.001)
-        // Until the user prefers Apple Watch — then the LIVE value wins, not the seed.
         recovery.setPreferred(.appleWatch, for: .sleep)
-        XCTAssertEqual(recovery.today.sleep.hours, 6.4, accuracy: 0.001)
+        XCTAssertEqual(recovery.today.sleep.hours, 6.4, accuracy: 0.001,
+                       "Preferring the Watch surfaces the LIVE value, not the seed")
     }
 
     func testCoachContextFollowsPreferredSource() {
         let app = AppState()
+        connectWhoop(app.recovery)
         let before = app.coachContext.sleepHours
+        XCTAssertEqual(before, 7.2, accuracy: 0.001)
         app.recovery.setPreferred(.appleWatch, for: .sleep)
         XCTAssertEqual(app.coachContext.sleepHours, 7.9, accuracy: 0.001,
                        "The coach must cite the source the user chose")
