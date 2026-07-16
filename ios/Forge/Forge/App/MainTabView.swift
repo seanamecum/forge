@@ -68,43 +68,42 @@ struct ForgeTabBar: View {
         .padding(.bottom, 4)
     }
 
+    /// Reference-style pill: the ACTIVE tab expands into a gold capsule with
+    /// icon + label; inactive tabs collapse to quiet glyphs. One moving pill,
+    /// nothing else animated.
     @ViewBuilder
     private func tabButton(_ tab: MainTab) -> some View {
         let selected = app.selectedTab == tab
-        let isCoach = tab == .coach
 
         Button {
             guard app.selectedTab != tab else { return }
             Haptics.selection()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                 app.selectedTab = tab
             }
         } label: {
-            VStack(spacing: 3) {
-                ZStack {
-                    if isCoach {
-                        Circle()
-                            .fill(Theme.goldGradient)
-                            .frame(width: 40, height: 40)
-                            .shadow(color: Theme.gold.opacity(selected ? 0.7 : 0.35), radius: selected ? 14 : 8)
-                            .offset(y: -8)
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(Theme.bg)
-                            .offset(y: -8)
-                    } else {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 19, weight: .medium))
-                            .foregroundStyle(selected ? Theme.gold : Theme.faint)
-                            .frame(height: 28)
-                    }
+            HStack(spacing: 6) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(selected ? Theme.bg : Theme.faint)
+                if selected {
+                    Text(tab.label)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.bg)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
-                Text(tab.label)
-                    .font(.system(size: 10, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(selected ? Theme.goldBright : Theme.faint)
-                    .offset(y: isCoach ? -6 : 0)
             }
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, selected ? 16 : 10)
+            .padding(.vertical, 11)
+            .background {
+                if selected {
+                    Capsule()
+                        .fill(Theme.goldGradient)
+                        .shadow(color: Theme.gold.opacity(0.4), radius: 10, y: 2)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

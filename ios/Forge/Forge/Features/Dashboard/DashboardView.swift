@@ -4,15 +4,21 @@ import SwiftData
 struct DashboardView: View {
     @Environment(AppState.self) private var app
     @Environment(\.modelContext) private var modelContext
+    @State private var tipDismissed = false
 
     var body: some View {
         NavigationStack {
             ScreenScaffold {
                 header
+                headline
+                goalCard
+                QuickActionsRow()
                 connectHealthBanner
                 MorningCheckInCard()
+                dailySummary
                 heroCard
                 todayCard
+                tipBanner
                 ModulesGrid()
                 DisclaimerNote()
             }
@@ -22,6 +28,121 @@ struct DashboardView: View {
                 app.publishWidgetSnapshot()
                 // Snapshot today's Forge Score so trends build from real history.
                 PersistenceService.recordTodayScore(app.forgeScore, context: modelContext)
+            }
+        }
+    }
+
+    /// Big friendly opener, tuned to the day's state — the reference design's
+    /// "Let's start strong!" moment in Forge's voice.
+    private var headline: some View {
+        Text(headlineText)
+            .font(.system(size: 38, weight: .bold, design: .rounded))
+            .foregroundStyle(Theme.cream)
+            .lineLimit(2)
+            .minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 2)
+    }
+
+    private var headlineText: String {
+        if app.recovery.today.recovery >= 80 { return "Green light.\nGo get it." }
+        switch Daypart.now {
+        case "Morning": return "Let's start\nstrong."
+        case "Afternoon": return "Keep the\nmomentum."
+        default: return "Finish the\nday right."
+        }
+    }
+
+    /// Reference goal card: one percentage, one bar, one bolt.
+    /// The number is real — today's calories against the coached target.
+    private var goalCard: some View {
+        let n = app.nutrition
+        let pct = n.calorieTarget > 0
+            ? Int((Double(n.calories) / Double(n.calorieTarget) * 100).rounded())
+            : 0
+        return Card {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("You're \(min(pct, 100))% to your fuel target")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.cream)
+                    CapsuleBar(value: Double(n.calories), target: Double(n.calorieTarget),
+                               tone: .gold, height: 10)
+                    Text("\(n.calories.formatted()) / \(n.calorieTarget.formatted()) kcal")
+                        .font(.system(size: 11)).foregroundStyle(Theme.muted)
+                }
+                ZStack {
+                    Circle().fill(Theme.goldGradient)
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Theme.bg)
+                }
+                .frame(width: 46, height: 46)
+                .shadow(color: Theme.gold.opacity(0.35), radius: 9, y: 2)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Fuel progress: \(pct) percent of today's calorie target")
+    }
+
+    /// Reference "Daily Summary": two ring cards over live Health numbers.
+    private var dailySummary: some View {
+        let hk = app.healthKit
+        let stepPct = Int((Double(hk.steps) / 10_000 * 100).rounded())
+        let energyPct = Int((Double(hk.activeEnergy) / 1_000 * 100).rounded())
+        return VStack(alignment: .leading, spacing: 10) {
+            EyebrowLabel(text: "Daily Summary")
+            HStack(spacing: 10) {
+                summaryRingCard(pct: stepPct, big: hk.steps.formatted(), label: "Steps",
+                                sub: "of 10,000")
+                summaryRingCard(pct: energyPct, big: hk.activeEnergy.formatted(), label: "Active energy",
+                                sub: "kcal · goal 1,000")
+            }
+        }
+    }
+
+    private func summaryRingCard(pct: Int, big: String, label: String, sub: String) -> some View {
+        Card {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(label).font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
+                    Text(big)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(Theme.cream)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    Text(sub).font(.system(size: 9.5)).foregroundStyle(Theme.faint)
+                }
+                Spacer(minLength: 0)
+                ScoreRing(value: min(pct, 100), size: 46, lineWidth: 5, animated: false)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(big), \(min(pct, 100)) percent")
+    }
+
+    /// Reference tip banner — gold, dismissible, with a real action.
+    /// The tip is the directive's priority, not canned copy.
+    @ViewBuilder
+    private var tipBanner: some View {
+        if !tipDismissed {
+            Card(gold: true) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(app.dailyDirective.priorityAction)
+                        .font(Theme.text(14, .medium))
+                        .foregroundStyle(Theme.cream)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 8) {
+                        Button("Dismiss") {
+                            withAnimation { tipDismissed = true }
+                        }
+                        .buttonStyle(GhostButtonStyle(compact: true))
+                        Button("Ask Coach") {
+                            Haptics.tap()
+                            app.selectedTab = .coach
+                        }
+                        .buttonStyle(GoldButtonStyle(compact: true))
+                    }
+                }
             }
         }
     }
@@ -74,8 +195,8 @@ struct DashboardView: View {
                     .kerning(1.6)
                     .foregroundStyle(Theme.faint)
                 Text("Good \(Daypart.now.lowercased()), \(app.user.name.split(separator: " ").first.map(String.init) ?? app.user.name)")
-                    .font(Theme.display(24))
-                    .foregroundStyle(Theme.cream)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
