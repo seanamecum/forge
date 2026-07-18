@@ -209,6 +209,7 @@ struct MealSection: View {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 18)).foregroundStyle(Theme.gold)
                     }
+                    .accessibilityLabel("Add food to \(meal.rawValue)")
                 }
                 if entries.isEmpty {
                     Text("Nothing logged").font(.system(size: 11.5)).foregroundStyle(Theme.faint)
@@ -290,6 +291,14 @@ struct FoodSearchSheet: View {
             .scrollContentBackground(.hidden)
             .background(Theme.bg)
             .searchable(text: $query, prompt: "Search foods")
+            .overlay {
+                if !query.isEmpty && app.nutrition.search(query).isEmpty {
+                    EmptyStateView(
+                        icon: "magnifyingglass",
+                        title: "No foods match \"\(query)\"",
+                        message: "Try the barcode scanner — it knows about 3 million products.")
+                }
+            }
             .navigationTitle("Add to \(meal.rawValue)")
             .navigationBarTitleDisplayMode(.inline)
         }

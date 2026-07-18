@@ -11,6 +11,7 @@ struct ScoreRing: View {
     var animated = true
 
     @State private var shown: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -47,15 +48,21 @@ struct ScoreRing: View {
         }
         .frame(width: size, height: size)
         .onAppear {
-            if animated {
+            if animated && !reduceMotion {
                 withAnimation(.easeOut(duration: 0.9).delay(0.1)) { shown = Double(value) }
             } else {
                 shown = Double(value)
             }
         }
         .onChange(of: value) { _, newValue in
-            withAnimation(.easeOut(duration: 0.5)) { shown = Double(newValue) }
+            if reduceMotion {
+                shown = Double(newValue)
+            } else {
+                withAnimation(.easeOut(duration: 0.5)) { shown = Double(newValue) }
+            }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label ?? "Score"): \(value) out of 100")
     }
 }
 
