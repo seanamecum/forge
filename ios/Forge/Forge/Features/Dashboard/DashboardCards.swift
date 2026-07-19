@@ -100,6 +100,9 @@ struct ForgeScoreHero: View {
                                     .frame(width: 26, alignment: .trailing)
                             }
                         }
+
+                        Divider().overlay(Theme.hairline.opacity(0.5))
+                        RecommendationBasisView(basis: app.forgeScoreBasis)
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }

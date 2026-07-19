@@ -150,6 +150,7 @@ struct DashboardView: View {
                         }
                         .buttonStyle(GoldButtonStyle(compact: true))
                     }
+                    RecommendationBasisView(basis: app.directiveBasis)
                 }
             }
         }

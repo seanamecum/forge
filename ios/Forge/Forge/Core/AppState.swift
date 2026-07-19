@@ -248,6 +248,62 @@ final class AppState {
         return "\(c.label) is your biggest lever — up to +\(gain) points on the table."
     }
 
+    /// The transparency contract behind today's Forge Score — inputs used, what's
+    /// missing, confidence, freshness, and the safe fallback. Surfaced in the UI so
+    /// the number is never opaque.
+    var forgeScoreBasis: RecommendationBasis {
+        let used = forgeScoreBreakdown.map { "\($0.label) \($0.value)" }
+        var missing: [String] = []
+        switch recovery.provenance {
+        case .demo:
+            missing.append("Live Apple Health signals (sleep, HRV, activity)")
+        case .partial:
+            if !recovery.recoveryFromLiveSignals { missing.append("Live recovery (currently estimated)") }
+            missing.append("Live strain & readiness (currently estimated)")
+        case .live:
+            break
+        }
+        if checkIn == nil { missing.append("Today's morning check-in") }
+
+        let fallback = recovery.provenance == .live ? nil
+            : "Using demo/estimated values where live data isn't connected — connect Apple Health to personalize."
+        return RecommendationBasis(
+            summary: forgeScoreNarrative, inputsUsed: used, inputsMissing: missing,
+            confidence: RecommendationBasis.confidence(provenance: recovery.provenance, hasCheckIn: checkIn != nil),
+            asOf: .now, safeFallback: fallback)
+    }
+
+    /// The transparency contract behind today's Directive.
+    var directiveBasis: RecommendationBasis {
+        let d = recovery.today
+        var used: [String] = ["Recovery \(d.recovery)"]
+        if d.sleepDebtHours > 0 { used.append("Sleep debt \(String(format: "%.1f", d.sleepDebtHours))h") }
+        if nutrition.proteinRemaining > 0 { used.append("Protein \(nutrition.proteinRemaining)g to go") }
+        used.append("Hydration \(nutrition.hydrationPct)%")
+        if d.strainYesterday > 0 { used.append("Training load \(Int(d.strainYesterday.rounded()))/21") }
+        if let injury = injuries.active.first {
+            used.append("\(injury.type.rawValue) injury (pain \(injury.painToday)/10)")
+        }
+        if let soreness = checkIn?.soreness { used.append("Soreness \(soreness)/10") }
+
+        var missing: [String] = []
+        if checkIn == nil { missing.append("Morning check-in (soreness, energy, stress)") }
+        if recovery.provenance == .demo { missing.append("Live recovery & sleep from Apple Health") }
+
+        let fallback: String?
+        if checkIn == nil {
+            fallback = "No check-in yet — log soreness and energy to sharpen today's call."
+        } else if recovery.provenance == .demo {
+            fallback = "Recovery is demo data until Apple Health is connected."
+        } else {
+            fallback = nil
+        }
+        return RecommendationBasis(
+            summary: dailyDirective.rationale, inputsUsed: used, inputsMissing: missing,
+            confidence: RecommendationBasis.confidence(provenance: recovery.provenance, hasCheckIn: checkIn != nil),
+            asOf: .now, safeFallback: fallback)
+    }
+
     /// Today's generated session — built from THIS athlete's goal, equipment,
     /// live recovery, and active injuries (not a canned demo plan). The workout
     /// generator stays a pure engine; this is where its live inputs come from.
