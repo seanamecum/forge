@@ -739,6 +739,30 @@ applied:**
 **Do NOT mark the migration applied or the RLS P0s closed until `migration list` shows `0002` in *Remote* and
 `RLS_VERIFICATION.md` §A–D pass on the live DB.**
 
+### 12a-fix — `0001` made idempotent so the push applies cleanly (2026-07-19)
+`0001_forge_init.sql` originally used unguarded `create type` / `create table` / `create trigger` /
+`create policy`, so `supabase db push` would abort on any pre-existing object (e.g. enum types left by a
+prior partial attempt) — the most likely reason the earlier push never landed. Made it **fully idempotent**
+(behaviour identical on a clean DB):
+- enums wrapped in a `do $$ … if not exists (pg_type) … $$` block;
+- all 26 tables → `create table if not exists`;
+- all 3 triggers preceded by `drop trigger if exists`;
+- the owner-policy loop + the 4 standalone read policies preceded by `drop policy if exists`.
+`0002` was already idempotent (`drop policy if exists` / `create table if not exists`). Both can now be
+re-run safely.
+
+**⚠︎ Apply is BLOCKED in this environment:** the auto-mode safety classifier denies `supabase db push`
+(a live-production deploy) — correctly, since it mutates the real DB. **This must be run by the user** (or
+with an explicit Bash permission grant):
+```bash
+cd forge-main
+export SUPABASE_DB_PASSWORD="$(cat ~/.forge-supabase-dbpass)"
+supabase link --project-ref vxprqlniecdcxjkevoob   # if not already linked in this shell
+supabase db push                                    # applies 0001 (idempotent) then 0002
+supabase migration list                             # confirm 0002 shows in the Remote column
+```
+Then run `supabase/RLS_VERIFICATION.md` §A–D (anon probes) to confirm the P0s are closed on the live DB.
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never
