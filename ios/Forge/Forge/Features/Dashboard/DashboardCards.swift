@@ -284,8 +284,9 @@ struct InjuryRiskCard: View {
                 HStack(spacing: 16) {
                     ScoreRing(value: risk.percent, label: "Risk", size: 76, lineWidth: 7, tone: .ruby)
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack {
+                        HStack(spacing: 6) {
                             EyebrowLabel(text: "Injury Risk · \(risk.band)")
+                            Chip(text: "Sample", tone: .amber)
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 11))

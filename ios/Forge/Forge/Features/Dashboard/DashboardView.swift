@@ -253,8 +253,11 @@ struct DashboardView: View {
                             .foregroundStyle(Theme.cream)
                         Spacer()
                         VStack(alignment: .trailing, spacing: 6) {
-                            if app.healthKit.authState != .authorized {
-                                Chip(text: "Demo data", tone: .amber)
+                            // Honest provenance: "Demo data" until any live signal
+                            // arrives, then "Partial · estimated" while recovery and
+                            // strain are still modeled — never a silent clean score.
+                            if app.recovery.provenance != .live {
+                                Chip(text: app.recovery.provenance.label, tone: .amber)
                             }
                             if streakDays >= 2 {
                                 Chip(text: "\(streakDays)-day streak", tone: .gold)

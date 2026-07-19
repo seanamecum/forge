@@ -106,9 +106,13 @@ struct InjuryProfileSection: View {
                     ScoreRing(value: risk.percent, label: "Risk", size: 86, lineWidth: 8, tone: .ruby)
                     VStack(alignment: .leading, spacing: 3) {
                         EyebrowLabel(text: "Injury Risk · \(risk.band)")
-                        Text("Why it's elevated").font(Theme.display(17)).foregroundStyle(Theme.cream)
+                        Text("Illustrative risk model").font(Theme.display(17)).foregroundStyle(Theme.cream)
                     }
+                    Spacer()
+                    Chip(text: "Sample", tone: .amber)
                 }
+                Text("Sample factors below — an illustration of the model, not a medical prediction about you.")
+                    .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
                 ForEach(risk.drivers) { d in
                     HStack {
                         Text(d.name).font(.system(size: 11.5)).foregroundStyle(Theme.creamDim)

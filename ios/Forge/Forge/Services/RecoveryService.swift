@@ -67,6 +67,20 @@ final class RecoveryService {
         return seeded + liveOverrides
     }
 
+    /// Metrics currently backed by a genuine live reading (not a demo seed).
+    var liveMetrics: Set<MetricKind> { Set(liveOverrides.map(\.kind)) }
+
+    /// Honest provenance of the recovery snapshot / Forge Score. `.demo` when
+    /// nothing is live; `.partial` once any live signal arrives (recovery, strain,
+    /// sleep-debt and readiness are still estimated, so it is never fully `.live`).
+    var provenance: DataProvenance {
+        liveMetrics.isEmpty ? .demo : .partial
+    }
+
+    /// Whether today's headline recovery number was derived from live signals
+    /// (vs. the demo seed). Drives the "estimate" labeling in the UI.
+    private(set) var recoveryFromLiveSignals = false
+
     /// Ingest a real reading (e.g. from HealthKit) and re-resolve.
     func updateReading(_ kind: MetricKind, value: Double, unit: String, source: DataSource) {
         liveOverrides.removeAll { $0.kind == kind && $0.source == source }
@@ -90,10 +104,27 @@ final class RecoveryService {
             today.sleep.hours = sleep.value
             today.sleep.score = Int((sleep.value * (81.0 / 7.2)).rounded()).clamped(to: 0...100)
         }
-        if let hrv = resolved(.hrv) { today.hrv = Int(hrv.value) }
+        let hrvReading = resolved(.hrv)
+        if let hrv = hrvReading { today.hrv = Int(hrv.value) }
         if let rhr = resolved(.restingHR) { today.restingHR = Int(rhr.value) }
         if let steps = resolved(.steps) { today.steps = Int(steps.value) }
         if let cal = resolved(.calories) { today.caloriesOut = Int(cal.value) }
+
+        // Derive the headline recovery from the user's own signals (a disclosed
+        // estimate) only when the *winning* HRV is a genuine live reading — so a
+        // connected user never sees the demo athlete's recovery value. No live
+        // HRV → keep the seeded, demo-labeled value untouched.
+        let hrvIsLive = hrvReading.map { winner in
+            liveOverrides.contains { $0.kind == .hrv && $0.source == winner.source }
+        } ?? false
+        if hrvIsLive {
+            today.recovery = RecoveryEstimator.recovery(
+                hrv: today.hrv, hrvBaseline: today.hrvBaseline,
+                restingHR: today.restingHR, sleepHours: today.sleep.hours)
+            recoveryFromLiveSignals = true
+        } else {
+            recoveryFromLiveSignals = false
+        }
     }
 
     /// The sources actually competing for a metric right now — a picker only

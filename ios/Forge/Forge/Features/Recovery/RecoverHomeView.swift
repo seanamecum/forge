@@ -28,11 +28,13 @@ struct RecoverHomeView: View {
                         .font(.system(size: 72, weight: .bold, design: .rounded))
                         .foregroundStyle(Theme.gold)
                     Spacer()
-                    if app.healthKit.authState != .authorized {
-                        Chip(text: "Demo data", tone: .amber)
+                    if app.recovery.provenance != .live {
+                        Chip(text: app.recovery.provenance.label, tone: .amber)
                     }
                 }
-                Text("Recovery today · HRV \(d.hrv) ms · sleep \(String(format: "%.1f", d.sleep.hours)) h")
+                Text(app.recovery.recoveryFromLiveSignals
+                     ? "Estimated from your HRV \(d.hrv) ms · sleep \(String(format: "%.1f", d.sleep.hours)) h"
+                     : "Demo recovery · HRV \(d.hrv) ms · sleep \(String(format: "%.1f", d.sleep.hours)) h")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.muted)
             }
