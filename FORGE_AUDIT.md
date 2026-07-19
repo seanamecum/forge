@@ -646,3 +646,22 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
 - **Unchanged/honest by design:** the live path still uses the Claude proxy (server-side key); the default
   build is the labeled demo coach (`aiMode = .mock`). Live-vs-mode switching remains covered by the 2
   `AIServiceTests` (skipped locally only because a gitignored `Secrets.plist` is present; they run in CI).
+
+### Initiative 5 — HealthKit freshness / honest stale states (closes P2-6) · iOS, tested
+- **Problem (P2-6):** `latest()` took the newest sample with no date bound and discarded its timestamp;
+  live readings were ingested with hardcoded `ageHours: 0`, so a weeks-old HRV/HR read as "excellent"
+  freshness and drove a "live" recovery. The existing `DataHub.quality(ageHours:)` band was never applied
+  to live data.
+- **Fix:** `HealthKitService.latest()` now returns the sample's **value + end-date**; per-metric
+  `sampleDates` + `ageHours(for:)` expose real age. `RecoveryService.updateReading` gained an `ageHours`
+  param (clamped ≥ 0); `applyUnifiedSignals` derives recovery from live HRV **only when it's fresh
+  (< 24h)** — a stale sample no longer masquerades as today's. Added `liveAgeHours(_:)` + `hasStaleLiveSignal`.
+  `AppState.ingestHealthKitSignals` passes real ages through. Staleness is surfaced honestly: the recovery
+  hero reads "…last HRV ~40h old, recovery held at estimate," and both `forgeScoreBasis`/`directiveBasis`
+  add "A fresh HRV reading (last sample ~Nh old)" to *inputs missing*.
+- **Tests:** `HealthFreshnessTests` (+5) — fresh HRV derives recovery; **stale (48h) HRV does not** and the
+  seeded value is held; negative age clamps to 0; `ageHours` is nil without a sample; the stale signal
+  surfaces in the Score basis. iOS **235 tests, 2 skipped, 0 failures; Debug build 0 warnings.**
+- **⚠︎ Device-only, unverified here:** the actual HealthKit sample-date capture (the `latest()` query change)
+  can't run in the simulator (no real Health samples). The freshness *logic* (age → gating → surfacing) is
+  fully unit-tested; the on-device read path still needs a real device (§7).
