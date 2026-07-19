@@ -15,5 +15,8 @@ ios/**/Secrets.plist
 **/xcuserdata/
 *.xcuserstate
 
+# Supabase CLI local link/state — internal, never commit
+supabase/.temp/
+
 # Atelier is a separate product with its own git repo — keep it out of Forge's tree
 atelier/

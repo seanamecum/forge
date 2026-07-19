@@ -712,6 +712,33 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
   Moderate with fresh live HRV + check-in; nutrition basis is Moderate + names the missing log with nothing
   eaten, High once intake is logged. iOS **248 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
 
+## 12a. Remote Supabase state — VERIFIED 2026-07-19 (migration NOT applied)
+
+Checked the live project `vxprqlniecdcxjkevoob` with the CLI (linked with the stored DB password, read-only)
+and by probing PostgREST with the public anon key. **Correction to the earlier assumption that `0001` was
+applied:**
+
+- **Migration tracking is empty.** `supabase migration list` shows `0001` and `0002` both with an empty
+  *Remote* column; `supabase db push --dry-run` reports it *would push both*. **Neither migration is applied.**
+- **The `0001` tables do not exist on the remote.** Anon `GET /rest/v1/challenge_members`, `/subscriptions`,
+  `/profiles` all return **404 "Could not find the table … in the schema cache."** Only **`feedback`** exists
+  (anon `GET` → `200 []`, i.e. insert-only-or-empty — dashboard-created for the feedback feature).
+- **Net effect:** the P0-1 (world-writable `challenge_members`) and P0-2 (self-writable billing) exploits are
+  **not currently live** *because those tables aren't deployed at all* — but the `0002` hardening is likewise
+  **not applied**, so the intended schema must be deployed **with** `0002` (never `0001` alone) to be safe from
+  the start. `feedback`'s insert-only RLS is still **unverified** (the `200 []` is consistent with either
+  insert-only or an empty table) — confirm via `supabase/RLS_VERIFICATION.md` §A.
+- **Likely cause:** `db push` applies `0001` first; `0001` uses bare `create table` (not `if not exists`), so
+  against any pre-existing objects it errors and nothing lands. **Not resolved from this environment** — I did
+  not run `db push` (a mutating production action). See "remaining manual action" in the session summary.
+- **iOS secrets:** ✅ no `service_role`/DB secret in the app — `SupabaseConfig.swift` holds only the **anon**
+  (publishable) key + project URL as compile-time literals; the file's own comment states the service-role key
+  must never appear, and it doesn't. (Hardcoded literals still block rotation-via-env — minor, tracked.)
+- **Verification checklist added:** `supabase/RLS_VERIFICATION.md` (anon-probe + authed matrix; run after apply).
+
+**Do NOT mark the migration applied or the RLS P0s closed until `migration list` shows `0002` in *Remote* and
+`RLS_VERIFICATION.md` §A–D pass on the live DB.**
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never
