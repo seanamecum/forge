@@ -264,6 +264,9 @@ final class AppState {
             break
         }
         if checkIn == nil { missing.append("Today's morning check-in") }
+        if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
+            missing.append("A fresh HRV reading (last sample ~\(Int(hrvAge))h old)")
+        }
 
         let fallback = recovery.provenance == .live ? nil
             : "Using demo/estimated values where live data isn't connected — connect Apple Health to personalize."
@@ -289,6 +292,9 @@ final class AppState {
         var missing: [String] = []
         if checkIn == nil { missing.append("Morning check-in (soreness, energy, stress)") }
         if recovery.provenance == .demo { missing.append("Live recovery & sleep from Apple Health") }
+        if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
+            missing.append("A fresh HRV reading (last sample ~\(Int(hrvAge))h old)")
+        }
 
         let fallback: String?
         if checkIn == nil {
@@ -390,10 +396,13 @@ final class AppState {
     /// live data enters the same pipeline as every other source, never a side door.
     func ingestHealthKitSignals() {
         guard healthKit.authState == .authorized, !healthKit.usingMockData else { return }
-        recovery.updateReading(.sleep, value: healthKit.sleepHoursLastNight, unit: "h", source: .appleWatch)
-        recovery.updateReading(.hrv, value: Double(healthKit.hrvMs), unit: "ms", source: .appleWatch)
-        recovery.updateReading(.restingHR, value: Double(healthKit.restingHeartRate), unit: "bpm", source: .appleWatch)
-        recovery.updateReading(.heartRate, value: Double(healthKit.heartRate), unit: "bpm", source: .appleWatch)
+        // Pass each sample's real age so a stale HRV/HR no longer reads as current.
+        // Steps & energy are same-day sums (inherently fresh → age 0).
+        func age(_ kind: MetricKind) -> Double { healthKit.ageHours(for: kind) ?? 0 }
+        recovery.updateReading(.sleep, value: healthKit.sleepHoursLastNight, unit: "h", source: .appleWatch, ageHours: age(.sleep))
+        recovery.updateReading(.hrv, value: Double(healthKit.hrvMs), unit: "ms", source: .appleWatch, ageHours: age(.hrv))
+        recovery.updateReading(.restingHR, value: Double(healthKit.restingHeartRate), unit: "bpm", source: .appleWatch, ageHours: age(.restingHR))
+        recovery.updateReading(.heartRate, value: Double(healthKit.heartRate), unit: "bpm", source: .appleWatch, ageHours: age(.heartRate))
         recovery.updateReading(.steps, value: Double(healthKit.steps), unit: "", source: .appleWatch)
         recovery.updateReading(.calories, value: Double(healthKit.activeEnergy), unit: "kcal", source: .appleWatch)
     }

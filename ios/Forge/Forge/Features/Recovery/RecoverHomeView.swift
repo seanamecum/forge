@@ -32,13 +32,25 @@ struct RecoverHomeView: View {
                         Chip(text: app.recovery.provenance.label, tone: .amber)
                     }
                 }
-                Text(app.recovery.recoveryFromLiveSignals
-                     ? "Estimated from your HRV \(d.hrv) ms · sleep \(String(format: "%.1f", d.sleep.hours)) h"
-                     : "Demo recovery · HRV \(d.hrv) ms · sleep \(String(format: "%.1f", d.sleep.hours)) h")
+                Text(recoverySourceLine(d))
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.muted)
             }
         }
+    }
+
+    /// Honest one-liner about where today's recovery number comes from: derived
+    /// from fresh live signals, held because the latest HRV is stale, or demo.
+    private func recoverySourceLine(_ d: RecoveryData) -> String {
+        let base = "HRV \(d.hrv) ms · sleep \(String(format: "%.1f", d.sleep.hours)) h"
+        if app.recovery.recoveryFromLiveSignals {
+            return "Estimated from your \(base)"
+        }
+        if let age = app.recovery.liveAgeHours(.hrv),
+           age >= RecoveryService.staleThresholdHours {
+            return "\(base) — last HRV ~\(Int(age))h old, recovery held at estimate"
+        }
+        return "Demo recovery · \(base)"
     }
 
     private var ringsRow: some View {
