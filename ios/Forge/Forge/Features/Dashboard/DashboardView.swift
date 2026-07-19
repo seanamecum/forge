@@ -4,7 +4,9 @@ import SwiftData
 struct DashboardView: View {
     @Environment(AppState.self) private var app
     @Environment(\.modelContext) private var modelContext
-    @State private var tipDismissed = false
+    /// Persisted per-directive: dismissing hides *this* directive's tip until the
+    /// directive changes, surviving tab switches and relaunches (P1-9).
+    @AppStorage("forge.dashboard.dismissedTipID") private var dismissedTipID = ""
 
     var body: some View {
         NavigationStack {
@@ -57,13 +59,13 @@ struct DashboardView: View {
     /// The number is real — today's calories against the coached target.
     private var goalCard: some View {
         let n = app.nutrition
-        let pct = n.calorieTarget > 0
-            ? Int((Double(n.calories) / Double(n.calorieTarget) * 100).rounded())
-            : 0
+        // One clamped source of truth so the visible bar and the VoiceOver label
+        // can never disagree (previously the label read the unclamped value).
+        let pct = Progress.displayPercent(n.calories, of: n.calorieTarget)
         return Card {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("You're \(min(pct, 100))% to your fuel target")
+                    Text("You're \(pct)% to your fuel target")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.cream)
                     CapsuleBar(value: Double(n.calories), target: Double(n.calorieTarget),
@@ -83,20 +85,25 @@ struct DashboardView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Fuel progress: \(pct) percent of today's calorie target")
+        .accessibilityValue("\(n.calories.formatted()) of \(n.calorieTarget.formatted()) kilocalories")
     }
 
     /// Reference "Daily Summary": two ring cards over live Health numbers.
     private var dailySummary: some View {
         let hk = app.healthKit
-        let stepPct = Int((Double(hk.steps) / 10_000 * 100).rounded())
-        let energyPct = Int((Double(hk.activeEnergy) / 1_000 * 100).rounded())
+        // Goals are derived from the athlete's profile (labeled defaults), not a
+        // universal 10,000 steps / 1,000 kcal. Progress is clamped + finite-safe.
+        let stepGoal = TargetEngine.steps(app.user)
+        let energyGoal = TargetEngine.activeEnergy(app.user)
+        let stepPct = Progress.displayPercent(hk.steps, of: stepGoal)
+        let energyPct = Progress.displayPercent(hk.activeEnergy, of: energyGoal)
         return VStack(alignment: .leading, spacing: 10) {
             EyebrowLabel(text: "Daily Summary")
             HStack(spacing: 10) {
                 summaryRingCard(pct: stepPct, big: hk.steps.formatted(), label: "Steps",
-                                sub: "of 10,000")
+                                sub: "goal \(stepGoal.formatted())")
                 summaryRingCard(pct: energyPct, big: hk.activeEnergy.formatted(), label: "Active energy",
-                                sub: "kcal · goal 1,000")
+                                sub: "kcal · goal \(energyGoal.formatted())")
             }
         }
     }
@@ -124,16 +131,17 @@ struct DashboardView: View {
     /// The tip is the directive's priority, not canned copy.
     @ViewBuilder
     private var tipBanner: some View {
-        if !tipDismissed {
+        let directive = app.dailyDirective
+        if directive.id != dismissedTipID {
             Card(gold: true) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(app.dailyDirective.priorityAction)
+                    Text(directive.priorityAction)
                         .font(Theme.text(14, .medium))
                         .foregroundStyle(Theme.cream)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
                         Button("Dismiss") {
-                            withAnimation { tipDismissed = true }
+                            withAnimation { dismissedTipID = directive.id }
                         }
                         .buttonStyle(GhostButtonStyle(compact: true))
                         Button("Ask Coach") {
@@ -228,10 +236,10 @@ struct DashboardView: View {
         .padding(.top, 6)
     }
 
-    /// The one number that matters, dominating the screen.
-    /// Consecutive days the athlete showed up (score snapshots are daily).
+    /// Consecutive days the athlete did the work — completed a workout or logged
+    /// a check-in. Not "opened the app" (see PersistenceService.activeDays).
     private var streakDays: Int {
-        StreakEngine.streak(days: PersistenceService.scoreDays())
+        StreakEngine.streak(days: PersistenceService.activeDays())
     }
 
     private var heroCard: some View {

@@ -61,11 +61,23 @@ enum PersistenceService {
         }
     }
 
-    /// Every day the app snapshotted a score — the streak's raw material.
+    /// Every day the app snapshotted a score. Kept for score-history/trends only —
+    /// it is NOT the streak source (a snapshot is written just for opening the
+    /// app, which would reward showing up rather than doing the work).
     @MainActor
     static func scoreDays() -> [Date] {
         let descriptor = FetchDescriptor<ScoreRecord>(sortBy: [SortDescriptor(\.date)])
         return ((try? context.fetch(descriptor)) ?? []).map(\.date)
+    }
+
+    /// Days the athlete took an *intentional* action — completed a workout or
+    /// logged a daily check-in. This is the honest streak source: it counts
+    /// doing the work, not opening the app.
+    @MainActor
+    static func activeDays() -> [Date] {
+        let workouts = (try? context.fetch(FetchDescriptor<WorkoutRecord>())) ?? []
+        let checkIns = (try? context.fetch(FetchDescriptor<CheckInRecord>())) ?? []
+        return workouts.map(\.date) + checkIns.map(\.date)
     }
 
     /// Everything the athlete owns, as a shareable JSON document.

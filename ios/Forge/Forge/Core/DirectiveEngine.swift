@@ -47,6 +47,13 @@ struct DailyDirective: Equatable {
     /// The prescribed plan for today — what to actually do, in order.
     var actions: [DirectiveAction] = []
 
+    /// Stable identity of *this decision* — a dismissal keyed on it persists until
+    /// the directive's content actually changes (not merely a view recreation).
+    /// Deterministic across launches (unlike `Hashable.hashValue`, which is salted).
+    var id: String {
+        Data("\(headline)|\(rationale)|\(priorityAction)".utf8).base64EncodedString()
+    }
+
     // Equatable intentionally ignores `actions` (compares the decision, not the render list).
     static func == (lhs: DailyDirective, rhs: DailyDirective) -> Bool {
         lhs.headline == rhs.headline && lhs.rationale == rhs.rationale

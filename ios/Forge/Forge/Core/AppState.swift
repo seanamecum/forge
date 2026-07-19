@@ -139,7 +139,9 @@ final class AppState {
     var forgeScore: Int {
         let b = forgeScoreBreakdown
         let total = b.reduce(0.0) { $0 + Double($1.value) * $1.weight }
-        return Int(total.rounded())
+        // A single out-of-range component (weights sum to 1.0) must never push
+        // the headline index past 0–100. See ForgeScoreBounds / ScoringTests.
+        return ForgeScoreBounds.clamp(total)
     }
 
     var forgeScoreBreakdown: [ScoreComponent] {
