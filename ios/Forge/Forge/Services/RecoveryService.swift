@@ -21,6 +21,19 @@ final class RecoveryService {
 
     var forgeScoreTrend: [Double] { MockData.forgeScoreTrend }
 
+    /// Values of a named trend series (Recovery · Sleep · Strain · HRV), or empty.
+    /// One accessor instead of `trends.first { $0.name == … }` scattered around.
+    func series(_ name: String) -> [Double] {
+        trends.first { $0.name == name }?.values ?? []
+    }
+
+    /// The athlete's strain baseline — the single source for the acute:chronic
+    /// comparisons in the Directive and the workout generator.
+    var strainBaseline: Double {
+        let s = series("Strain")
+        return s.isEmpty ? 0 : s.reduce(0, +) / Double(s.count)
+    }
+
     var connectedCount: Int { wearables.filter(\.connected).count }
 
     func toggleConnection(_ device: WearableDevice) {

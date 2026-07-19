@@ -202,9 +202,9 @@ final class AppState {
         var out: [ScoreChange] = []
 
         func dayMove(_ name: String) -> Double? {
-            guard let s = recovery.trends.first(where: { $0.name == name }), s.values.count >= 2
-            else { return nil }
-            return s.values[s.values.count - 1] - s.values[s.values.count - 2]
+            let s = recovery.series(name)
+            guard s.count >= 2 else { return nil }
+            return s[s.count - 1] - s[s.count - 2]
         }
         if let r = dayMove("Recovery") {
             if r >= 1.5 { out.append(ScoreChange(text: "Recovery improved", positive: true)) }
@@ -370,7 +370,7 @@ final class AppState {
             injuries: injuries.active.map(\.type),
             level: user.fitnessLevel,
             recentStrain: recovery.today.strainYesterday,
-            strainBaseline: average(recovery.trends.first { $0.name == "Strain" }?.values ?? []))
+            strainBaseline: recovery.strainBaseline)
     }
 
     /// Today's directive — the full prescribed plan, synthesized by DirectiveEngine
@@ -391,7 +391,7 @@ final class AppState {
             workoutName: workouts.workoutName(goal: user.primaryGoal, injuries: injuries.active.map(\.type)),
             soreness: checkIn?.soreness,
             trainingLoadYesterday: d.strainYesterday,
-            trainingLoadAvg: average(recovery.trends.first { $0.name == "Strain" }?.values ?? []),
+            trainingLoadAvg: recovery.strainBaseline,
             calorieTarget: nutrition.calorieTarget,
             proteinTarget: nutrition.proteinTarget,
             mobilityMinutes: injury != nil ? 20 : 12,
@@ -405,7 +405,7 @@ final class AppState {
     /// MacroFactor-style adaptivity, Forge-style integration: training load,
     /// weight trend, recovery, and injuries move the targets — with reasons.
     func refreshFuelPlan() {
-        let strain = recovery.trends.first { $0.name == "Strain" }?.values ?? []
+        let strain = recovery.series("Strain")
         let strainAvg7 = strain.suffix(7).isEmpty ? 0
             : strain.suffix(7).reduce(0, +) / Double(strain.suffix(7).count)
         nutrition.activePlan = AdaptiveNutritionEngine.plan(.init(
@@ -566,14 +566,11 @@ final class AppState {
     /// The weekly recap — trend windows synthesized into wins, watch-outs, and
     /// next week's single focus. The Directive's longer-horizon sibling.
     var weeklyReport: WeeklyReport {
-        func series(_ name: String) -> [Double] {
-            recovery.trends.first { $0.name == name }?.values ?? []
-        }
         return WeeklyReportEngine.make(
-            recovery: series("Recovery"),
-            sleep: series("Sleep"),
-            strain: series("Strain"),
-            hrv: series("HRV"),
+            recovery: recovery.series("Recovery"),
+            sleep: recovery.series("Sleep"),
+            strain: recovery.series("Strain"),
+            hrv: recovery.series("HRV"),
             streakDays: user.streakDays,
             lever: forgeScoreLever)
     }

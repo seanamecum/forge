@@ -26,6 +26,14 @@ final class RecoveryEstimatorTests: XCTestCase {
 
     // MARK: Provenance + live derivation
 
+    func testSeriesAndStrainBaseline() {
+        let svc = RecoveryService()
+        let strain = svc.series("Strain")
+        XCTAssertFalse(strain.isEmpty)
+        XCTAssertEqual(svc.strainBaseline, strain.reduce(0, +) / Double(strain.count), accuracy: 0.0001)
+        XCTAssertTrue(svc.series("does-not-exist").isEmpty)
+    }
+
     func testDefaultsToDemoProvenance() {
         let svc = RecoveryService()
         XCTAssertEqual(svc.provenance, .demo)
