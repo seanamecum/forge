@@ -17,7 +17,7 @@ final class CoachViewModel {
         let mode = ForgeConfig.aiMode == .mock ? " (demo coach — configure the proxy for live AI)" : ""
         messages.append(CoachMessage(
             role: .coach,
-            text: "\(hello), \(first). I'm reading everything — last night's sleep, your HRV, the knee, yesterday's bench session, today's protein pace\(mode). Ask me anything.",
+            text: "\(hello), \(first). I'm reading your latest signals — sleep, HRV, recovery, training load, and today's fuel pace\(mode). Ask me anything, and tap “Signals Forge used” under any reply to see exactly what I based it on.",
             suggestions: Array(AIService.quickPrompts.prefix(3))
         ))
     }
