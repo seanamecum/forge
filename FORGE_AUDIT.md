@@ -51,10 +51,13 @@ git checkout -b audit/launch-hardening
 **Claim correction:** `ios/README.md` states "149 tests." The real discoverable count this session is
 **178 executed (+2 skipped) = 180 defined.** The README figure is stale, not inflated.
 
-**Skipped-test cause (finding, see P1-12):** the 2 skipped tests are
-`AIServiceTests.testMockModeWhenNoKey` and `testCoachEndpointFollowsMode`. They skip with
-*"Secrets.plist present — device is configured for the live proxy."* Because `ios/Forge/Forge/Secrets.plist`
-is **committed**, the mock↔live AI-mode switching has **no executed coverage** in this build.
+**Skipped-test cause:** the 2 skipped tests are `AIServiceTests.testMockModeWhenNoKey` and
+`testCoachEndpointFollowsMode`. They skip with *"Secrets.plist present — device is configured for the
+live proxy."* This is a **local-only** artifact: `ios/Forge/Forge/Secrets.plist` exists on the developer
+machine but is **gitignored and never committed** (verified: `git ls-files`/`git log` show it untracked
+with no history; `.gitignore:14` covers `ios/**/Secrets.plist`). A clean CI checkout has no `Secrets.plist`,
+so those 2 tests **do run** in CI. **Correction:** an earlier draft of this report (P1-12) called the file
+"committed" — that was wrong; see the struck finding below.
 
 **Runtime noise observed:** the test log emits repeated `CoreData: error … Sandbox access to
 file-write-create denied` for the App-Group store `group.com.forge.performance`. Non-fatal in the
@@ -242,11 +245,12 @@ inconsistent: `terms:92-96` and `feedback:80` use a **personal Gmail**, while pr
 **Impact:** the privacy policy makes false statements about accounts and server data; contradictory,
 counsel-unreviewed legal docs with placeholder dates and a personal email cannot ship.
 
-**P1-12 · `Secrets.plist` committed → suppresses AI-mode tests** — *(VERIFIED)*
-`ios/Forge/Forge/Secrets.plist` is in the source tree though `ForgeConfig`/`.gitignore` describe it as
-gitignored. It holds only the CoachProxyURL (no secret), but its presence auto-skips the two AI-mode
-tests. **Impact:** the mock-vs-live decision (the core honesty control for "is this real AI?") is untested
-in CI, and the file contradicts the documented secret model.
+**P1-12 · ~~`Secrets.plist` committed → suppresses AI-mode tests~~** — **RETRACTED / FALSE POSITIVE**
+An earlier draft claimed this file was committed. On direct verification it is **untracked, never in git
+history, and correctly gitignored** (`.gitignore:14`). It exists only on the developer's local disk (holds
+just the CoachProxyURL, no secret). The 2 AI-mode tests skip **locally** because the file is present there,
+but a clean CI checkout has no such file, so they run in CI. **No action needed.** Left here, struck, for
+audit-trail honesty rather than silently deleted.
 
 **P1-13 · CI is missing key gates** — *(VERIFIED by reading `.github/workflows/ci.yml`)*
 CI runs iOS build+test and web `npm ci`/`npm test`/`npm run build`, but **no** lint, standalone
@@ -388,15 +392,29 @@ counsel-review warning until counsel actually reviews.
 > Scores reflect launch risk, not polish. The app builds clean and its engines are well-tested, but
 > unresolved P0 security/safety/honesty issues cap both scores.
 
+**Initial (pre-fix):**
 - **Beta readiness: 55 / 100.** Builds Debug+Release with 0 warnings, 178 tests pass, core flows
   (auth, HealthKit, nutrition, logging) are real. Held down by: unprotected `challenge_members` +
   self-writable billing (P0-1/2), concussion "game cleared" + RTP "Cleared" (P0-3/4), app-open streak
   (P0-5), demo-as-real signals (P0-6), tokens in UserDefaults (P1-1).
 - **App Store readiness: 35 / 100.** Additionally blocked by: privacy policy that misstates accounts/
   server data (P1-11), draft legal + personal-email contact, incomplete data export (P1-4), missing
-  Keychain/refresh, unverifiable feedback RLS (P0-7), "3 million products" claim (P1-10), advertised
+  Keychain/refresh, feedback RLS not in source (P0-7), "3 million products" claim (P1-10), advertised
   prices with no StoreKit (P2-11), CI gaps (P1-13), and everything in §7 that needs device/Apple/Supabase
   verification.
+
+**Revised after Groups A–G (this session):**
+- **Beta readiness: 68 / 100.** ⬆ from medical-safety (P0-3/4), honest streak (P0-5), clamped/safe
+  numbers (P1-7/8), data rights (P1-4), Keychain + typed feedback (P1-1/5). **Still capped by, and
+  contingent on:** the Group A RLS migration being **applied** in Supabase (P0-1/2/7 are fixed *in code*
+  but the live DB stays exposed until `0002` runs) and **P0-6 only partially closed** — the medical/score
+  honesty is fixed, but a *connected* Forge Score still blends real sleep/HRV with mock recovery/strain
+  without a demo label, and forecast/injury-risk still show fabricated confidence. Those remain open.
+- **App Store readiness: 52 / 100.** ⬆ from legal accuracy (P1-11), complete export + clear deletion
+  (P1-4 / 5.1.1(v)), honest nutrition claim (P1-10), CI gates (P1-13). **Still capped by:** legal docs are
+  still **draft pending counsel**; the web + CI changes are **unverified here** (no Node); Keychain/refresh
+  need **device** verification; P0-6 residue above; pricing/marketing needs a **product decision** (P2-9);
+  and all §7 device/Apple/Supabase items. These scores assume nothing until those verifications pass.
 
 ## 9. Recommended next steps (exact order)
 
@@ -483,10 +501,31 @@ All iOS changes below were re-verified: **iOS tests 194 executed / 2 skipped / 0
 - **Tests:** `FeedbackErrorTests` (HTTP + URLError + validation mapping, non-technical copy).
   ⚠︎ Keychain persistence + token refresh need **on-device** verification (§7) — not exercised by the sim tests.
 
-### Not yet started (Groups F–G)
-Website legal contradiction + "3 million products" claim (F, can't build/test here — no Node), CI expansion +
-remove committed `Secrets.plist` (G). Tracked in §6.
+### Group F — honest claims + legal accuracy (P1) · iOS tested; web static-only
+- **P1-10** iOS nutrition empty-state "the barcode scanner … knows about 3 million products" → honest
+  "Try the barcode scanner to look up supported packaged foods, or add a food manually."
+  *(NutritionHomeView.swift)* — covered by the iOS test rebuild.
+- **P1-11** website legal accuracy: Privacy and Support no longer claim "no account system / nothing
+  server-side" — they now describe the **optional Supabase account** (email + account record on our
+  servers, deletable in-app) while keeping health-data-on-device accurate. Terms legal contact changed
+  from a **personal Gmail** to `legal@forge.app`. *(privacy/page.tsx, support/page.tsx, terms/page.tsx)*
+  - ⚠︎ **Kept intact on purpose:** the Terms/Privacy **DRAFT** status, "Effective: at public launch"
+    placeholder, and **"have counsel review before launch"** warnings — not removed (counsel has not
+    reviewed). The `forge.app` email domain must be provisioned before launch.
+  - ⚠︎ **Web changes NOT built/linted/tested** — no Node here. Static content edits only.
+  - **Still open (P2-9):** landing-page pricing ($19/$39/$79) vs Terms "free", and marketing 20 mock
+    modules presented as shipped — these need a **product decision** (are paid tiers/features shipping?),
+    so left for you rather than guessed.
 
-*Status: Groups A–E implemented; iOS re-verified green (202 tests, 2 skipped, 0 failures; Debug+Release
-0 warnings). Group A SQL awaits dashboard apply; Keychain/refresh await device verification. Scores in §8
-will be revised after F–G land and the §7 verifications are done.*
+### Group G — CI gates (P1-13) · config only (can't run here)
+- Expanded `.github/workflows/ci.yml`: web job now runs **lint** + **typecheck** before test/build; new
+  **security** job runs **gitleaks** secret scan (full history) + `npm audit --audit-level=high` (advisory).
+- Added `.eslintrc.json` (`next/core-web-vitals`) so `next lint` runs non-interactively, and a `typecheck`
+  script (`tsc --noEmit`) to `package.json`.
+- **G2 (remove committed `Secrets.plist`) — not needed:** it was never committed (see retracted P1-12).
+- ⚠︎ **Not executed here** (no Node/Actions). If latent lint/type errors exist, the new gates will surface
+  them on first CI run — that is the gate working; run `npm run lint && npm run typecheck` locally to see.
+
+*Status: Groups A–G implemented. iOS re-verified green (202 tests, 2 skipped, 0 failures; Debug+Release
+0 warnings). Unverified-here (flagged): Group A SQL (apply in Supabase dashboard), all Group F web + Group G
+CI (no Node/Actions), Keychain/refresh (needs device). Scores in §8 revised below.*
