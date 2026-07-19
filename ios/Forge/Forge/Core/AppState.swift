@@ -320,7 +320,9 @@ final class AppState {
             equipment: user.equipment.first ?? .fullGym,
             recovery: recovery.today.recovery,
             injuries: injuries.active.map(\.type),
-            level: user.fitnessLevel)
+            level: user.fitnessLevel,
+            recentStrain: recovery.today.strainYesterday,
+            strainBaseline: average(recovery.trends.first { $0.name == "Strain" }?.values ?? []))
     }
 
     /// Today's directive — the full prescribed plan, synthesized by DirectiveEngine
