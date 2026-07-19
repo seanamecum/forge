@@ -168,28 +168,17 @@ final class AppState {
         phase = .welcome
     }
 
-    /// Forge Score 0–100 — weighted blend of the nine signal inputs.
-    var forgeScore: Int {
-        let b = forgeScoreBreakdown
-        let total = b.reduce(0.0) { $0 + Double($1.value) * $1.weight }
-        // A single out-of-range component (weights sum to 1.0) must never push
-        // the headline index past 0–100. See ForgeScoreBounds / ScoringTests.
-        return ForgeScoreBounds.clamp(total)
-    }
+    /// Forge Score 0–100 — the weighted blend, delegated to the pure ForgeScoreEngine.
+    var forgeScore: Int { ForgeScoreEngine.score(forgeScoreBreakdown) }
 
     var forgeScoreBreakdown: [ScoreComponent] {
         let d = recovery.today
         let n = nutrition
-        return [
-            ScoreComponent(label: "Sleep", value: d.sleepScore, weight: 0.18),
-            ScoreComponent(label: "Recovery (HRV)", value: d.recovery, weight: 0.18),
-            ScoreComponent(label: "Nutrition", value: n.nutritionScore, weight: 0.14),
-            ScoreComponent(label: "Hydration", value: n.hydrationScore, weight: 0.08),
-            ScoreComponent(label: "Training Load", value: d.trainingLoadScore, weight: 0.14),
-            ScoreComponent(label: "Activity", value: d.activityScore, weight: 0.08),
-            ScoreComponent(label: "Stress", value: d.stressScore, weight: 0.10),
-            ScoreComponent(label: "Injury Status", value: injuries.injuryStatusScore, weight: 0.10),
-        ]
+        return ForgeScoreEngine.breakdown(
+            sleep: d.sleepScore, recovery: d.recovery,
+            nutrition: n.nutritionScore, hydration: n.hydrationScore,
+            trainingLoad: d.trainingLoadScore, activity: d.activityScore,
+            stress: d.stressScore, injury: injuries.injuryStatusScore)
     }
 
     /// Plain-language explanation of what's raising and lowering the score today.

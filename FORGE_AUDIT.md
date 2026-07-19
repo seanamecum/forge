@@ -711,3 +711,18 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
 - **Tests:** `RecommendationBasisTests` (+4) — recovery basis is Low/flags Apple-Health in demo and lifts to
   Moderate with fresh live HRV + check-in; nutrition basis is Moderate + names the missing log with nothing
   eaten, High once intake is logged. iOS **248 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+
+## 12. Quality / architecture pass (post-loop)
+
+Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never
+sacrifice stability for speed; behaviour-preserving refactors verified by the *existing* tests staying green.
+
+### QA-1 — extract the Forge Score into a pure `ForgeScoreEngine` (starts AppState decomposition; audit P2-4/god-object)
+- **Problem:** the flagship metric's weights + blend lived inline in the ~500-line `AppState` and were tested
+  only indirectly via `AppState()`.
+- **Fix:** new `Core/ForgeScoreEngine.swift` owns the eight weighted components (single source of truth) and
+  the clamped blend; `AppState.forgeScore`/`forgeScoreBreakdown` delegate to it. Pure, behaviour-preserving.
+- **Tests:** `ForgeScoreEngineTests` (+6) — weights sum to 1.0, 8 expected labels, uniform breakdown scores to
+  the value, out-of-range components can't escape 0–100, values pass through, and the engine matches
+  `AppState`'s own computation. **All prior `ScoringTests` still pass** (behaviour preserved). iOS **254
+  tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
