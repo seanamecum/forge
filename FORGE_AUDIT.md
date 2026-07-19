@@ -547,3 +547,28 @@ All iOS changes below were re-verified: **iOS tests 194 executed / 2 skipped / 0
 *Status: Groups A–G + the P0-6 residue implemented. iOS re-verified green (206 tests, 2 skipped, 0
 failures; Debug+Release 0 warnings). Unverified-here (flagged): Group A SQL (apply in Supabase dashboard), all Group F web + Group G
 CI (no Node/Actions), Keychain/refresh (needs device). Scores in §8 revised below.*
+
+---
+
+## 11. Continuous improvement — intelligence-loop initiative
+
+Beyond the launch audit, ongoing work to make "every system feeds the intelligence layer" real.
+
+### Slice 1 — training feeds the Forge Score (closes P2-1 for training) · iOS, tested
+- **Problem:** finishing a workout only wrote history + PRs; `recovery.today.strain*` stayed seeded, so
+  the score's Training Load component (14%) never reflected real training. Loop open.
+- **Fix:** new pure `Core/TrainingLoadEngine.swift` (session/day strain on the 0–21 scale from duration ×
+  RPE-intensity, v1, disclosed). `AppState.applyTrainingLoad(sessions:)` (DI, testable) maps **persisted
+  (real) workouts only** — never the demo-laced in-memory history — into `strainToday`/`strainYesterday`;
+  a `@MainActor` convenience pulls from persistence. Called in `rehydrate()` and after each `saveWorkout()`
+  in `WorkoutLoggerView` + `RunningView`. Empty/demo history leaves seeded values untouched (demo stays
+  coherent; existing tests unaffected).
+- **Model choice (residual):** today's session sets `strainToday` now and becomes tomorrow's
+  `strainYesterday` (the score driver) — matches next-day training-load physiology, no demo destabilization.
+  A same-day *acute* penalty is a deliberate follow-up pending product sign-off. Directive headline
+  (recovery-band-driven) not yet strain-fed — next slice.
+- **Tests:** `TrainingLoadTests` — engine bounds/monotonicity/cap, empty-leaves-demo, and an **end-to-end
+  loop proof** that a hard logged day yields higher strain → lower `trainingLoadScore` → lower `forgeScore`
+  than a light day. iOS **211 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+- **Still open in this initiative:** workout → HRV/recovery (only strain today); injury singleton (P2-2);
+  strain into the Directive headline + generator; nutrition/sleep already partially wired.
