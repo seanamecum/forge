@@ -404,12 +404,13 @@ counsel-review warning until counsel actually reviews.
   verification.
 
 **Revised after Groups A–G (this session):**
-- **Beta readiness: 68 / 100.** ⬆ from medical-safety (P0-3/4), honest streak (P0-5), clamped/safe
-  numbers (P1-7/8), data rights (P1-4), Keychain + typed feedback (P1-1/5). **Still capped by, and
+- **Beta readiness: 72 / 100.** ⬆ from medical-safety (P0-3/4), honest streak (P0-5), clamped/safe
+  numbers (P1-7/8), data rights (P1-4), Keychain + typed feedback (P1-1/5), and **P0-6 now closed** —
+  connected recovery is derived from the user's own live signals (disclosed estimate), provenance is
+  labeled ("Partial · estimated"), and forecast/injury-risk are marked "Sample." **Still capped by, and
   contingent on:** the Group A RLS migration being **applied** in Supabase (P0-1/2/7 are fixed *in code*
-  but the live DB stays exposed until `0002` runs) and **P0-6 only partially closed** — the medical/score
-  honesty is fixed, but a *connected* Forge Score still blends real sleep/HRV with mock recovery/strain
-  without a demo label, and forecast/injury-risk still show fabricated confidence. Those remain open.
+  but the live DB stays exposed until `0002` runs), and the residual mock inputs that still feed the score
+  (strain/sleep-debt/readiness are seeded — now honestly labeled, not yet live-sourced).
 - **App Store readiness: 52 / 100.** ⬆ from legal accuracy (P1-11), complete export + clear deletion
   (P1-4 / 5.1.1(v)), honest nutrition claim (P1-10), CI gates (P1-13). **Still capped by:** legal docs are
   still **draft pending counsel**; the web + CI changes are **unverified here** (no Node); Keychain/refresh
@@ -526,6 +527,23 @@ All iOS changes below were re-verified: **iOS tests 194 executed / 2 skipped / 0
 - ⚠︎ **Not executed here** (no Node/Actions). If latent lint/type errors exist, the new gates will surface
   them on first CI run — that is the gate working; run `npm run lint && npm run typecheck` locally to see.
 
-*Status: Groups A–G implemented. iOS re-verified green (202 tests, 2 skipped, 0 failures; Debug+Release
-0 warnings). Unverified-here (flagged): Group A SQL (apply in Supabase dashboard), all Group F web + Group G
+### Group P0-6 — demo-as-real residue closed · iOS, tested
+- **Recovery headline no longer shows the demo athlete's number to a connected user.** New
+  `Core/RecoveryEstimator.swift` derives recovery (0–100) from the user's **live** HRV-vs-baseline (50%),
+  resting-HR (20%), and sleep (30%) — a *disclosed heuristic, not a clinical model* — and
+  `RecoveryService.applyUnifiedSignals()` uses it **only when the winning HRV is a genuine live reading**;
+  no live data → the seeded value stays, clearly labeled demo.
+- **Honest provenance replaces auth-state guessing.** `DataProvenance` (`.demo`/`.partial`/`.live`;
+  `.live` deliberately unreachable while strain/sleep-debt aren't sourced live) drives the labels on the
+  Dashboard hero, Recovery hero, and Wearables — a *connected but still-estimated* score now reads
+  **"Partial · estimated"** instead of a clean number. Recovery subtitle states whether the number is
+  "Estimated from your HRV…" or "Demo recovery…".
+- **Forecast + injury-risk no longer pose as computed.** Forecast screen labeled **"Sample data — not from
+  your history"** with reworded confidence/disclaimer; injury-risk cards (Recovery + Dashboard) tagged
+  **"Sample"** with "an illustration of the model, not a medical prediction about you."
+- **Tests:** `RecoveryEstimatorTests` (bounds, direction, zero-baseline safety, provenance flips to
+  `.partial` and recovery reflects the live HRV, not the demo value).
+
+*Status: Groups A–G + the P0-6 residue implemented. iOS re-verified green (206 tests, 2 skipped, 0
+failures; Debug+Release 0 warnings). Unverified-here (flagged): Group A SQL (apply in Supabase dashboard), all Group F web + Group G
 CI (no Node/Actions), Keychain/refresh (needs device). Scores in §8 revised below.*
