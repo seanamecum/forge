@@ -697,3 +697,17 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
   iOS **244 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
 - **Loop status:** training now flows end-to-end — logged session → strain → **Forge Score + Directive
   headline + the prescribed workout's sets/RPE**, each explaining itself.
+
+### Initiative 3b — transparency contract extended to recovery + nutrition · iOS, tested
+- **Problem:** the `RecommendationBasis` contract covered only the Forge Score + Directive; recovery and
+  the coached fuel targets still gave numbers without exposing their basis.
+- **Fix:** `AppState.recoveryBasis` (HRV vs baseline, RHR, sleep, sleep-debt; confidence from provenance +
+  check-in; honestly flags missing live/fresh HRV and demo state) and `AppState.nutritionBasis` (bodyweight,
+  activity, goal, logged intake, each adaptive adjustment's reason; confidence High once meals are logged,
+  Moderate otherwise; **discloses that weight-trend adjustments run on sample weigh-ins** until real
+  body-weight history exists). Both surfaced via the reusable `RecommendationBasisView` on the recovery
+  hero and the Fuel card. Now all four flagship recommendations — Score, Directive, Recovery, Nutrition —
+  and the Coach explain themselves the same way.
+- **Tests:** `RecommendationBasisTests` (+4) — recovery basis is Low/flags Apple-Health in demo and lifts to
+  Moderate with fresh live HRV + check-in; nutrition basis is Moderate + names the missing log with nothing
+  eaten, High once intake is logged. iOS **248 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
