@@ -588,3 +588,26 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
   0 warnings.**
 - **Note:** baseline uses the seeded strain trend until real strain history is persisted (honest
   approximation); wiring a real rolling strain baseline is a follow-up.
+
+### Initiative 2 — injury is real, editable, connected (closes P2-2) · iOS, tested
+- **Problem:** `InjuryService.active` was a hardcoded `[MockData.knee]` singleton; "Log a New Injury"
+  was a literal no-op (`FlowChips(toggle: {_ in})`); nothing persisted; and the pain slider had a
+  shared-`@State` bug (one slider seeded from the demo knee, reused across every injury).
+- **Fix:**
+  - `InjuryProfile` + `InjuryPhase` made `Codable`; `InjuryService` now **persists** `active` as JSON
+    (`forge.injuries.v1`) and loads it on init — presence-based, so **resolving to empty sticks** and the
+    demo knee doesn't return. Persistence gated by `isTestRun` (hermetic tests).
+  - Real editing: `add(type:phase:pain:)`, `resolve(_:)`, and persisted `logPain`. A focused
+    **`LogInjurySheet`** (area · phase · starting pain) replaces the no-op; an extracted
+    **`ActiveInjuryCard`** fixes the slider bug (per-injury state) and adds **"Mark resolved"**; an honest
+    **empty state** when clear.
+  - Pipeline was already generic over `active` — added injuries now genuinely flow into the workout
+    generator's constraints (knee/shoulder/back swaps), `injuryStatusScore` (Forge Score, 10%), the
+    Directive priority, and RehabEngine. Kept the wellness/see-a-clinician framing in the log flow.
+- **Tests:** `InjuryServiceTests` (+7) — seed/add/resolve/logPain, `injuryStatusScore` reacts,
+  severity mapping, `Codable` round-trip, and an **end-to-end proof** that a newly-logged shoulder injury
+  blocks the barbell bench and queues the neutral-grip swap in the actual prescribed session.
+  iOS **221 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+- **Still demo-tied (flagged):** the knee/concussion rehab sub-modules (`rtsChecklist`, `rtpStages`) and
+  the illustrative `InjuryRisk` remain seeded (already labeled "Sample"); making those fully per-injury
+  dynamic is a larger follow-up.
