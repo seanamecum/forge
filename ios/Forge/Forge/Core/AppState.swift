@@ -182,18 +182,7 @@ final class AppState {
     }
 
     /// Plain-language explanation of what's raising and lowering the score today.
-    var forgeScoreNarrative: String {
-        let sorted = forgeScoreBreakdown.sorted { $0.value < $1.value }
-        guard let lowest = sorted.first, let highest = sorted.last else { return "" }
-        let second = sorted.dropFirst().first
-        let drags: String
-        if let second, second.value < 75 {
-            drags = "\(lowest.label) (\(lowest.value)) and \(second.label) (\(second.value))"
-        } else {
-            drags = "\(lowest.label) (\(lowest.value))"
-        }
-        return "Held back by \(drags). Lifted by \(highest.label) (\(highest.value))."
-    }
+    var forgeScoreNarrative: String { ForgeScoreEngine.narrative(forgeScoreBreakdown) }
 
     /// Why the score moved — signed contributors, so the number feels alive.
     /// Positives blend day-over-day trend movement with today's strong components;
@@ -228,14 +217,7 @@ final class AppState {
     }
 
     /// The single component where the most points are recoverable — what to fix first.
-    var forgeScoreLever: String {
-        guard let c = forgeScoreBreakdown.max(by: {
-            Double(100 - $0.value) * $0.weight < Double(100 - $1.value) * $1.weight
-        }) else { return "" }
-        let gain = Int((Double(100 - c.value) * c.weight).rounded())
-        guard gain > 0 else { return "Every input is dialed — hold the line." }
-        return "\(c.label) is your biggest lever — up to +\(gain) points on the table."
-    }
+    var forgeScoreLever: String { ForgeScoreEngine.lever(forgeScoreBreakdown) }
 
     /// The transparency contract behind today's Forge Score — inputs used, what's
     /// missing, confidence, freshness, and the safe fallback. Surfaced in the UI so

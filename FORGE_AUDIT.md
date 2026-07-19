@@ -763,3 +763,16 @@ sacrifice stability for speed; behaviour-preserving refactors verified by the *e
   dailyDirective.workoutName` invariant is preserved and still enforced by `ProductionReadinessTests`.
 - **Tests:** `GeneratorTests` (+1) — the cheap name equals `generate(...).name` across goals × injuries.
   iOS **255 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+
+### QA-3 — centralize trend-series + strain baseline on `RecoveryService` (dedup)
+- Removed `recovery.trends.first { $0.name == … }` + `average(strain)` duplicated across 5 `AppState` sites;
+  `RecoveryService.series(_:)` + `strainBaseline` are the single source, living where the `trends` data does.
+  Behaviour-preserving. `RecoveryEstimatorTests` +1. iOS **256 tests, 0 failures; Debug+Release 0 warnings.**
+
+### QA-4 — consolidate Forge Score explanation into `ForgeScoreEngine`
+- Moved `forgeScoreNarrative` + `forgeScoreLever` (pure over the breakdown) out of `AppState` into the
+  engine, so *all* score logic — value, weights, and its human "why" — lives behind one directly-tested type.
+- **Tests:** `ForgeScoreEngineTests` (+4) — narrative names weakest/strongest and the second drag only when
+  low; lever picks the highest gap×weight and reads "dialed" when everything's high; and it matches
+  `AppState`'s output. Prior `ScoringTests`/`DirectiveTests` still pass. iOS **260 tests, 2 skipped, 0
+  failures; Debug+Release 0 warnings.**
