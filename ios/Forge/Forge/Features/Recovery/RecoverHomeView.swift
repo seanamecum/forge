@@ -35,6 +35,7 @@ struct RecoverHomeView: View {
                 Text(recoverySourceLine(d))
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.muted)
+                RecommendationBasisView(basis: app.recoveryBasis)
             }
         }
     }

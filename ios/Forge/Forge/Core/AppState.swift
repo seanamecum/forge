@@ -310,6 +310,65 @@ final class AppState {
             asOf: .now, safeFallback: fallback)
     }
 
+    /// The transparency contract behind today's recovery estimate.
+    var recoveryBasis: RecommendationBasis {
+        let d = recovery.today
+        let used = [
+            "HRV \(d.hrv) ms (baseline \(d.hrvBaseline))",
+            "Resting HR \(d.restingHR) bpm",
+            "Sleep \(String(format: "%.1f", d.sleep.hours)) h",
+            "Sleep debt \(String(format: "%.1f", d.sleepDebtHours)) h",
+        ]
+        var missing: [String] = []
+        if recovery.provenance == .demo {
+            missing.append("Live HRV, resting HR & sleep from Apple Health")
+        } else if !recovery.recoveryFromLiveSignals {
+            missing.append("A fresh HRV reading to derive recovery from your own data")
+        }
+        if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
+            missing.append("A current HRV sample (last one ~\(Int(hrvAge))h old)")
+        }
+        let fallback = recovery.recoveryFromLiveSignals ? nil
+            : "Recovery is a demo/estimated value until fresh Apple Health signals are connected."
+        let summary = recovery.recoveryFromLiveSignals
+            ? "Recovery \(d.recovery), derived from your HRV vs baseline, resting HR, and sleep."
+            : "Recovery \(d.recovery) (estimate) — connect Apple Health to base it on your own signals."
+        return RecommendationBasis(
+            summary: summary, inputsUsed: used, inputsMissing: missing,
+            confidence: RecommendationBasis.confidence(provenance: recovery.provenance, hasCheckIn: checkIn != nil),
+            asOf: .now, safeFallback: fallback)
+    }
+
+    /// The transparency contract behind today's coached fuel targets.
+    var nutritionBasis: RecommendationBasis {
+        let n = nutrition
+        var used = [
+            "Bodyweight \(Int(user.weightLb)) lb",
+            "Activity \(user.activityLevel.rawValue)",
+            "Goal \(user.primaryGoal.rawValue)",
+        ]
+        if !n.entries.isEmpty { used.append("Logged today: \(n.calories) kcal · \(n.protein) g protein") }
+        for adj in (n.activePlan?.adjustments ?? []) { used.append(adj.reason) }
+
+        var missing: [String] = []
+        if n.entries.isEmpty { missing.append("Today's logged meals (to track against the target)") }
+        // The adaptive weight-trend adjustments run on sample weigh-ins until real
+        // body-weight history exists — say so rather than imply it's personalized.
+        if n.activePlan?.isAdjusted == true {
+            missing.append("Real weigh-in history (trend adjustments use sample data)")
+        }
+
+        let confidence: RecommendationBasis.Confidence = n.entries.isEmpty ? .moderate : .high
+        let fallback = n.entries.isEmpty
+            ? "Targets come from your profile; log meals so Forge can coach what's left today."
+            : nil
+        let summary = n.activePlan?.adjustments.first?.reason
+            ?? "Fuel targets derived from your bodyweight, activity, and goal."
+        return RecommendationBasis(
+            summary: summary, inputsUsed: used, inputsMissing: missing,
+            confidence: confidence, asOf: .now, safeFallback: fallback)
+    }
+
     /// Today's generated session — built from THIS athlete's goal, equipment,
     /// live recovery, and active injuries (not a canned demo plan). The workout
     /// generator stays a pure engine; this is where its live inputs come from.

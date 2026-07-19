@@ -271,6 +271,7 @@ struct FuelCard: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Theme.gold)
                 }
+                RecommendationBasisView(basis: app.nutritionBasis)
             }
         }
     }

@@ -54,4 +54,46 @@ final class RecommendationBasisTests: XCTestCase {
         XCTAssertNotNil(basis.safeFallback)
         XCTAssertEqual(basis.summary, app.dailyDirective.rationale)
     }
+
+    // MARK: Recovery basis
+
+    func testRecoveryBasisIsHonestInDemo() {
+        let app = AppState()
+        let basis = app.recoveryBasis
+        XCTAssertEqual(basis.confidence, .low)                      // demo, no check-in
+        XCTAssertTrue(basis.inputsUsed.contains { $0.hasPrefix("HRV") })
+        XCTAssertTrue(basis.inputsMissing.contains { $0.contains("Apple Health") })
+        XCTAssertNotNil(basis.safeFallback)
+    }
+
+    func testRecoveryBasisLiftsWithFreshLiveHRVAndCheckIn() {
+        let app = AppState()
+        app.recovery.updateReading(.hrv, value: 55, unit: "ms", source: .appleWatch, ageHours: 1)
+        app.checkIn = CheckInSnapshot(sleepQuality: 4, soreness: 2, energy: 4, stress: 2)
+        XCTAssertEqual(app.recoveryBasis.confidence, .moderate)
+        XCTAssertNil(app.recoveryBasis.safeFallback)               // derived from live signals
+    }
+
+    // MARK: Nutrition basis
+
+    func testNutritionBasisWithNothingLogged() {
+        let app = AppState()
+        app.nutrition.entries = []
+        let basis = app.nutritionBasis
+        XCTAssertEqual(basis.confidence, .moderate)
+        XCTAssertNotNil(basis.safeFallback)
+        XCTAssertTrue(basis.inputsMissing.contains { $0.contains("logged meals") })
+        XCTAssertTrue(basis.inputsUsed.contains { $0.contains("Bodyweight") })
+        XCTAssertFalse(basis.summary.isEmpty)
+    }
+
+    func testNutritionBasisWithLoggedIntake() {
+        let app = AppState()
+        app.nutrition.entries = MockData.todaysEntries
+        guard !app.nutrition.entries.isEmpty else { return }
+        let basis = app.nutritionBasis
+        XCTAssertEqual(basis.confidence, .high)
+        XCTAssertNil(basis.safeFallback)
+        XCTAssertTrue(basis.inputsUsed.contains { $0.contains("Logged today") })
+    }
 }
