@@ -30,7 +30,7 @@ export default function SupportPage() {
     },
     {
       q: "How do I delete my data?",
-      a: "The current release is local-first with no accounts — deleting the app deletes your data. Health data written to Apple Health stays under your control in the Health app.",
+      a: "Forge is local-first: your training and health data lives on your device, and deleting the app deletes it. A Forge account is optional — if you created one, delete it (and its server-side data) anytime in the app under Profile → Account & Data. Health data in Apple Health stays under your control in the Health app.",
     },
   ];
 

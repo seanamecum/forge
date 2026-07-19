@@ -296,7 +296,7 @@ struct FoodSearchSheet: View {
                     EmptyStateView(
                         icon: "magnifyingglass",
                         title: "No foods match \"\(query)\"",
-                        message: "Try the barcode scanner — it knows about 3 million products.")
+                        message: "Try the barcode scanner to look up supported packaged foods, or add a food manually.")
                 }
             }
             .navigationTitle("Add to \(meal.rawValue)")

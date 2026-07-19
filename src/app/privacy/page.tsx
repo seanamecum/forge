@@ -26,8 +26,9 @@ export default function PrivacyPage() {
             <p>
               Forge is local-first. Your health and training data lives on your device.
               We don&apos;t run ads, we don&apos;t sell data, and we don&apos;t track you
-              across apps or websites. The only data that ever leaves your device is what&apos;s
-              needed to answer your questions when live AI coaching is enabled.
+              across apps or websites. Data leaves your device only when it&apos;s needed:
+              to answer your questions when live AI coaching is enabled, and — if you create
+              an optional Forge account — your sign-in email and account record.
             </p>
           </section>
 
@@ -43,8 +44,11 @@ export default function PrivacyPage() {
               <li>Waitlist interest flags (e.g. Forge Band)</li>
             </ul>
             <p className="mt-2">
-              Deleting the app deletes this data. Forge has no account system in the current release,
-              so there is nothing server-side to erase.
+              Deleting the app deletes this on-device data. A Forge account is optional: if you
+              create one, your sign-in email and account record are stored on our servers
+              (via Supabase) so you can sign in across devices. You can delete your account —
+              and its server-side data — anytime in the app (Profile → Account &amp; Data).
+              Deleting the app alone does not remove a cloud account.
             </p>
           </section>
 
@@ -93,7 +97,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="mb-2 font-display text-xl text-cream-100">Changes & contact</h2>
             <p>
-              We&apos;ll update this policy as Forge gains accounts and sync, and material changes
+              We&apos;ll update this policy as Forge adds cross-device sync, and material changes
               will be called out in the app. Questions:{" "}
               <a href="mailto:privacy@forge.app" className="text-gold-200 hover:underline">
                 privacy@forge.app
