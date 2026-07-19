@@ -277,6 +277,8 @@ final class AppState {
             activeInjuryPain: injury?.painToday,
             workoutName: todaysPlan.name,
             soreness: checkIn?.soreness,
+            trainingLoadYesterday: d.strainYesterday,
+            trainingLoadAvg: average(recovery.trends.first { $0.name == "Strain" }?.values ?? []),
             calorieTarget: nutrition.calorieTarget,
             proteinTarget: nutrition.proteinTarget,
             mobilityMinutes: injury != nil ? 20 : 12,

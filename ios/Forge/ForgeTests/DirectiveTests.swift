@@ -8,13 +8,15 @@ final class DirectiveTests: XCTestCase {
                       riskPct: Int = 10, riskBand: String = "Low",
                       injuryName: String? = nil, pain: Int? = nil,
                       workout: String = "Lower — Posterior Chain",
-                      soreness: Int? = nil) -> DailyDirective {
+                      soreness: Int? = nil,
+                      load: Double = 0, loadAvg: Double = 0) -> DailyDirective {
         DirectiveEngine.make(
             recovery: recovery, sleepDebtHours: sleepDebt,
             proteinRemaining: protein, hydrationPct: hydration,
             injuryRiskPercent: riskPct, injuryRiskBand: riskBand,
             activeInjuryName: injuryName, activeInjuryPain: pain,
-            workoutName: workout, soreness: soreness)
+            workoutName: workout, soreness: soreness,
+            trainingLoadYesterday: load, trainingLoadAvg: loadAvg)
     }
 
     func testHighRecoveryPushesHard() {
@@ -71,6 +73,29 @@ final class DirectiveTests: XCTestCase {
     func testLowSorenessDoesNotOverride() {
         let d = make(recovery: 85, soreness: 2)
         XCTAssertEqual(d.headline, "Push hard today.")
+    }
+
+    func testHardYesterdayCapsAGreenLight() {
+        // A load spike over baseline tempers "Push hard" to "moderate" even at high
+        // recovery — you don't stack back-to-back maximal days.
+        let d = make(recovery: 88, load: 20, loadAvg: 12)
+        XCTAssertEqual(d.headline, "Train at moderate intensity.")
+        XCTAssertEqual(d.tone, .gold)
+        XCTAssertTrue(d.rationale.contains("training load ran high yesterday"))
+    }
+
+    func testHardYesterdayDrivesThePriorityAction() {
+        // At fine recovery with nothing else pressing, high load owns the priority.
+        let d = make(recovery: 78, load: 20, loadAvg: 12)
+        XCTAssertTrue(d.priorityAction.contains("trained hard yesterday"))
+        XCTAssertTrue(d.priorityAction.lowercased().contains("reps in reserve"))
+    }
+
+    func testTypicalLoadLeavesTheGreenLight() {
+        // A normal day near baseline must not temper anything.
+        let d = make(recovery: 88, load: 12, loadAvg: 13.9)
+        XCTAssertEqual(d.headline, "Push hard today.")
+        XCTAssertFalse(d.rationale.contains("training load"))
     }
 
     func testScoreNarrativeNamesWeakestDriver() {
