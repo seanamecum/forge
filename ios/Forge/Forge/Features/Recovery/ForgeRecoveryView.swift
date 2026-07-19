@@ -259,7 +259,7 @@ struct ConcussionSection: View {
                     ForEach(app.injuries.concussionSymptoms) { symptom in
                         ConcussionSymptomRow(symptom: symptom)
                     }
-                    CoachNote(text: "Last concussion fully cleared in March. Current readings are baseline noise — log twice daily after any head impact.")
+                    CoachNote(text: "Sample data. Log symptoms twice daily after any head impact and follow your clinician's return-to-play plan — Forge tracks it, it doesn't decide it.")
                 }
             }
 
@@ -364,7 +364,7 @@ struct ReturnToSportSection: View {
                     let done = app.injuries.rtsChecklist.filter(\.done).count
                     let total = app.injuries.rtsChecklist.count
                     CapsuleBar(value: Double(done), target: Double(total), tone: .green, height: 7)
-                    Text("\(done) of \(total) gates cleared · Forge estimate: full clearance in 7–10 days")
+                    Text("\(done) of \(total) self-check gates done · only your PT or physician can clear your return")
                         .font(.system(size: 11)).foregroundStyle(Theme.gold)
                 }
             }

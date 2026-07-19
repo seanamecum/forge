@@ -81,7 +81,7 @@ struct GoalSuggestion: Identifiable {
         GoalSuggestion(title: "Bodyweight 207", unit: "lb", target: 207, current: 200,
                        why: "Lean-bulk endpoint at +0.6 lb/week."),
         GoalSuggestion(title: "Clear knee return-to-sport", unit: "gates", target: 6, current: 3,
-                       why: "3 of 6 RTS gates done — full clearance ~10 days."),
+                       why: "3 of 6 RTS gates done — clearance is your PT's call."),
     ]
 }
 

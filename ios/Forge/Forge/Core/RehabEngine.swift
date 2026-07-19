@@ -75,9 +75,12 @@ enum RehabEngine {
         let raw = 0.5 * checklistPct + 0.3 * Double(injury.strengthPct) + 0.2 * painScore
         let percent = Int(raw.rounded()).clamped(to: 0...100)
 
+        // Forge tracks self-reported progress; it never issues medical clearance.
+        // The top band means the athlete has met the self-check criteria — the
+        // return-to-sport decision still belongs to a clinician.
         let band: String
         switch percent {
-        case 90...:    band = "Cleared"
+        case 90...:    band = "Criteria met"
         case 70..<90:  band = "Nearly there"
         case 45..<70:  band = "On track"
         default:       band = "Early"
@@ -86,7 +89,7 @@ enum RehabEngine {
         let remaining = total - cleared
         let etaText: String
         switch remaining {
-        case 0:    etaText = "Cleared for return"
+        case 0:    etaText = "Final gate: clinician sign-off"
         case 1:    etaText = "~1 week out"
         case 2...3: etaText = "~2–3 weeks out"
         default:   etaText = "4+ weeks out"

@@ -26,7 +26,9 @@ final class RehabEngineTests: XCTestCase {
         XCTAssertFalse(r.etaText.isEmpty)
     }
 
-    func testFullyClearedAndPainFreeReadsCleared() {
+    func testTopBandNeverClaimsMedicalClearance() {
+        // Meeting every self-check gate must NOT read as "cleared" — Forge does
+        // not issue return-to-sport clearance; that is a clinician's call.
         let cleared = MockData.kneeRTSChecklist.map {
             RTSChecklistItem(label: $0.label, detail: $0.detail, done: true)
         }
@@ -35,9 +37,21 @@ final class RehabEngineTests: XCTestCase {
         healthy.strengthPct = 98
         let r = RehabEngine.readiness(checklist: cleared, injury: healthy)
         XCTAssertGreaterThanOrEqual(r.percent, 90)
-        XCTAssertEqual(r.band, "Cleared")
-        XCTAssertEqual(r.etaText, "Cleared for return")
+        XCTAssertEqual(r.band, "Criteria met")
+        XCTAssertEqual(r.etaText, "Final gate: clinician sign-off")
         XCTAssertNil(r.nextMilestone)
+        // Guard against regressing to clearance language anywhere in the result.
+        XCTAssertFalse(r.band.lowercased().contains("cleared"))
+        XCTAssertFalse(r.etaText.lowercased().contains("cleared for"))
+    }
+
+    func testConcussionDemoDoesNotShowGameCleared() {
+        // The concussion return-to-play demo must not depict an athlete already
+        // returned to competition (P0-4).
+        let stages = MockData.rtpStages
+        let contactOrGame = stages.filter { $0.number >= 6 }
+        XCTAssertFalse(contactOrGame.contains { $0.completed },
+                       "Contact/competition RTP stages must not be pre-completed in the demo")
     }
 
     func testDirectiveMobilityActionCarriesTheRehabPlan() {

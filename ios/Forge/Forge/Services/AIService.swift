@@ -317,7 +317,7 @@ enum AIService {
         }
         if q.contains("train hard") || q.contains("push today") || q.contains("go heavy") {
             return CoachMessage(role: .coach,
-                text: "Upper body: yes — recovery 78 and readiness high, so take the bench progression to 185. Lower body: capped. The knee is mid-rehab (phase 2 of 4), so heavy slow resistance only — leg press at 3-0-3 tempo, no jumps, no skating sprints. That's not caution for its own sake; loading the tendon correctly this week is what gets you cleared next week.",
+                text: "Upper body: yes — recovery 78 and readiness high, so take the bench progression to 185. Lower body: capped. The knee is mid-rehab (phase 2 of 4), so heavy slow resistance only — leg press at 3-0-3 tempo, no jumps, no skating sprints. That's not caution for its own sake; loading the tendon correctly this week is what puts your PT in a position to clear you sooner.",
                 steps: ["Recovery 78 / readiness High",
                         "HRV −6% — fine for strength, watch volume",
                         "Knee phase 2 → tempo work yes, plyo no",

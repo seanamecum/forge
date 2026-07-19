@@ -126,8 +126,8 @@ extension MockData {
         RTPStage(number: 3, name: "Light cardio", detail: "Zone 2 bike or jog, 20 min, no head impact.", completed: true),
         RTPStage(number: 4, name: "Sport-specific movement", detail: "Skating drills, no contact.", completed: true),
         RTPStage(number: 5, name: "Non-contact practice", detail: "Full practice intensity without contact.", completed: true),
-        RTPStage(number: 6, name: "Full practice", detail: "Contact. Requires medical clearance.", completed: true),
-        RTPStage(number: 7, name: "Competition return", detail: "Game cleared. Keep monitoring 2 weeks.", completed: true),
+        RTPStage(number: 6, name: "Full practice", detail: "Contact. Only after written medical clearance.", completed: false),
+        RTPStage(number: 7, name: "Competition return", detail: "Requires your physician's clearance. Keep monitoring 2 weeks.", completed: false),
     ]
 
     // MARK: - Injury risk model
