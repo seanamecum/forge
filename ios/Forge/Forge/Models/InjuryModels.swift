@@ -15,7 +15,7 @@ enum InjuryType: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 }
 
-enum InjuryPhase: String, CaseIterable {
+enum InjuryPhase: String, CaseIterable, Codable {
     case acute = "Acute"
     case subacute = "Sub-acute"
     case rehab = "Rehab"
@@ -23,7 +23,7 @@ enum InjuryPhase: String, CaseIterable {
     case resolved = "Resolved"
 }
 
-struct InjuryProfile: Identifiable {
+struct InjuryProfile: Identifiable, Codable {
     let id = UUID()
     let type: InjuryType
     let name: String
@@ -36,6 +36,13 @@ struct InjuryProfile: Identifiable {
     var stabilityPct: Int
     var notes: String
     var painHistory: [Double]   // recent trend
+
+    // `id` is identity-per-session (regenerated on load), so it's excluded from
+    // Codable — mirrors UserProfile and silences the immutable-decode warning.
+    private enum CodingKeys: String, CodingKey {
+        case type, name, painToday, daysOld, phase, severity
+        case mobilityPct, strengthPct, stabilityPct, notes, painHistory
+    }
 }
 
 struct PTExercise: Identifiable {

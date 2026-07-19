@@ -46,55 +46,32 @@ struct ForgeRecoveryView: View {
 
 struct InjuryProfileSection: View {
     @Environment(AppState.self) private var app
-    @State private var painSlider: Double = Double(MockData.knee.painToday)
+    @State private var showLog = false
 
     var body: some View {
         VStack(spacing: 12) {
             riskCard
 
-            ForEach(app.injuries.active) { injury in
-                Card(gold: true) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                EyebrowLabel(text: "\(injury.type.rawValue) · Day \(injury.daysOld)")
-                                Text(injury.name).font(Theme.display(20)).foregroundStyle(Theme.cream)
-                            }
-                            Spacer()
-                            Chip(text: injury.phase.rawValue, tone: .amber)
-                        }
-
-                        Text(injury.notes).font(.system(size: 12)).foregroundStyle(Theme.creamDim)
-
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack {
-                                Text("Pain today").font(.system(size: 12)).foregroundStyle(Theme.muted)
-                                Spacer()
-                                Text("\(Int(painSlider)) / 10")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(painSlider >= 5 ? Theme.rubyBright : Theme.amber)
-                            }
-                            Slider(value: $painSlider, in: 0...10, step: 1) { editing in
-                                if !editing { app.injuries.logPain(Int(painSlider), for: injury) }
-                            }
-                            .tint(painSlider >= 5 ? Theme.ruby : Theme.amber)
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("PAIN TREND · 12 DAYS").font(Theme.eyebrow(8)).kerning(1.4).foregroundStyle(Theme.faint)
-                            Sparkline(values: injury.painHistory, color: Theme.amber, height: 30)
-                        }
-
-                        HStack(spacing: 12) {
-                            recoverySubscore("Mobility", injury.mobilityPct)
-                            recoverySubscore("Strength", injury.strengthPct)
-                            recoverySubscore("Stability", injury.stabilityPct)
-                        }
-                    }
+            if app.injuries.active.isEmpty {
+                injuryEmptyState
+            } else {
+                ForEach(app.injuries.active) { injury in
+                    ActiveInjuryCard(injury: injury)
                 }
             }
 
             addInjuryCard
+        }
+        .sheet(isPresented: $showLog) { LogInjurySheet() }
+    }
+
+    private var injuryEmptyState: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 6) {
+                EyebrowLabel(text: "No active injuries")
+                Text("You're clear. Log one if something flares up — Forge will adjust your training and queue the matching protocol.")
+                    .font(.system(size: 12)).foregroundStyle(Theme.muted)
+            }
         }
     }
 
@@ -132,25 +109,170 @@ struct InjuryProfileSection: View {
                 EyebrowLabel(text: "Log a New Injury")
                 Text("Forge auto-blocks aggravating lifts and queues the matching protocol.")
                     .font(.system(size: 12)).foregroundStyle(Theme.muted)
-                FlowChips(options: InjuryType.allCases.map(\.rawValue),
-                          isSelected: { _ in false }, toggle: { _ in })
+                Button {
+                    Haptics.tap(); showLog = true
+                } label: {
+                    Label("Log an injury", systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(GoldButtonStyle(compact: true))
             }
         }
     }
+}
 
-    private func recoverySubscore(_ label: String, _ value: Int) -> some View {
-        VStack(spacing: 3) {
-            Text("\(value)%")
-                .font(Theme.display(17))
-                .foregroundStyle(value >= 80 ? Theme.green : Theme.amber)
-            Text(label.uppercased())
-                .font(.system(size: 8, weight: .semibold)).kerning(1)
-                .foregroundStyle(Theme.muted)
+/// One active injury: pain logging (per-injury slider — was a shared @State bug),
+/// sub-scores, and a resolve action that immediately stops constraining training.
+private struct ActiveInjuryCard: View {
+    @Environment(AppState.self) private var app
+    let injury: InjuryProfile
+    @State private var painSlider: Double
+    @State private var confirmResolve = false
+
+    init(injury: InjuryProfile) {
+        self.injury = injury
+        _painSlider = State(initialValue: Double(injury.painToday))
+    }
+
+    var body: some View {
+        Card(gold: true) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        EyebrowLabel(text: "\(injury.type.rawValue) · Day \(injury.daysOld)")
+                        Text(injury.name).font(Theme.display(20)).foregroundStyle(Theme.cream)
+                    }
+                    Spacer()
+                    Chip(text: injury.phase.rawValue, tone: .amber)
+                }
+
+                Text(injury.notes).font(.system(size: 12)).foregroundStyle(Theme.creamDim)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack {
+                        Text("Pain today").font(.system(size: 12)).foregroundStyle(Theme.muted)
+                        Spacer()
+                        Text("\(Int(painSlider)) / 10")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(painSlider >= 5 ? Theme.rubyBright : Theme.amber)
+                    }
+                    Slider(value: $painSlider, in: 0...10, step: 1) { editing in
+                        if !editing { app.injuries.logPain(Int(painSlider), for: injury) }
+                    }
+                    .tint(painSlider >= 5 ? Theme.ruby : Theme.amber)
+                }
+
+                if !injury.painHistory.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("PAIN TREND").font(Theme.eyebrow(8)).kerning(1.4).foregroundStyle(Theme.faint)
+                        Sparkline(values: injury.painHistory, color: Theme.amber, height: 30)
+                    }
+                }
+
+                HStack(spacing: 12) {
+                    recoverySubscore("Mobility", injury.mobilityPct)
+                    recoverySubscore("Strength", injury.strengthPct)
+                    recoverySubscore("Stability", injury.stabilityPct)
+                }
+
+                Button("Mark resolved") { confirmResolve = true }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.green)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 2)
+                    .confirmationDialog("Mark \(injury.name) resolved?",
+                                        isPresented: $confirmResolve, titleVisibility: .visible) {
+                        Button("Mark resolved", role: .destructive) { app.injuries.resolve(injury) }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("Forge will stop constraining your training for this injury.")
+                    }
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.bgElevated))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.hairline, lineWidth: 1))
+    }
+}
+
+private func recoverySubscore(_ label: String, _ value: Int) -> some View {
+    VStack(spacing: 3) {
+        Text("\(value)%")
+            .font(Theme.display(17))
+            .foregroundStyle(value >= 80 ? Theme.green : Theme.amber)
+        Text(label.uppercased())
+            .font(.system(size: 8, weight: .semibold)).kerning(1)
+            .foregroundStyle(Theme.muted)
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 10)
+    .background(RoundedRectangle(cornerRadius: 10).fill(Theme.bgElevated))
+    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.hairline, lineWidth: 1))
+}
+
+/// Minimal, focused flow to log a new injury: area, phase, and starting pain.
+private struct LogInjurySheet: View {
+    @Environment(AppState.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    @State private var type: InjuryType = .knee
+    @State private var phase: InjuryPhase = .subacute
+    @State private var pain: Double = 3
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.bgElevated.ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 18) {
+                    field("Area") {
+                        Picker("Area", selection: $type) {
+                            ForEach(InjuryType.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.menu).tint(Theme.gold)
+                    }
+                    field("Phase") {
+                        Picker("Phase", selection: $phase) {
+                            ForEach(InjuryPhase.allCases.filter { $0 != .resolved }, id: \.self) {
+                                Text($0.rawValue).tag($0)
+                            }
+                        }
+                        .pickerStyle(.menu).tint(Theme.gold)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Pain today").font(.system(size: 13)).foregroundStyle(Theme.cream)
+                            Spacer()
+                            Text("\(Int(pain)) / 10").font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(pain >= 5 ? Theme.rubyBright : Theme.amber)
+                        }
+                        Slider(value: $pain, in: 0...10, step: 1)
+                            .tint(pain >= 5 ? Theme.ruby : Theme.amber)
+                    }
+                    Text("Forge will block aggravating lifts and queue the matching protocol. This is training guidance, not medical advice — see a clinician for a real injury.")
+                        .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                    Button("Log injury") {
+                        app.injuries.add(type: type, phase: phase, pain: Int(pain))
+                        Haptics.success()
+                        dismiss()
+                    }
+                    .buttonStyle(GoldButtonStyle())
+                    Spacer()
+                }
+                .padding(20)
+            }
+            .navigationTitle("Log an Injury")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Cancel") { dismiss() }.foregroundStyle(Theme.gold)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .preferredColorScheme(.dark)
+    }
+
+    private func field<Control: View>(_ label: String, @ViewBuilder _ control: () -> Control) -> some View {
+        HStack {
+            Text(label).font(.system(size: 13)).foregroundStyle(Theme.cream)
+            Spacer()
+            control()
+        }
     }
 }
 
