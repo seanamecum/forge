@@ -626,5 +626,23 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
   Score basis is honestly Low + names missing Apple-Health/check-in in demo and never hides its fallback;
   connecting live HRV + logging a check-in lifts confidence to Moderate; the Directive basis exposes its
   inputs and fallback. iOS **226 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
-- **Still open:** extend the same basis to the AI Coach + nutrition/recovery recommendations; track real
-  per-signal freshness timestamps (currently `asOf` = compute time, honest but coarse — ties to P2-6).
+- **Still open:** extend the same basis to nutrition/recovery recommendations; track real per-signal
+  freshness timestamps (currently `asOf` = compute time, honest but coarse — ties to P2-6).
+
+### Initiative 4 — AI Coach reasoning is honest (retires the fabricated "Reasoning" panel) · iOS, tested
+- **Problem (audit §AI):** the Coach's "Reasoning · N signals" panel showed **fabricated per-answer steps**
+  (e.g., "ACR 1.24 — elevated", "HRV 58 vs 62") that implied a model chain-of-thought, and **live replies
+  carried no steps at all** — so the panel was either fake or absent.
+- **Fix:** new `AIService.contextSignals(_:)` returns the **real signals Forge fed the coach** from the live
+  `CoachContext` (Forge Score, recovery/readiness, HRV vs baseline, sleep, sleep debt, training load,
+  protein, hydration, the Directive, any plateau). `reply()` attaches these to **every** reply — mock *and*
+  live — so the panel always reflects true inputs. Removed all fabricated `steps` arrays from `mockReply`
+  (demo answer text/cards remain, still labeled "demo coach"). UI relabeled **"Reasoning · N signals" →
+  "Signals Forge used · N"** (these are inputs, not invented reasoning). Softened the seed message so it no
+  longer fabricates a specific "bench session / knee" before any context exists.
+- **Tests:** `CoachSignalsTests` (+4) — signals reflect real context values and track changes; `mockReply`
+  no longer hardcodes reasoning steps for any prompt; it still answers with text. iOS **230 tests, 2
+  skipped, 0 failures; Debug+Release 0 warnings.**
+- **Unchanged/honest by design:** the live path still uses the Claude proxy (server-side key); the default
+  build is the labeled demo coach (`aiMode = .mock`). Live-vs-mode switching remains covered by the 2
+  `AIServiceTests` (skipped locally only because a gitignored `Secrets.plist` is present; they run in CI).
