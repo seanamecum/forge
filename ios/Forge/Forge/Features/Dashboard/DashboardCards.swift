@@ -30,7 +30,8 @@ struct ForgeScoreHero: View {
                     }
                 }
 
-                Sparkline(values: app.recovery.forgeScoreTrend, height: 36)
+                Sparkline(values: app.recovery.forgeScoreTrend, height: 36,
+                          accessibilityLabel: "Forge Score trend")
 
                 Button {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { showBreakdown.toggle() }

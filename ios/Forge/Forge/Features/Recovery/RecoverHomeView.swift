@@ -118,7 +118,8 @@ struct RecoverHomeView: View {
                         }
                         Sparkline(values: trend.values,
                                   color: trend.name == "Strain" ? Theme.amber : Theme.gold,
-                                  height: 34)
+                                  height: 34,
+                                  accessibilityLabel: "\(trend.name) trend, \(trend.unit)")
                     }
                 }
             }

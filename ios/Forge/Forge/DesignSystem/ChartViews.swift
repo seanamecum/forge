@@ -6,6 +6,9 @@ struct Sparkline: View {
     let values: [Double]
     var color: Color = Theme.gold
     var height: CGFloat = 44
+    /// Context for VoiceOver, e.g. "Recovery trend". The current value + direction
+    /// are appended automatically so the chart isn't silent to VoiceOver.
+    var accessibilityLabel: String? = nil
 
     var body: some View {
         Chart(Array(values.enumerated()), id: \.offset) { item in
@@ -28,6 +31,10 @@ struct Sparkline: View {
         // non-zero domain — clip to the frame so the wash can't bleed into
         // whatever is rendered underneath.
         .clipped()
+        // A trend chart must not be silent to VoiceOver — read it as one element
+        // with a spoken summary instead of an unlabeled graphic.
+        .accessibilityElement()
+        .accessibilityLabel(TrendSummary.describe(values, context: accessibilityLabel))
     }
 
     private var yDomain: ClosedRange<Double> {
@@ -37,11 +44,37 @@ struct Sparkline: View {
     }
 }
 
+/// Pure, tested VoiceOver summary for a series of values — "now 78, up from 72
+/// over 14 points". Shared by every trend chart so they describe themselves the
+/// same way.
+enum TrendSummary {
+    static func describe(_ values: [Double], context: String? = nil) -> String {
+        let body: String
+        guard let last = values.last else {
+            body = "no data yet"
+            return [context, body].compactMap { $0 }.joined(separator: ": ")
+        }
+        let now = number(last)
+        if let first = values.first, values.count > 1, first != last {
+            let direction = last > first ? "up from" : "down from"
+            body = "now \(now), \(direction) \(number(first)) over \(values.count) points"
+        } else {
+            body = "steady at \(now)"
+        }
+        return [context, body].compactMap { $0 }.joined(separator: ": ")
+    }
+
+    private static func number(_ v: Double) -> String {
+        v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v)
+    }
+}
+
 /// Vertical bar trend (strain, volume, etc.).
 struct BarTrend: View {
     let values: [Double]
     var color: Color = Theme.gold
     var height: CGFloat = 56
+    var accessibilityLabel: String? = nil
 
     var body: some View {
         Chart(Array(values.enumerated()), id: \.offset) { item in
@@ -52,6 +85,8 @@ struct BarTrend: View {
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
         .frame(height: height)
+        .accessibilityElement()
+        .accessibilityLabel(TrendSummary.describe(values, context: accessibilityLabel))
     }
 }
 

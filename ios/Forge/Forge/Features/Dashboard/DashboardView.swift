@@ -269,7 +269,8 @@ struct DashboardView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.muted)
                 }
-                Sparkline(values: app.recovery.forgeScoreTrend, height: 72)
+                Sparkline(values: app.recovery.forgeScoreTrend, height: 72,
+                          accessibilityLabel: "Forge Score trend")
                 Text(directive.headline)
                     .font(Theme.text(14))
                     .foregroundStyle(Theme.creamDim)

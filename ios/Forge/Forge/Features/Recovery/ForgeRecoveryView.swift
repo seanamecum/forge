@@ -164,7 +164,8 @@ private struct ActiveInjuryCard: View {
                 if !injury.painHistory.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("PAIN TREND").font(Theme.eyebrow(8)).kerning(1.4).foregroundStyle(Theme.faint)
-                        Sparkline(values: injury.painHistory, color: Theme.amber, height: 30)
+                        Sparkline(values: injury.painHistory, color: Theme.amber, height: 30,
+                                  accessibilityLabel: "Pain trend")
                     }
                 }
 
