@@ -214,6 +214,13 @@ final class WorkoutService {
         )
     }
 
+    /// The session's display name without generating the whole plan — the Directive
+    /// needs the name, not the exercises, so it shouldn't pay for a full generate().
+    /// Must stay consistent with `generate(...).name`.
+    func workoutName(goal: Goal, injuries: [InjuryType]) -> String {
+        goalTitle(goal, kneeSafe: injuries.contains(.knee))
+    }
+
     private func goalTitle(_ goal: Goal, kneeSafe: Bool) -> String {
         switch goal {
         case .buildMuscle: return kneeSafe ? "Upper Push + Knee-Safe Lower" : "Hypertrophy Builder"

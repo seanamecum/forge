@@ -74,6 +74,19 @@ final class GeneratorTests: XCTestCase {
         XCTAssertTrue(plan.rationale.contains("RPE 7"))
     }
 
+    func testCheapWorkoutNameMatchesGeneratedPlanName() {
+        // The Directive uses workoutName(...) instead of running a full generate();
+        // the two must never diverge.
+        let svc = WorkoutService()
+        for injuries in [[InjuryType](), [.knee], [.shoulder]] {
+            for goal in [Goal.buildMuscle, .endurance, .loseFat, .strength] {
+                let plan = svc.generate(goal: goal, minutes: 60, equipment: .fullGym,
+                                        recovery: 78, injuries: injuries, level: .intermediate)
+                XCTAssertEqual(svc.workoutName(goal: goal, injuries: injuries), plan.name)
+            }
+        }
+    }
+
     func testTypicalLoadLeavesTheSessionAlone() {
         let plan = WorkoutService().generate(goal: .buildMuscle, minutes: 60, equipment: .fullGym,
                                              recovery: 88, injuries: [], level: .intermediate,

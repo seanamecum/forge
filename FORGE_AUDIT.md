@@ -726,3 +726,13 @@ sacrifice stability for speed; behaviour-preserving refactors verified by the *e
   the value, out-of-range components can't escape 0–100, values pass through, and the engine matches
   `AppState`'s own computation. **All prior `ScoringTests` still pass** (behaviour preserved). iOS **254
   tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+
+### QA-2 — Directive stops running a full workout generation for a name (perf, audit P2-4)
+- **Problem:** `dailyDirective` read `todaysPlan.name`, and `todaysPlan` runs the whole generator. The
+  Dashboard reads `dailyDirective` ~4× per render (+ `todaysPlan` once), so ~5 full workout generations
+  fired on every home render just to get one deterministic string.
+- **Fix:** `WorkoutService.workoutName(goal:injuries:)` returns the session name via the existing
+  `goalTitle` without building the plan; `dailyDirective` uses it. The `todaysPlan.name ==
+  dailyDirective.workoutName` invariant is preserved and still enforced by `ProductionReadinessTests`.
+- **Tests:** `GeneratorTests` (+1) — the cheap name equals `generate(...).name` across goals × injuries.
+  iOS **255 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**

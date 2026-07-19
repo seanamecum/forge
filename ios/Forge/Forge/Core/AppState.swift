@@ -387,7 +387,8 @@ final class AppState {
             injuryRiskBand: injuries.risk.band,
             activeInjuryName: injury?.type.rawValue,
             activeInjuryPain: injury?.painToday,
-            workoutName: todaysPlan.name,
+            // Cheap name lookup — the Directive doesn't need a full generate() here.
+            workoutName: workouts.workoutName(goal: user.primaryGoal, injuries: injuries.active.map(\.type)),
             soreness: checkIn?.soreness,
             trainingLoadYesterday: d.strainYesterday,
             trainingLoadAvg: average(recovery.trends.first { $0.name == "Strain" }?.values ?? []),
