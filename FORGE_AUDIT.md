@@ -412,5 +412,55 @@ counsel-review warning until counsel actually reviews.
 
 ---
 
-*Status of this document: audit complete and evidence-verified where the environment allowed.
-No source fixes have been applied yet — "Completed fixes" is intentionally empty until Groups A–G land.*
+---
+
+## 10. Completed fixes — this session (Groups A–C)
+
+All iOS changes below were re-verified: **iOS tests 194 executed / 2 skipped / 0 failures**
+(up from 178; +16 new tests), Debug + Release rebuild clean. Branch `audit/launch-hardening`.
+
+### Group A — backend authorization (P0) · `supabase/migrations/0002_rls_hardening.sql`
+- **P0-1** enable RLS + owner policy on `challenge_members`.
+- **P0-2** `subscriptions` → read-own only, writes to service role; `REVOKE UPDATE(plan)` on `profiles`
+  from client roles — users can no longer self-grant paid tiers.
+- **P0-7** define `feedback` as an **insert-only** table for anon (no select/update/delete policy) with
+  length `CHECK`s, bringing the endpoint's protection under source control.
+- ⚠︎ **Delivered, NOT applied/tested** — no Supabase CLI here. Must be run in the dashboard; the file
+  ends with manual verification queries. Rotate the anon key after applying.
+
+### Group B — medical safety (P0) · iOS, tested
+- **P0-3** `RehabEngine.readiness` no longer emits "Cleared"/"Cleared for return"; top band is
+  **"Criteria met"**, eta **"Final gate: clinician sign-off"**. The app tracks self-checks; it never
+  issues return-to-sport clearance. *(RehabEngine.swift)*
+- **P0-4** concussion RTP demo: contact/competition stages 6–7 set `completed: false` and reworded to
+  require written physician clearance (no more "Game cleared"). *(MockRehab.swift)*
+- Removed app-issued clearance estimates and a fabricated clinical fact:
+  RTS footer "Forge estimate: full clearance in 7–10 days" → "only your PT or physician can clear your
+  return"; concussion CoachNote "Last concussion fully cleared in March…" → sample-labeled, defers to
+  clinician; goal-suggestion "full clearance ~10 days" → "clearance is your PT's call"; coach mock reply
+  "gets you cleared next week" → "puts your PT in a position to clear you sooner."
+  *(ForgeRecoveryView.swift, GoalsView.swift, AIService.swift)*
+- **Tests:** `RehabEngineTests.testTopBandNeverClaimsMedicalClearance`,
+  `testConcussionDemoDoesNotShowGameCleared`.
+
+### Group C — number honesty (P0/P1) · iOS, tested
+- **P1-7/P1-8** new shared, tested `Core/Progress.swift` (`Progress` + `ForgeScoreBounds`): one
+  divide-by-zero/NaN/∞-safe, clamp-consistent source for every percentage; Forge Score clamped to 0–100
+  (`AppState.forgeScore`). The fuel card's visual and VoiceOver values now come from the same
+  `displayPercent` — the 100 %-vs-"130 percent" mismatch is gone; added an `accessibilityValue`.
+- **P1-6** hardcoded 10,000-step / 1,000-kcal goals replaced by `TargetEngine.steps`/`activeEnergy`,
+  derived from the athlete's activity + body mass, labeled as goals. *(TargetEngine.swift, DashboardView.swift)*
+- **P0-5** streak now counts **intentional action** — `PersistenceService.activeDays()` (workouts ∪
+  check-ins) feeds `StreakEngine`, not app-open score snapshots. *(PersistenceService.swift,
+  DashboardView.swift, StreakEngine.swift docs)*
+- **P1-9** directive-tip dismissal persists against a stable `DailyDirective.id` via `@AppStorage`, so it
+  survives tab switches/relaunches and re-appears only when the directive changes.
+  *(DirectiveEngine.swift, DashboardView.swift)*
+- **Tests:** `ProgressTests` (12), `TargetEngineTests` (+2 step/energy), directive-id stability.
+
+### Not yet started (Groups D–G)
+Data-export completeness + typed feedback errors + Keychain/refresh (D/E), website legal contradiction
+(F), CI expansion + remove committed `Secrets.plist` (G). Tracked in §6.
+
+*Status: Groups A–C implemented; iOS re-verified green. Group A SQL awaits dashboard apply. Scores in §8
+will be revised after D–G land and the on-device/Supabase verifications in §7 are done.*
