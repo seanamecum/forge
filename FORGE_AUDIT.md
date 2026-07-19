@@ -776,3 +776,12 @@ sacrifice stability for speed; behaviour-preserving refactors verified by the *e
   low; lever picks the highest gap×weight and reads "dialed" when everything's high; and it matches
   `AppState`'s output. Prior `ScoringTests`/`DirectiveTests` still pass. iOS **260 tests, 2 skipped, 0
   failures; Debug+Release 0 warnings.**
+
+### QA-5 — timezone / DST reliability for the streak (audit Phase 9/10)
+- **Problem:** the streak (a user-facing metric) had no coverage for the real-world edges the audit called
+  out — travelling across timezones and the daylight-saving night.
+- **Result:** added `StreakEngineTests` (+4) proving the streak counts **calendar days, not raw 24-hour
+  spans** — 3-day runs survive both the US fall-back (25h day) and spring-forward (23h day), a 23:00→01:00
+  pair reads as two distinct days, and a non-default timezone (Asia/Tokyo) is consistent. **No code change
+  needed** — `StreakEngine` already uses `Calendar` day arithmetic; the tests lock that correctness against
+  regression. iOS **264 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
