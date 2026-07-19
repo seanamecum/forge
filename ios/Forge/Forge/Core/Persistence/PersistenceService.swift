@@ -36,6 +36,29 @@ enum PersistenceService {
     @MainActor
     static var context: ModelContext { container.mainContext }
 
+    /// Erase every locally-stored Forge record + per-day UserDefaults data. Used by
+    /// the explicit "delete data on this phone" action. Does NOT touch Apple Health
+    /// (Forge only reads it) or the cloud account (that is a separate action).
+    @MainActor
+    static func deleteAllLocalData() {
+        try? context.delete(model: UserRecord.self)
+        try? context.delete(model: GoalRecord.self)
+        try? context.delete(model: WorkoutRecord.self)
+        try? context.delete(model: NutritionEntryRecord.self)
+        try? context.delete(model: RecoveryRecord.self)
+        try? context.delete(model: SleepRecord.self)
+        try? context.delete(model: ScoreRecord.self)
+        try? context.delete(model: CheckInRecord.self)
+        try? context.save()
+        // Data keys only — the auth session (forge.auth.*) is cleared by the
+        // separate cloud-account action, so a local wipe leaves you signed in.
+        let defaults = UserDefaults.standard
+        for key in defaults.dictionaryRepresentation().keys
+        where key.hasPrefix("forge.") && !key.hasPrefix("forge.auth.") {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
     private static func startOfToday() -> Date {
         Calendar.current.startOfDay(for: .now)
     }
@@ -80,37 +103,130 @@ enum PersistenceService {
         return workouts.map(\.date) + checkIns.map(\.date)
     }
 
-    /// Everything the athlete owns, as a shareable JSON document.
-    @MainActor
-    static func exportJSON() -> String {
-        func iso(_ d: Date) -> String { d.formatted(.iso8601) }
-        var export: [String: Any] = ["exported_at": iso(.now), "app": "Forge"]
-        if let workouts = try? context.fetch(FetchDescriptor<WorkoutRecord>(sortBy: [SortDescriptor(\.date)])) {
-            export["workouts"] = workouts.map {
-                ["name": $0.name, "date": iso($0.date), "duration_min": $0.durationMin,
-                 "volume_lb": $0.totalVolumeLb, "sets": $0.setCount, "avg_rpe": $0.avgRPE,
-                 "summary": $0.exerciseSummary] as [String: Any]
+    /// Data-portability export (GDPR/CCPA + App Store expectation). Fails loudly
+    /// rather than handing back a silent "{}".
+    enum ExportError: LocalizedError {
+        case encodingFailed
+        case writeFailed
+        var errorDescription: String? {
+            switch self {
+            case .encodingFailed: return "Couldn't assemble your data export. Please try again."
+            case .writeFailed:    return "Couldn't save the export file. Free up some space and try again."
             }
         }
+    }
+
+    static let exportSchemaVersion = 2
+
+    private static func appVersion() -> String {
+        let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let b = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+        return "\(v) (\(b))"
+    }
+
+    /// Everything the athlete owns and Forge stores locally, as one versioned JSON
+    /// document with stable field names, units, timezone, and ISO-8601 timestamps.
+    /// Throws instead of returning an empty object so the UI can show a real error.
+    @MainActor
+    static func exportDocument(profile: UserProfile) throws -> Data {
+        func iso(_ d: Date) -> String { d.formatted(.iso8601) }
+
+        var doc: [String: Any] = [
+            "schema_version": exportSchemaVersion,
+            "app": "Forge",
+            "app_version": appVersion(),
+            "generated_at": iso(.now),
+            "timezone": TimeZone.current.identifier,
+            "units": ["mass": "lb", "energy": "kcal", "liquid": "oz", "distance": "mi"],
+        ]
+
+        // Profile + coached targets (the live, user-owned profile).
+        doc["profile"] = [
+            "name": profile.name, "age": profile.age, "sex": "\(profile.sex)",
+            "sport": profile.sport, "fitness_level": profile.fitnessLevel.rawValue,
+            "activity_level": profile.activityLevel.rawValue,
+            "experience_years": profile.experienceYears,
+            "height_inches": profile.heightInches, "weight_lb": profile.weightLb,
+            "diet": "\(profile.diet)", "uses_imperial": profile.usesImperial,
+            "primary_goal": profile.primaryGoal.rawValue,
+            "goals": profile.goals.map(\.rawValue),
+            "targets": ["calories": profile.calorieTarget, "protein_g": profile.proteinTarget,
+                        "carbs_g": profile.carbTarget, "fat_g": profile.fatTarget,
+                        "water_oz": profile.waterTargetOz],
+        ] as [String: Any]
+
+        // User-created goals.
+        if let goals = try? context.fetch(FetchDescriptor<GoalRecord>(sortBy: [SortDescriptor(\.createdAt)])) {
+            doc["goals_tracked"] = goals.map {
+                ["title": $0.title, "unit": $0.unit, "target": $0.targetValue,
+                 "current": $0.currentValue, "done": $0.done, "created_at": iso($0.createdAt),
+                 "deadline": $0.deadline.map(iso) ?? NSNull()] as [String: Any]
+            }
+        }
+
+        // Workouts, with per-set detail (weight/reps/rpe/completed) when present.
+        if let workouts = try? context.fetch(FetchDescriptor<WorkoutRecord>(sortBy: [SortDescriptor(\.date)])) {
+            doc["workouts"] = workouts.map { w -> [String: Any] in
+                var row: [String: Any] = [
+                    "name": w.name, "date": iso(w.date), "duration_min": w.durationMin,
+                    "volume_lb": w.totalVolumeLb, "sets": w.setCount, "avg_rpe": w.avgRPE,
+                    "summary": w.exerciseSummary, "saved_to_health": w.savedToHealthKit,
+                ]
+                if !w.exercisesJSON.isEmpty,
+                   let detail = try? JSONSerialization.jsonObject(with: Data(w.exercisesJSON.utf8)) {
+                    row["exercises_detail"] = detail
+                }
+                return row
+            }
+        }
+
         if let meals = try? context.fetch(FetchDescriptor<NutritionEntryRecord>(sortBy: [SortDescriptor(\.date)])) {
-            export["nutrition"] = meals.map {
+            doc["nutrition"] = meals.map {
                 ["date": iso($0.date), "meal": $0.meal, "food": $0.name, "calories": $0.calories,
                  "protein_g": $0.protein, "carbs_g": $0.carbs, "fat_g": $0.fat,
                  "servings": $0.servings] as [String: Any]
             }
         }
+
+        // Hydration (per-day, kept in UserDefaults rather than a model).
+        let waterPrefix = "forge.water."
+        let hydration = UserDefaults.standard.dictionaryRepresentation()
+            .filter { $0.key.hasPrefix(waterPrefix) }
+            .compactMap { key, value -> [String: Any]? in
+                guard let oz = value as? Double else { return nil }
+                return ["date": String(key.dropFirst(waterPrefix.count)), "oz": oz]
+            }
+        if !hydration.isEmpty { doc["hydration"] = hydration }
+
         if let scores = try? context.fetch(FetchDescriptor<ScoreRecord>(sortBy: [SortDescriptor(\.date)])) {
-            export["forge_scores"] = scores.map { ["date": iso($0.date), "score": $0.score] as [String: Any] }
+            doc["forge_scores"] = scores.map { ["date": iso($0.date), "score": $0.score] as [String: Any] }
         }
         if let checkIns = try? context.fetch(FetchDescriptor<CheckInRecord>(sortBy: [SortDescriptor(\.date)])) {
-            export["check_ins"] = checkIns.map {
+            doc["check_ins"] = checkIns.map {
                 ["date": iso($0.date), "sleep_quality": $0.sleepQuality, "soreness": $0.soreness,
                  "energy": $0.energy, "stress": $0.stress] as [String: Any]
             }
         }
-        guard let data = try? JSONSerialization.data(withJSONObject: export, options: [.prettyPrinted, .sortedKeys])
-        else { return "{}" }
-        return String(decoding: data, as: UTF8.self)
+        // Recovery/sleep are read live from Apple Health, not stored by Forge, so
+        // they aren't in this file; the source is recorded here for honesty.
+        doc["health_data_note"] = "Sleep, HRV, heart rate and activity are read live from Apple Health when connected and are not stored in this export."
+
+        guard let data = try? JSONSerialization.data(withJSONObject: doc, options: [.prettyPrinted, .sortedKeys])
+        else { throw ExportError.encodingFailed }
+        return data
+    }
+
+    /// Writes the export to a temporary file for `ShareLink`, so large histories
+    /// share as a file attachment instead of an in-memory string.
+    @MainActor
+    static func exportToTemporaryFile(profile: UserProfile) throws -> URL {
+        let data = try exportDocument(profile: profile)
+        let stamp = Date.now.formatted(.iso8601.year().month().day())
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("forge-export-\(stamp).json")
+        do { try data.write(to: url, options: .atomic) }
+        catch { throw ExportError.writeFailed }
+        return url
     }
 
     // MARK: - Workouts
