@@ -458,9 +458,35 @@ All iOS changes below were re-verified: **iOS tests 194 executed / 2 skipped / 0
   *(DirectiveEngine.swift, DashboardView.swift)*
 - **Tests:** `ProgressTests` (12), `TargetEngineTests` (+2 step/energy), directive-id stability.
 
-### Not yet started (Groups D–G)
-Data-export completeness + typed feedback errors + Keychain/refresh (D/E), website legal contradiction
-(F), CI expansion + remove committed `Secrets.plist` (G). Tracked in §6.
+### Group D — data rights (P1) · iOS, tested
+- **P1-4** `PersistenceService.exportDocument(profile:)` replaces `exportJSON()`: `schema_version`,
+  `app_version`, `generated_at` (ISO-8601), `timezone`, `units`, and **all locally-stored categories**
+  — profile+coached targets, user-created goals, workouts **with per-set detail**, nutrition,
+  **hydration** (was omitted), forge scores, check-ins, plus an honest note that sleep/HRV/activity are
+  read live from Apple Health and not stored here. **Throws** `ExportError` instead of returning `"{}"`;
+  shares as a temp **file** (large-history safe) built on tap, not eagerly on every ProfileView render.
+- **Apple 5.1.1(v) deletion clarity:** three unmistakable actions replace the single ambiguous button —
+  **"Delete cloud account only"**, **"Delete all data on this phone"** (`PersistenceService.deleteAllLocalData()`,
+  preserves the auth session), **"Delete account + all data"** (server first; local wipe only on success so
+  a failure is retryable). Message states exactly what each removes and that none touch Apple Health.
+- **Tests:** `ExportTests` (versioning, metadata, profile+targets, file round-trips as valid JSON).
 
-*Status: Groups A–C implemented; iOS re-verified green. Group A SQL awaits dashboard apply. Scores in §8
-will be revised after D–G land and the on-device/Supabase verifications in §7 are done.*
+### Group E — networking honesty + session security (P1) · iOS, tested
+- **P1-5** `FeedbackError` typed mapping (offline/timeout/invalidRequest/unauthorized/rateLimited/
+  serverError/validation/unknown) with nontechnical user copy + client-side validation; `FeedbackClient.submit`
+  returns the typed error instead of a `Bool`, and the sheet shows the specific message.
+- **P1-1** auth session moved from `UserDefaults` to the **Keychain** (`Services/Keychain.swift`,
+  device-only, after-first-unlock), with a one-time migration of any legacy UserDefaults session.
+- **P1-2** token **expiry** is now stored (`expires_at`/`expires_in`) and `refreshIfNeeded()` refreshes via
+  the GoTrue refresh-token grant; `deleteAccount()` refreshes first and surfaces a real "session expired —
+  sign in again" message instead of a misleading network error.
+- **Tests:** `FeedbackErrorTests` (HTTP + URLError + validation mapping, non-technical copy).
+  ⚠︎ Keychain persistence + token refresh need **on-device** verification (§7) — not exercised by the sim tests.
+
+### Not yet started (Groups F–G)
+Website legal contradiction + "3 million products" claim (F, can't build/test here — no Node), CI expansion +
+remove committed `Secrets.plist` (G). Tracked in §6.
+
+*Status: Groups A–E implemented; iOS re-verified green (202 tests, 2 skipped, 0 failures; Debug+Release
+0 warnings). Group A SQL awaits dashboard apply; Keychain/refresh await device verification. Scores in §8
+will be revised after F–G land and the §7 verifications are done.*
