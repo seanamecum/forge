@@ -665,3 +665,19 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
 - **⚠︎ Device-only, unverified here:** the actual HealthKit sample-date capture (the `latest()` query change)
   can't run in the simulator (no real Health samples). The freshness *logic* (age → gating → surfacing) is
   fully unit-tested; the on-device read path still needs a real device (§7).
+
+### Initiative 6 — accessibility of the reusable data-viz (Phase 4 groundwork) · iOS, tested
+- **Problem (Phase 4):** trend charts (`Sparkline`, `BarTrend`) were **silent to VoiceOver**; `MetricRing`
+  fragmented into three spoken pieces; progress bars added clutter. Fixing components propagates to all ~30
+  screens (the "systemic, not sprinkle" approach the audit calls for).
+- **Fix:** `Sparkline`/`BarTrend` collapse to a single accessibility element with a spoken **`TrendSummary`**
+  ("Recovery trend: now 78, up from 72 over 14 points") — pure + tested, with an optional caller context
+  label wired at the prominent sites (Forge Score, recovery trends, pain, weight). `CapsuleBar` is
+  decorative-hidden by default (adjacent text carries the value) with an opt-in a11y label + percent value.
+  `MetricRing` reads as one element ("Recovery, 78, HRV-weighted blend"). (`ScoreRing` already respects
+  Reduce Motion + carries a label from earlier work.)
+- **Tests:** `TrendSummaryTests` (+6) — rising/falling/flat/empty/decimals/context. iOS **241 tests, 2
+  skipped, 0 failures; Debug+Release 0 warnings.**
+- **⚠︎ Still needs a real device (§7):** full Dynamic Type / AX-XXXL truncation, VoiceOver reading-order,
+  Increased-Contrast, Bold-Text, and 44pt touch-target audits (e.g., the 16pt concussion symptom dots)
+  across all screens — a simulator/unit pass can't sign these off.
