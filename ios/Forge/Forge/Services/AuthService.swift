@@ -16,9 +16,11 @@ final class AuthService {
         let accessToken: String
         let refreshToken: String?
         let email: String
+        var expiresAt: Date?
     }
 
     init() {
+        Self.migrateLegacySessionIfNeeded()
         // A stored session means this device already signed in.
         isAuthenticated = Self.loadSession() != nil
     }
@@ -31,7 +33,13 @@ final class AuthService {
     /// belongs to; no id ever comes from the client.
     @MainActor
     func deleteAccount() async -> Bool {
-        guard let token = sessionToken else { return false }
+        // Make sure we send a live token — a stale JWT would 401 and look like a
+        // network failure.
+        await refreshIfNeeded()
+        guard let token = sessionToken else {
+            lastError = "Your session expired. Please sign in again to delete your account."
+            return false
+        }
         var request = URLRequest(url: SupabaseConfig.url.appending(path: "/functions/v1/delete-account"))
         request.httpMethod = "POST"
         request.timeoutInterval = 15
@@ -119,8 +127,22 @@ final class AuthService {
     }
 
     func signOut() {
-        UserDefaults.standard.removeObject(forKey: Self.sessionKey)
+        Keychain.delete(Self.sessionKey)
         isAuthenticated = false
+    }
+
+    /// Refreshes the access token when it is missing an expiry or within 60s of
+    /// expiring, using the stored refresh token. Best-effort: a failure leaves the
+    /// existing session in place for the caller to handle (e.g. surface re-auth).
+    @MainActor
+    func refreshIfNeeded() async {
+        guard let session = Self.loadSession() else { return }
+        if let expiry = session.expiresAt, expiry.timeIntervalSinceNow > 60 { return }
+        guard let refreshToken = session.refreshToken,
+              let body = try? JSONEncoder().encode(["refresh_token": refreshToken]),
+              let (data, status) = try? await Self.post(path: "token?grant_type=refresh_token", body: body),
+              status == 200 else { return }
+        try? Self.storeSession(from: data, email: session.email)
     }
 
     // MARK: - Transport
@@ -143,22 +165,37 @@ final class AuthService {
     private struct TokenResponse: Decodable {
         let accessToken: String
         let refreshToken: String?
+        let expiresIn: Int?
+        let expiresAt: Int?
         enum CodingKeys: String, CodingKey {
             case accessToken = "access_token"
             case refreshToken = "refresh_token"
+            case expiresIn = "expires_in"
+            case expiresAt = "expires_at"
         }
     }
 
     private static func storeSession(from data: Data, email: String) throws {
         let token = try JSONDecoder().decode(TokenResponse.self, from: data)
+        let expiry: Date? = token.expiresAt.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+            ?? token.expiresIn.map { Date(timeIntervalSinceNow: TimeInterval($0)) }
         let session = StoredSession(accessToken: token.accessToken,
-                                    refreshToken: token.refreshToken, email: email)
-        UserDefaults.standard.set(try JSONEncoder().encode(session), forKey: sessionKey)
+                                    refreshToken: token.refreshToken,
+                                    email: email, expiresAt: expiry)
+        Keychain.set(try JSONEncoder().encode(session), for: sessionKey)
     }
 
     private static func loadSession() -> StoredSession? {
-        guard let data = UserDefaults.standard.data(forKey: sessionKey) else { return nil }
+        guard let data = Keychain.get(sessionKey) else { return nil }
         return try? JSONDecoder().decode(StoredSession.self, from: data)
+    }
+
+    /// One-time move of any pre-Keychain session out of UserDefaults.
+    private static func migrateLegacySessionIfNeeded() {
+        guard Keychain.get(sessionKey) == nil,
+              let legacy = UserDefaults.standard.data(forKey: sessionKey) else { return }
+        Keychain.set(legacy, for: sessionKey)
+        UserDefaults.standard.removeObject(forKey: sessionKey)
     }
 
     /// Supabase error payloads vary: {"msg": …}, {"message": …}, {"error_description": …}.
