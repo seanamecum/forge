@@ -91,12 +91,45 @@ final class AppState {
             workouts.history = (saved + workouts.history).sorted { $0.date > $1.date }
         }
 
+        // Real training load from logged sessions → strain → Forge Score + Directive.
+        applyTrainingLoad()
+
         // Morning check-in done earlier today survives relaunch.
         checkIn = PersistenceService.loadTodayCheckIn()
 
         refreshFuelPlan()
     }
     private var rehydrated = false
+
+    // MARK: - Training load → intelligence layer
+
+    /// Push real training strain into today's recovery snapshot so a completed
+    /// workout actually moves the Forge Score (Training Load component) and the
+    /// Directive — not just the history list. Injectable for tests; the demo/empty
+    /// case leaves the seeded values untouched so the demo story stays coherent.
+    ///
+    /// Residual model: today's sessions set `strainToday` now and become tomorrow's
+    /// `strainYesterday` (which drives the score), mirroring how training load flows
+    /// into next-day recovery.
+    func applyTrainingLoad(sessions: [TrainingSession],
+                           calendar: Calendar = .current, now: Date = .now) {
+        guard !sessions.isEmpty else { return }
+        let today = sessions.filter { calendar.isDate($0.date, inSameDayAs: now) }
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now).map { ref in
+            sessions.filter { calendar.isDate($0.date, inSameDayAs: ref) }
+        } ?? []
+        if !today.isEmpty { recovery.today.strainToday = TrainingLoadEngine.dayStrain(today) }
+        if !yesterday.isEmpty { recovery.today.strainYesterday = TrainingLoadEngine.dayStrain(yesterday) }
+    }
+
+    /// Convenience: pull real logged sessions from persistence and apply.
+    @MainActor
+    func applyTrainingLoad() {
+        let sessions = PersistenceService.loadWorkouts().map {
+            TrainingSession(date: $0.date, durationMin: $0.durationMin, avgRPE: $0.avgRPE)
+        }
+        applyTrainingLoad(sessions: sessions)
+    }
 
     // MARK: - Profile persistence
 
