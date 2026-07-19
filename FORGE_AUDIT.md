@@ -571,4 +571,20 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
   loop proof** that a hard logged day yields higher strain → lower `trainingLoadScore` → lower `forgeScore`
   than a light day. iOS **211 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
 - **Still open in this initiative:** workout → HRV/recovery (only strain today); injury singleton (P2-2);
-  strain into the Directive headline + generator; nutrition/sleep already partially wired.
+  strain into the workout generator; nutrition/sleep already partially wired.
+
+### Slice 2 — training load steers the Daily Directive · iOS, tested
+- **Problem:** the Directive headline was purely recovery(HRV)-driven; a brutal recent session didn't
+  change "what to do today," so training and the Directive were still disconnected.
+- **Fix:** `DirectiveEngine.make` gains defaulted `trainingLoadYesterday` + `trainingLoadAvg` inputs
+  (0 → no effect, so every existing caller/test is untouched). Applies the acute:chronic workload
+  principle **conservatively**: a load spike over the athlete's baseline (ratio ≥ 1.4) or a maximal day
+  (≥ 15/21) can only *temper* a green light ("Push hard" → "moderate") — never raise intensity, never
+  override a pull-back. It always **explains itself**: adds a rationale clause and, when nothing more
+  urgent is pending, owns the priority action ("You trained hard yesterday (X/21) — keep today controlled,
+  leave 1–2 reps in reserve"). `AppState.dailyDirective` feeds `strainYesterday` + the strain-trend average.
+- **Tests:** `DirectiveTests` +3 (caps a green light, drives the priority action, typical load leaves it
+  alone) plus all prior directive tests still green. iOS **214 tests, 2 skipped, 0 failures; Debug+Release
+  0 warnings.**
+- **Note:** baseline uses the seeded strain trend until real strain history is persisted (honest
+  approximation); wiring a real rolling strain baseline is a follow-up.
