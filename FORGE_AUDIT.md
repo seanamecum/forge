@@ -681,3 +681,19 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
 - **⚠︎ Still needs a real device (§7):** full Dynamic Type / AX-XXXL truncation, VoiceOver reading-order,
   Increased-Contrast, Bold-Text, and 44pt touch-target audits (e.g., the 16pt concussion symptom dots)
   across all screens — a simulator/unit pass can't sign these off.
+
+### Slice 3 — training load deloads the actual prescribed session · iOS, tested
+- **Problem:** training load reached the Forge Score (slice 1) and the Directive headline (slice 2) but the
+  **generated workout itself** ignored it — a hard week didn't change the sets/RPE Forge actually prescribed.
+- **Fix:** `WorkoutService.generate` gains defaulted `recentStrain` + `strainBaseline` (0 → no effect, so
+  existing callers/tests are untouched). Same acute:chronic rule as the Directive (ratio ≥ 1.4 or ≥ 15/21):
+  a spike **trims one main set and drops the RPE cap half a notch**, composed on top of the recovery
+  scaling and floored at **3 sets / RPE 7** so it can't gut an already-light day. Rationale explains it
+  honestly ("training load ran high (20/21): one set trimmed and top sets capped at RPE 8.5 …"), and only
+  claims a set was trimmed when one actually was. `AppState.todaysPlan` feeds `strainYesterday` + the
+  strain-trend baseline (demo strain sits at baseline → no change to the demo session).
+- **Tests:** `GeneratorTests` (+3) — a load spike drops 5→4 main sets and names the load; the deload never
+  goes below the 3-set floor; typical load leaves the session alone. All prior generator tests still pass.
+  iOS **244 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+- **Loop status:** training now flows end-to-end — logged session → strain → **Forge Score + Directive
+  headline + the prescribed workout's sets/RPE**, each explaining itself.
