@@ -611,3 +611,20 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
 - **Still demo-tied (flagged):** the knee/concussion rehab sub-modules (`rtsChecklist`, `rtpStages`) and
   the illustrative `InjuryRisk` remain seeded (already labeled "Sample"); making those fully per-injury
   dynamic is a larger follow-up.
+
+### Initiative 3 — recommendation transparency contract (closes P2-5 for Score + Directive) · iOS, tested
+- **Problem (P2-5):** recommendations exposed no inputs-missing / confidence / timestamp / safe-fallback —
+  the charter requires every calculated recommendation to explain itself.
+- **Fix:** new `Core/RecommendationBasis.swift` — one value type (`summary`, `inputsUsed`, `inputsMissing`,
+  `confidence`, `asOf`, `safeFallback`) with a pure, tested `confidence(provenance:hasCheckIn:)` rule that
+  ties trust to the P0-6 data provenance (demo→Low, partial+check-in→Moderate, live+check-in→High).
+  `AppState.forgeScoreBasis` + `directiveBasis` build it from real signals (reusing `forgeScoreNarrative` /
+  `directive.rationale`). New reusable `DesignSystem/RecommendationBasisView` (collapsible, VoiceOver-labeled)
+  surfaces confidence + freshness, inputs used, what's missing, and the fallback — wired into the Forge
+  Score card and the Directive tip (the two flagship recommendations).
+- **Tests:** `RecommendationBasisTests` (+5) — confidence rule across all provenance×check-in states; the
+  Score basis is honestly Low + names missing Apple-Health/check-in in demo and never hides its fallback;
+  connecting live HRV + logging a check-in lifts confidence to Moderate; the Directive basis exposes its
+  inputs and fallback. iOS **226 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+- **Still open:** extend the same basis to the AI Coach + nutrition/recovery recommendations; track real
+  per-signal freshness timestamps (currently `asOf` = compute time, honest but coarse — ties to P2-6).
