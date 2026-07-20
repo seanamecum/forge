@@ -40,6 +40,17 @@ final class AppState {
         didSet { Self.persistUser(user) }
     }
 
+    /// True in demo mode (exploring Sean's world), false for a real account. Drives
+    /// whether the demo athlete's seeded training/health data is shown. Persisted;
+    /// restored in `init`. Hermetic in tests.
+    var isDemoAccount = false {
+        didSet {
+            guard !PersistenceService.isTestRun else { return }
+            UserDefaults.standard.set(isDemoAccount, forKey: Self.demoKey)
+        }
+    }
+    private static let demoKey = "forge.isDemoAccount"
+
     /// Today's morning check-in, if completed (in-memory; SwiftData holds history).
     var checkIn: CheckInSnapshot?
 
@@ -55,6 +66,10 @@ final class AppState {
     let notifications = NotificationService()
 
     init() {
+        // Restore demo/real mode (skipped in tests for hermeticity).
+        if !PersistenceService.isTestRun {
+            isDemoAccount = UserDefaults.standard.bool(forKey: Self.demoKey)
+        }
         // Restore the saved profile so a returning user never reverts to the demo athlete.
         if let saved = Self.loadUser() { user = saved }
         // Forge speaks imperial — migrate any previously saved metric preference.
@@ -85,10 +100,16 @@ final class AppState {
         nutrition.entries = PersistenceService.loadTodayEntries()
         nutrition.waterOz = PersistenceService.loadTodayWater()
 
-        // Real workout history layered over the demo baseline (newest first).
+        // Workout history: a real account sees only its own logged sessions; demo
+        // mode keeps the demo athlete's baseline (with any saved layered on top).
         let saved = PersistenceService.loadWorkouts()
-        if !saved.isEmpty {
-            workouts.history = (saved + workouts.history).sorted { $0.date > $1.date }
+        if isDemoAccount {
+            if !saved.isEmpty {
+                workouts.history = (saved + workouts.history).sorted { $0.date > $1.date }
+            }
+        } else {
+            workouts.clearDemoSeed()
+            workouts.history = saved.sorted { $0.date > $1.date }
         }
 
         // Real training load from logged sessions → strain → Forge Score + Directive.
@@ -149,16 +170,19 @@ final class AppState {
     }
 
     func completeAuth(demo: Bool) {
+        isDemoAccount = demo
         if demo {
+            workouts.restoreDemoSeed()   // in case a prior real session cleared it
             user = MockData.sean
             finishOnboarding()
         } else {
+            workouts.clearDemoSeed()     // a real account starts with a clean slate
             phase = .onboarding
         }
     }
 
     func finishOnboarding() {
-        UserDefaults.standard.set(true, forKey: "forge.hasOnboarded")
+        if !PersistenceService.isTestRun { UserDefaults.standard.set(true, forKey: "forge.hasOnboarded") }
         phase = .main
     }
 
@@ -177,6 +201,8 @@ final class AppState {
     /// (previously dropped, leaving every new user with the demo knee). Empty
     /// injuries → healthy.
     func commitOnboarding(profile: UserProfile, injuries selected: Set<InjuryType>) {
+        isDemoAccount = false
+        workouts.clearDemoSeed()          // idempotent — a real user builds their own history
         user = Self.onboardingProfile(from: profile)
         injuries.setActive(from: selected)
         finishOnboarding()

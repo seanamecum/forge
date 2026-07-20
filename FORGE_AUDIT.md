@@ -800,6 +800,24 @@ have — misleading and safety-adjacent), plus Sean's **23-day streak / level / 
   declared shoulder injury constrains the generated session (neutral-grip swap). iOS **269 tests, 2 skipped,
   0 failures; Debug+Release 0 warnings.**
 
+## 12c. Product — real accounts see only their own training data (2026-07-20)
+
+**Highest-impact shipped-product fix.** `WorkoutService` seeded Sean's `history`/`personalRecords`/
+`muscleVolume`, and `rehydrate()` layered a real user's saved workouts *over* that demo baseline — so
+**every real account's** Train tab, PRs, weekly volume, plateaus, weak-points, and the coach signals built
+from them were contaminated with the demo athlete's sessions (not just new users; an active user saw their
+sessions mixed with Sean's). There was no demo-vs-real distinction.
+- **Fix:** persisted `AppState.isDemoAccount` (set on `completeAuth`, `commitOnboarding`; restored in
+  `init`; hermetic in tests). `WorkoutService.clearDemoSeed()`/`restoreDemoSeed()`. Real accounts clear the
+  seed and load **their own logged workouts only**; demo mode keeps Sean's world (and `restoreDemoSeed()`
+  brings it back if a real session cleared it — e.g. demo after logout). `TrainHomeView` gains empty states
+  for history/PRs/volume, and the hardcoded "quads under target — knee rehab" caption now shows **only if
+  the user actually has a knee injury**.
+- **Hygiene:** gated `finishOnboarding` + `isDemoAccount` persistence on `isTestRun`.
+- **Tests:** `DemoModeTests` (+5) — clear/restore seed; demo keeps Sean's training; real account +
+  onboarding start clean (empty history, `weeklyVolumeLb == 0`, no plateaus); demo-after-real restores the
+  demo world. iOS **274 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never

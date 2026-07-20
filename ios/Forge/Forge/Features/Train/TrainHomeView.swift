@@ -169,19 +169,25 @@ struct TrainHomeView: View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
                 EyebrowLabel(text: "Weekly Volume by Muscle")
-                ForEach(app.workouts.muscleVolume) { m in
-                    HStack(spacing: 10) {
-                        Text(m.muscle).font(.system(size: 11.5)).foregroundStyle(Theme.creamDim)
-                            .frame(width: 80, alignment: .leading)
-                        CapsuleBar(value: Double(m.sets), target: Double(m.optimalHigh),
-                                   tone: m.inOptimal ? .green : .amber, height: 5)
-                        Text("\(m.sets) / \(m.optimalLow)–\(m.optimalHigh)")
-                            .font(.system(size: 10)).foregroundStyle(Theme.faint)
-                            .frame(width: 54, alignment: .trailing)
+                if app.workouts.muscleVolume.isEmpty {
+                    emptyNote("Log a few sessions and Forge maps your weekly sets per muscle against optimal ranges.")
+                } else {
+                    ForEach(app.workouts.muscleVolume) { m in
+                        HStack(spacing: 10) {
+                            Text(m.muscle).font(.system(size: 11.5)).foregroundStyle(Theme.creamDim)
+                                .frame(width: 80, alignment: .leading)
+                            CapsuleBar(value: Double(m.sets), target: Double(m.optimalHigh),
+                                       tone: m.inOptimal ? .green : .amber, height: 5)
+                            Text("\(m.sets) / \(m.optimalLow)–\(m.optimalHigh)")
+                                .font(.system(size: 10)).foregroundStyle(Theme.faint)
+                                .frame(width: 54, alignment: .trailing)
+                        }
+                    }
+                    if app.injuries.active.contains(where: { $0.type == .knee }) {
+                        Text("Quads intentionally under target — knee rehab block.")
+                            .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
                     }
                 }
-                Text("Quads intentionally under target — knee rehab block.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
             }
         }
     }
@@ -190,18 +196,22 @@ struct TrainHomeView: View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
                 EyebrowLabel(text: "Personal Records")
-                ForEach(app.workouts.personalRecords) { pr in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(pr.exerciseName).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.cream)
-                            Text(pr.date).font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                if app.workouts.personalRecords.isEmpty {
+                    emptyNote("Your PRs land here automatically as you hit them.")
+                } else {
+                    ForEach(app.workouts.personalRecords) { pr in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(pr.exerciseName).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.cream)
+                                Text(pr.date).font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                            }
+                            Spacer()
+                            Text("\(Int(pr.weightLb)) lb × \(pr.reps)")
+                                .font(Theme.display(16))
+                                .foregroundStyle(Theme.goldGradient)
                         }
-                        Spacer()
-                        Text("\(Int(pr.weightLb)) lb × \(pr.reps)")
-                            .font(Theme.display(16))
-                            .foregroundStyle(Theme.goldGradient)
+                        .padding(.vertical, 3)
                     }
-                    .padding(.vertical, 3)
                 }
             }
         }
@@ -210,10 +220,24 @@ struct TrainHomeView: View {
     private var historyList: some View {
         VStack(alignment: .leading, spacing: 10) {
             EyebrowLabel(text: "Recent Sessions")
-            ForEach(app.workouts.history) { workout in
-                WorkoutHistoryRow(workout: workout)
+            if app.workouts.history.isEmpty {
+                Card {
+                    EmptyStateView(icon: "dumbbell",
+                                   title: "No sessions yet",
+                                   message: "Log your first workout and it'll show up here — with volume, PRs, and trends.")
+                }
+            } else {
+                ForEach(app.workouts.history) { workout in
+                    WorkoutHistoryRow(workout: workout)
+                }
             }
         }
+    }
+
+    private func emptyNote(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

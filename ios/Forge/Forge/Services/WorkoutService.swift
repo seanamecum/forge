@@ -9,6 +9,21 @@ final class WorkoutService {
     var enrolledProgram = MockData.enrolledProgram
     var exercises: [Exercise] = MockData.exercises
 
+    /// Real accounts don't inherit the demo athlete's training history/PRs/volume —
+    /// they build their own by logging. (`exercises` is a shared catalog, kept.)
+    func clearDemoSeed() {
+        history = []
+        personalRecords = []
+        muscleVolume = []
+    }
+
+    /// Restore the demo world (e.g. entering demo mode after a real session cleared it).
+    func restoreDemoSeed() {
+        history = MockData.workoutHistory
+        personalRecords = MockData.personalRecords
+        muscleVolume = MockData.muscleVolume
+    }
+
     var weeklyVolumeLb: Double {
         let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now
         return history.filter { $0.date >= cutoff }.reduce(0) { $0 + $1.totalVolumeLb }
