@@ -158,7 +158,8 @@ struct ProfileView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(u.name).font(Theme.display(21)).foregroundStyle(Theme.cream)
-                    Text("\(u.sport) · \(u.fitnessLevel.rawValue) · \(u.experienceYears) yrs")
+                    Text([u.sport, u.fitnessLevel.rawValue, "\(u.experienceYears) yrs"]
+                            .filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.system(size: 11.5)).foregroundStyle(Theme.gold)
                     Text("\(u.age) yrs · \(u.heightLabel) · \(Int(u.weightLb)) lb")
                         .font(.system(size: 11)).foregroundStyle(Theme.muted)

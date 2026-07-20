@@ -44,6 +44,15 @@ final class InjuryService {
         persist()
     }
 
+    /// Replace the active injuries with the athlete's onboarding declarations —
+    /// an empty set means "healthy", clearing the demo seed. Each starts at a
+    /// conservative sub-acute / mild default the user refines on the injury screen.
+    func setActive(from types: Set<InjuryType>) {
+        active = types.sorted { $0.rawValue < $1.rawValue }
+            .map { Self.makeInjury(type: $0, phase: .subacute, pain: 3) }
+        persist()
+    }
+
     func logPain(_ value: Int, for injury: InjuryProfile) {
         guard let idx = active.firstIndex(where: { $0.id == injury.id }) else { return }
         active[idx].painToday = value

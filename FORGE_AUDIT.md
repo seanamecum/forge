@@ -782,6 +782,24 @@ supabase migration list                             # confirm 0002 shows in the 
 ```
 Then run `supabase/RLS_VERIFICATION.md` §A–D (anon probes) to confirm the P0s are closed on the live DB.
 
+## 12b. Product — new-user onboarding now applies the real user's state (2026-07-20)
+
+**Highest-impact shipped-product fix of the session.** Onboarding collected the user's declared injuries
+(`InjuryStep`, step 9) into `selectedInjuries` and then **silently dropped them** — `advance()` only did
+`app.user = draft`. Because `draft` starts from `MockData.sean`, every real user inherited **Sean's demo
+knee injury** (a specific "patellar tendinopathy · day 12 · phase 2" diagnosis + rehab plan they don't
+have — misleading and safety-adjacent), plus Sean's **23-day streak / level / XP / "Hockey."**
+- **Fix:** `AppState.commitOnboarding(profile:injuries:)` now (a) applies the user's **declared injuries**
+  via new `InjuryService.setActive(from:)` — empty set → healthy, clearing the demo knee — and (b) strips
+  the demo seed's gamification/sport via pure `AppState.onboardingProfile(from:)` (streak 0, level 1, xp 0,
+  sport cleared). `OnboardingFlowView.advance()` calls it; `ProfileView` header omits an empty sport.
+- **Hygiene:** gated `persistUser`/`loadUser` on `isTestRun` so the profile store is hermetic in tests
+  (also fixes real non-determinism when the app is run then tested on the same simulator).
+- **Tests:** `OnboardingTests` (+5) — gamification reset with real inputs preserved; declared injuries
+  replace the demo knee; **no injuries → healthy (`injuryStatusScore 100`, no knee-PT directive)**; a
+  declared shoulder injury constrains the generated session (neutral-grip swap). iOS **269 tests, 2 skipped,
+  0 failures; Debug+Release 0 warnings.**
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never

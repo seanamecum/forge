@@ -136,13 +136,15 @@ final class AppState {
     private static let userKey = "forge.user.v1"
 
     private static func persistUser(_ profile: UserProfile) {
+        guard !PersistenceService.isTestRun else { return }   // hermetic tests
         if let data = try? JSONEncoder().encode(profile) {
             UserDefaults.standard.set(data, forKey: userKey)
         }
     }
 
     private static func loadUser() -> UserProfile? {
-        guard let data = UserDefaults.standard.data(forKey: userKey) else { return nil }
+        guard !PersistenceService.isTestRun,
+              let data = UserDefaults.standard.data(forKey: userKey) else { return nil }
         return try? JSONDecoder().decode(UserProfile.self, from: data)
     }
 
@@ -158,6 +160,26 @@ final class AppState {
     func finishOnboarding() {
         UserDefaults.standard.set(true, forKey: "forge.hasOnboarded")
         phase = .main
+    }
+
+    /// A real athlete starts fresh — strip the demo seed's identity/gamification
+    /// so a new user never inherits Sean's streak, level, XP, or sport. Pure.
+    static func onboardingProfile(from draft: UserProfile) -> UserProfile {
+        var p = draft
+        p.streakDays = 0
+        p.level = 1
+        p.xp = 0
+        if p.sport == MockData.sean.sport { p.sport = "" }   // don't inherit "Hockey"
+        return p
+    }
+
+    /// Commit onboarding: the user's real profile AND their declared injuries
+    /// (previously dropped, leaving every new user with the demo knee). Empty
+    /// injuries → healthy.
+    func commitOnboarding(profile: UserProfile, injuries selected: Set<InjuryType>) {
+        user = Self.onboardingProfile(from: profile)
+        injuries.setActive(from: selected)
+        finishOnboarding()
     }
 
     func logout() {
