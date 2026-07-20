@@ -33,7 +33,17 @@ final class HealthKitService {
     var sleepHoursLastNight: Double = MockData.today.sleep.hours
     var workoutsLast7Days: Int = 4
 
+    /// End-date of the most recent real sample per metric — the basis for honest
+    /// freshness ("HRV as of 2 days ago") instead of treating every read as current.
+    private(set) var sampleDates: [MetricKind: Date] = [:]
+
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
+
+    /// How old (hours) the latest real sample for a metric is, or nil if none.
+    func ageHours(for kind: MetricKind, now: Date = .now) -> Double? {
+        guard let date = sampleDates[kind] else { return nil }
+        return max(0, now.timeIntervalSince(date) / 3600)
+    }
 
     // MARK: - Types
 
@@ -95,10 +105,16 @@ final class HealthKitService {
 
         if let v = await sumToday(.stepCount, unit: .count()) { steps = Int(v); gotRealData = true }
         if let v = await sumToday(.activeEnergyBurned, unit: .kilocalorie()) { activeEnergy = Int(v); gotRealData = true }
-        if let v = await latest(.heartRate, unit: HKUnit.count().unitDivided(by: .minute())) { heartRate = Int(v); gotRealData = true }
-        if let v = await latest(.restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute())) { restingHeartRate = Int(v); gotRealData = true }
-        if let v = await latest(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli)) { hrvMs = Int(v); gotRealData = true }
-        if let v = await latest(.bodyMass, unit: .pound()) { bodyMassLb = v; gotRealData = true }
+        if let r = await latest(.heartRate, unit: HKUnit.count().unitDivided(by: .minute())) {
+            heartRate = Int(r.value); sampleDates[.heartRate] = r.date; gotRealData = true
+        }
+        if let r = await latest(.restingHeartRate, unit: HKUnit.count().unitDivided(by: .minute())) {
+            restingHeartRate = Int(r.value); sampleDates[.restingHR] = r.date; gotRealData = true
+        }
+        if let r = await latest(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli)) {
+            hrvMs = Int(r.value); sampleDates[.hrv] = r.date; gotRealData = true
+        }
+        if let r = await latest(.bodyMass, unit: .pound()) { bodyMassLb = r.value; gotRealData = true }
         if let v = await sleepHours() { sleepHoursLastNight = v; gotRealData = true }
         if let v = await workoutCount(days: 7) { workoutsLast7Days = v; gotRealData = true }
 
@@ -214,14 +230,19 @@ final class HealthKitService {
         }
     }
 
-    private func latest(_ id: HKQuantityTypeIdentifier, unit: HKUnit) async -> Double? {
+    /// Most-recent sample's value **and** its end-date, so callers can judge
+    /// freshness instead of assuming the latest read is current.
+    private func latest(_ id: HKQuantityTypeIdentifier, unit: HKUnit) async -> (value: Double, date: Date)? {
         let type = HKQuantityType(id)
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
         return await withCheckedContinuation { continuation in
             let query = HKSampleQuery(sampleType: type, predicate: nil,
                                       limit: 1, sortDescriptors: [sort]) { _, samples, _ in
-                let value = (samples?.first as? HKQuantitySample)?.quantity.doubleValue(for: unit)
-                continuation.resume(returning: value)
+                if let sample = samples?.first as? HKQuantitySample {
+                    continuation.resume(returning: (sample.quantity.doubleValue(for: unit), sample.endDate))
+                } else {
+                    continuation.resume(returning: nil)
+                }
             }
             store.execute(query)
         }

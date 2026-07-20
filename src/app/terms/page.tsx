@@ -89,10 +89,10 @@ export default function TermsPage() {
             <p>
               Questions about these terms:{" "}
               <a
-                href="mailto:seana.mecum@gmail.com"
+                href="mailto:legal@forge.app"
                 className="text-gold-200 underline underline-offset-4"
               >
-                seana.mecum@gmail.com
+                legal@forge.app
               </a>
               . See also{" "}
               <Link href="/support" className="text-gold-200 underline underline-offset-4">

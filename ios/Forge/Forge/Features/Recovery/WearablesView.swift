@@ -111,8 +111,8 @@ struct WearablesView: View {
                     healthChip(for: hk.authState)
                 }
                 Text(hk.statusMessage).font(.system(size: 11.5)).foregroundStyle(Theme.muted)
-                if hk.usingMockData && hk.authState != .authorized {
-                    Chip(text: "Demo data", tone: .amber)
+                if app.recovery.provenance != .live {
+                    Chip(text: app.recovery.provenance.label, tone: .amber)
                 }
 
                 if let error = hk.lastError {

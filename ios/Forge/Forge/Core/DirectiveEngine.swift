@@ -47,6 +47,13 @@ struct DailyDirective: Equatable {
     /// The prescribed plan for today — what to actually do, in order.
     var actions: [DirectiveAction] = []
 
+    /// Stable identity of *this decision* — a dismissal keyed on it persists until
+    /// the directive's content actually changes (not merely a view recreation).
+    /// Deterministic across launches (unlike `Hashable.hashValue`, which is salted).
+    var id: String {
+        Data("\(headline)|\(rationale)|\(priorityAction)".utf8).base64EncodedString()
+    }
+
     // Equatable intentionally ignores `actions` (compares the decision, not the render list).
     static func == (lhs: DailyDirective, rhs: DailyDirective) -> Bool {
         lhs.headline == rhs.headline && lhs.rationale == rhs.rationale
@@ -67,6 +74,10 @@ enum DirectiveEngine {
         activeInjuryPain: Int?,
         workoutName: String,
         soreness: Int? = nil,
+        // Recent training load (0–21 strain) + the athlete's baseline, so a hard
+        // day tempers today. Defaulted to 0 → no effect unless supplied.
+        trainingLoadYesterday: Double = 0,
+        trainingLoadAvg: Double = 0,
         // Prescription inputs — defaulted so the scalar directive (and its tests) are unaffected.
         calorieTarget: Int = 0,
         proteinTarget: Int = 0,
@@ -90,9 +101,21 @@ enum DirectiveEngine {
             tone = .ruby
         }
 
+        // 1b. Acute:chronic workload — a spike over the athlete's own baseline (or
+        // a maximal day in absolute terms) tempers a green light. It only ever
+        // *lowers* intensity, never raises it, and never overrides a pull-back.
+        let loadRatio = trainingLoadAvg > 0 ? trainingLoadYesterday / trainingLoadAvg : 1.0
+        let highLoad = trainingLoadYesterday >= 15 || loadRatio >= 1.4
+        if highLoad, !verySore, headline == "Push hard today." {
+            headline = "Train at moderate intensity."
+            tone = .gold
+        }
+        let loadText = "\(Int(trainingLoadYesterday.rounded()))/21"
+
         // 2. Rationale stitches the live signals into one readable line.
         var parts = ["Recovery is \(recovery)%"]
         if let s = soreness, s >= 5 { parts.append("you logged soreness \(s)/10") }
+        if highLoad { parts.append("training load ran high yesterday (\(loadText))") }
         if proteinRemaining > 0 { parts.append("protein is \(proteinRemaining)g behind") }
         if hydrationPct < 80 { parts.append("hydration is at \(hydrationPct)%") }
         if injuryRiskPercent >= 20, let name = activeInjuryName {
@@ -114,6 +137,8 @@ enum DirectiveEngine {
             priorityAction = "Front-load protein — \(proteinRemaining)g to go, start at lunch."
         } else if hydrationPct < 70 {
             priorityAction = "Hydrate before training — you're at \(hydrationPct)% of target."
+        } else if highLoad {
+            priorityAction = "You trained hard yesterday (\(loadText)) — keep today controlled and leave 1–2 reps in reserve."
         } else {
             priorityAction = "You're cleared to progress — chase the top set."
         }

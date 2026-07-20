@@ -91,12 +91,45 @@ final class AppState {
             workouts.history = (saved + workouts.history).sorted { $0.date > $1.date }
         }
 
+        // Real training load from logged sessions → strain → Forge Score + Directive.
+        applyTrainingLoad()
+
         // Morning check-in done earlier today survives relaunch.
         checkIn = PersistenceService.loadTodayCheckIn()
 
         refreshFuelPlan()
     }
     private var rehydrated = false
+
+    // MARK: - Training load → intelligence layer
+
+    /// Push real training strain into today's recovery snapshot so a completed
+    /// workout actually moves the Forge Score (Training Load component) and the
+    /// Directive — not just the history list. Injectable for tests; the demo/empty
+    /// case leaves the seeded values untouched so the demo story stays coherent.
+    ///
+    /// Residual model: today's sessions set `strainToday` now and become tomorrow's
+    /// `strainYesterday` (which drives the score), mirroring how training load flows
+    /// into next-day recovery.
+    func applyTrainingLoad(sessions: [TrainingSession],
+                           calendar: Calendar = .current, now: Date = .now) {
+        guard !sessions.isEmpty else { return }
+        let today = sessions.filter { calendar.isDate($0.date, inSameDayAs: now) }
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now).map { ref in
+            sessions.filter { calendar.isDate($0.date, inSameDayAs: ref) }
+        } ?? []
+        if !today.isEmpty { recovery.today.strainToday = TrainingLoadEngine.dayStrain(today) }
+        if !yesterday.isEmpty { recovery.today.strainYesterday = TrainingLoadEngine.dayStrain(yesterday) }
+    }
+
+    /// Convenience: pull real logged sessions from persistence and apply.
+    @MainActor
+    func applyTrainingLoad() {
+        let sessions = PersistenceService.loadWorkouts().map {
+            TrainingSession(date: $0.date, durationMin: $0.durationMin, avgRPE: $0.avgRPE)
+        }
+        applyTrainingLoad(sessions: sessions)
+    }
 
     // MARK: - Profile persistence
 
@@ -135,41 +168,21 @@ final class AppState {
         phase = .welcome
     }
 
-    /// Forge Score 0–100 — weighted blend of the nine signal inputs.
-    var forgeScore: Int {
-        let b = forgeScoreBreakdown
-        let total = b.reduce(0.0) { $0 + Double($1.value) * $1.weight }
-        return Int(total.rounded())
-    }
+    /// Forge Score 0–100 — the weighted blend, delegated to the pure ForgeScoreEngine.
+    var forgeScore: Int { ForgeScoreEngine.score(forgeScoreBreakdown) }
 
     var forgeScoreBreakdown: [ScoreComponent] {
         let d = recovery.today
         let n = nutrition
-        return [
-            ScoreComponent(label: "Sleep", value: d.sleepScore, weight: 0.18),
-            ScoreComponent(label: "Recovery (HRV)", value: d.recovery, weight: 0.18),
-            ScoreComponent(label: "Nutrition", value: n.nutritionScore, weight: 0.14),
-            ScoreComponent(label: "Hydration", value: n.hydrationScore, weight: 0.08),
-            ScoreComponent(label: "Training Load", value: d.trainingLoadScore, weight: 0.14),
-            ScoreComponent(label: "Activity", value: d.activityScore, weight: 0.08),
-            ScoreComponent(label: "Stress", value: d.stressScore, weight: 0.10),
-            ScoreComponent(label: "Injury Status", value: injuries.injuryStatusScore, weight: 0.10),
-        ]
+        return ForgeScoreEngine.breakdown(
+            sleep: d.sleepScore, recovery: d.recovery,
+            nutrition: n.nutritionScore, hydration: n.hydrationScore,
+            trainingLoad: d.trainingLoadScore, activity: d.activityScore,
+            stress: d.stressScore, injury: injuries.injuryStatusScore)
     }
 
     /// Plain-language explanation of what's raising and lowering the score today.
-    var forgeScoreNarrative: String {
-        let sorted = forgeScoreBreakdown.sorted { $0.value < $1.value }
-        guard let lowest = sorted.first, let highest = sorted.last else { return "" }
-        let second = sorted.dropFirst().first
-        let drags: String
-        if let second, second.value < 75 {
-            drags = "\(lowest.label) (\(lowest.value)) and \(second.label) (\(second.value))"
-        } else {
-            drags = "\(lowest.label) (\(lowest.value))"
-        }
-        return "Held back by \(drags). Lifted by \(highest.label) (\(highest.value))."
-    }
+    var forgeScoreNarrative: String { ForgeScoreEngine.narrative(forgeScoreBreakdown) }
 
     /// Why the score moved — signed contributors, so the number feels alive.
     /// Positives blend day-over-day trend movement with today's strong components;
@@ -178,9 +191,9 @@ final class AppState {
         var out: [ScoreChange] = []
 
         func dayMove(_ name: String) -> Double? {
-            guard let s = recovery.trends.first(where: { $0.name == name }), s.values.count >= 2
-            else { return nil }
-            return s.values[s.values.count - 1] - s.values[s.values.count - 2]
+            let s = recovery.series(name)
+            guard s.count >= 2 else { return nil }
+            return s[s.count - 1] - s[s.count - 2]
         }
         if let r = dayMove("Recovery") {
             if r >= 1.5 { out.append(ScoreChange(text: "Recovery improved", positive: true)) }
@@ -204,13 +217,127 @@ final class AppState {
     }
 
     /// The single component where the most points are recoverable — what to fix first.
-    var forgeScoreLever: String {
-        guard let c = forgeScoreBreakdown.max(by: {
-            Double(100 - $0.value) * $0.weight < Double(100 - $1.value) * $1.weight
-        }) else { return "" }
-        let gain = Int((Double(100 - c.value) * c.weight).rounded())
-        guard gain > 0 else { return "Every input is dialed — hold the line." }
-        return "\(c.label) is your biggest lever — up to +\(gain) points on the table."
+    var forgeScoreLever: String { ForgeScoreEngine.lever(forgeScoreBreakdown) }
+
+    /// The transparency contract behind today's Forge Score — inputs used, what's
+    /// missing, confidence, freshness, and the safe fallback. Surfaced in the UI so
+    /// the number is never opaque.
+    var forgeScoreBasis: RecommendationBasis {
+        let used = forgeScoreBreakdown.map { "\($0.label) \($0.value)" }
+        var missing: [String] = []
+        switch recovery.provenance {
+        case .demo:
+            missing.append("Live Apple Health signals (sleep, HRV, activity)")
+        case .partial:
+            if !recovery.recoveryFromLiveSignals { missing.append("Live recovery (currently estimated)") }
+            missing.append("Live strain & readiness (currently estimated)")
+        case .live:
+            break
+        }
+        if checkIn == nil { missing.append("Today's morning check-in") }
+        if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
+            missing.append("A fresh HRV reading (last sample ~\(Int(hrvAge))h old)")
+        }
+
+        let fallback = recovery.provenance == .live ? nil
+            : "Using demo/estimated values where live data isn't connected — connect Apple Health to personalize."
+        return RecommendationBasis(
+            summary: forgeScoreNarrative, inputsUsed: used, inputsMissing: missing,
+            confidence: RecommendationBasis.confidence(provenance: recovery.provenance, hasCheckIn: checkIn != nil),
+            asOf: .now, safeFallback: fallback)
+    }
+
+    /// The transparency contract behind today's Directive.
+    var directiveBasis: RecommendationBasis {
+        let d = recovery.today
+        var used: [String] = ["Recovery \(d.recovery)"]
+        if d.sleepDebtHours > 0 { used.append("Sleep debt \(String(format: "%.1f", d.sleepDebtHours))h") }
+        if nutrition.proteinRemaining > 0 { used.append("Protein \(nutrition.proteinRemaining)g to go") }
+        used.append("Hydration \(nutrition.hydrationPct)%")
+        if d.strainYesterday > 0 { used.append("Training load \(Int(d.strainYesterday.rounded()))/21") }
+        if let injury = injuries.active.first {
+            used.append("\(injury.type.rawValue) injury (pain \(injury.painToday)/10)")
+        }
+        if let soreness = checkIn?.soreness { used.append("Soreness \(soreness)/10") }
+
+        var missing: [String] = []
+        if checkIn == nil { missing.append("Morning check-in (soreness, energy, stress)") }
+        if recovery.provenance == .demo { missing.append("Live recovery & sleep from Apple Health") }
+        if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
+            missing.append("A fresh HRV reading (last sample ~\(Int(hrvAge))h old)")
+        }
+
+        let fallback: String?
+        if checkIn == nil {
+            fallback = "No check-in yet — log soreness and energy to sharpen today's call."
+        } else if recovery.provenance == .demo {
+            fallback = "Recovery is demo data until Apple Health is connected."
+        } else {
+            fallback = nil
+        }
+        return RecommendationBasis(
+            summary: dailyDirective.rationale, inputsUsed: used, inputsMissing: missing,
+            confidence: RecommendationBasis.confidence(provenance: recovery.provenance, hasCheckIn: checkIn != nil),
+            asOf: .now, safeFallback: fallback)
+    }
+
+    /// The transparency contract behind today's recovery estimate.
+    var recoveryBasis: RecommendationBasis {
+        let d = recovery.today
+        let used = [
+            "HRV \(d.hrv) ms (baseline \(d.hrvBaseline))",
+            "Resting HR \(d.restingHR) bpm",
+            "Sleep \(String(format: "%.1f", d.sleep.hours)) h",
+            "Sleep debt \(String(format: "%.1f", d.sleepDebtHours)) h",
+        ]
+        var missing: [String] = []
+        if recovery.provenance == .demo {
+            missing.append("Live HRV, resting HR & sleep from Apple Health")
+        } else if !recovery.recoveryFromLiveSignals {
+            missing.append("A fresh HRV reading to derive recovery from your own data")
+        }
+        if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
+            missing.append("A current HRV sample (last one ~\(Int(hrvAge))h old)")
+        }
+        let fallback = recovery.recoveryFromLiveSignals ? nil
+            : "Recovery is a demo/estimated value until fresh Apple Health signals are connected."
+        let summary = recovery.recoveryFromLiveSignals
+            ? "Recovery \(d.recovery), derived from your HRV vs baseline, resting HR, and sleep."
+            : "Recovery \(d.recovery) (estimate) — connect Apple Health to base it on your own signals."
+        return RecommendationBasis(
+            summary: summary, inputsUsed: used, inputsMissing: missing,
+            confidence: RecommendationBasis.confidence(provenance: recovery.provenance, hasCheckIn: checkIn != nil),
+            asOf: .now, safeFallback: fallback)
+    }
+
+    /// The transparency contract behind today's coached fuel targets.
+    var nutritionBasis: RecommendationBasis {
+        let n = nutrition
+        var used = [
+            "Bodyweight \(Int(user.weightLb)) lb",
+            "Activity \(user.activityLevel.rawValue)",
+            "Goal \(user.primaryGoal.rawValue)",
+        ]
+        if !n.entries.isEmpty { used.append("Logged today: \(n.calories) kcal · \(n.protein) g protein") }
+        for adj in (n.activePlan?.adjustments ?? []) { used.append(adj.reason) }
+
+        var missing: [String] = []
+        if n.entries.isEmpty { missing.append("Today's logged meals (to track against the target)") }
+        // The adaptive weight-trend adjustments run on sample weigh-ins until real
+        // body-weight history exists — say so rather than imply it's personalized.
+        if n.activePlan?.isAdjusted == true {
+            missing.append("Real weigh-in history (trend adjustments use sample data)")
+        }
+
+        let confidence: RecommendationBasis.Confidence = n.entries.isEmpty ? .moderate : .high
+        let fallback = n.entries.isEmpty
+            ? "Targets come from your profile; log meals so Forge can coach what's left today."
+            : nil
+        let summary = n.activePlan?.adjustments.first?.reason
+            ?? "Fuel targets derived from your bodyweight, activity, and goal."
+        return RecommendationBasis(
+            summary: summary, inputsUsed: used, inputsMissing: missing,
+            confidence: confidence, asOf: .now, safeFallback: fallback)
     }
 
     /// Today's generated session — built from THIS athlete's goal, equipment,
@@ -223,7 +350,9 @@ final class AppState {
             equipment: user.equipment.first ?? .fullGym,
             recovery: recovery.today.recovery,
             injuries: injuries.active.map(\.type),
-            level: user.fitnessLevel)
+            level: user.fitnessLevel,
+            recentStrain: recovery.today.strainYesterday,
+            strainBaseline: recovery.strainBaseline)
     }
 
     /// Today's directive — the full prescribed plan, synthesized by DirectiveEngine
@@ -240,8 +369,11 @@ final class AppState {
             injuryRiskBand: injuries.risk.band,
             activeInjuryName: injury?.type.rawValue,
             activeInjuryPain: injury?.painToday,
-            workoutName: todaysPlan.name,
+            // Cheap name lookup — the Directive doesn't need a full generate() here.
+            workoutName: workouts.workoutName(goal: user.primaryGoal, injuries: injuries.active.map(\.type)),
             soreness: checkIn?.soreness,
+            trainingLoadYesterday: d.strainYesterday,
+            trainingLoadAvg: recovery.strainBaseline,
             calorieTarget: nutrition.calorieTarget,
             proteinTarget: nutrition.proteinTarget,
             mobilityMinutes: injury != nil ? 20 : 12,
@@ -255,7 +387,7 @@ final class AppState {
     /// MacroFactor-style adaptivity, Forge-style integration: training load,
     /// weight trend, recovery, and injuries move the targets — with reasons.
     func refreshFuelPlan() {
-        let strain = recovery.trends.first { $0.name == "Strain" }?.values ?? []
+        let strain = recovery.series("Strain")
         let strainAvg7 = strain.suffix(7).isEmpty ? 0
             : strain.suffix(7).reduce(0, +) / Double(strain.suffix(7).count)
         nutrition.activePlan = AdaptiveNutritionEngine.plan(.init(
@@ -297,10 +429,13 @@ final class AppState {
     /// live data enters the same pipeline as every other source, never a side door.
     func ingestHealthKitSignals() {
         guard healthKit.authState == .authorized, !healthKit.usingMockData else { return }
-        recovery.updateReading(.sleep, value: healthKit.sleepHoursLastNight, unit: "h", source: .appleWatch)
-        recovery.updateReading(.hrv, value: Double(healthKit.hrvMs), unit: "ms", source: .appleWatch)
-        recovery.updateReading(.restingHR, value: Double(healthKit.restingHeartRate), unit: "bpm", source: .appleWatch)
-        recovery.updateReading(.heartRate, value: Double(healthKit.heartRate), unit: "bpm", source: .appleWatch)
+        // Pass each sample's real age so a stale HRV/HR no longer reads as current.
+        // Steps & energy are same-day sums (inherently fresh → age 0).
+        func age(_ kind: MetricKind) -> Double { healthKit.ageHours(for: kind) ?? 0 }
+        recovery.updateReading(.sleep, value: healthKit.sleepHoursLastNight, unit: "h", source: .appleWatch, ageHours: age(.sleep))
+        recovery.updateReading(.hrv, value: Double(healthKit.hrvMs), unit: "ms", source: .appleWatch, ageHours: age(.hrv))
+        recovery.updateReading(.restingHR, value: Double(healthKit.restingHeartRate), unit: "bpm", source: .appleWatch, ageHours: age(.restingHR))
+        recovery.updateReading(.heartRate, value: Double(healthKit.heartRate), unit: "bpm", source: .appleWatch, ageHours: age(.heartRate))
         recovery.updateReading(.steps, value: Double(healthKit.steps), unit: "", source: .appleWatch)
         recovery.updateReading(.calories, value: Double(healthKit.activeEnergy), unit: "kcal", source: .appleWatch)
     }
@@ -413,14 +548,11 @@ final class AppState {
     /// The weekly recap — trend windows synthesized into wins, watch-outs, and
     /// next week's single focus. The Directive's longer-horizon sibling.
     var weeklyReport: WeeklyReport {
-        func series(_ name: String) -> [Double] {
-            recovery.trends.first { $0.name == name }?.values ?? []
-        }
         return WeeklyReportEngine.make(
-            recovery: series("Recovery"),
-            sleep: series("Sleep"),
-            strain: series("Strain"),
-            hrv: series("HRV"),
+            recovery: recovery.series("Recovery"),
+            sleep: recovery.series("Sleep"),
+            strain: recovery.series("Strain"),
+            hrv: recovery.series("HRV"),
             streakDays: user.streakDays,
             lever: forgeScoreLever)
     }

@@ -102,7 +102,8 @@ final class WorkoutService {
     //  profile, recovery, and injuries — this service stays a pure engine.)
 
     func generate(goal: Goal, minutes: Int, equipment: Equipment,
-                  recovery: Int, injuries: [InjuryType], level: FitnessLevel) -> GeneratedWorkout {
+                  recovery: Int, injuries: [InjuryType], level: FitnessLevel,
+                  recentStrain: Double = 0, strainBaseline: Double = 0) -> GeneratedWorkout {
 
         let lowRecovery = recovery < 60
         let highRecovery = recovery >= 80
@@ -110,14 +111,32 @@ final class WorkoutService {
         let shoulderSafe = injuries.contains(.shoulder)
         let backSafe = injuries.contains(.back)
 
-        // Volume scaling by recovery
-        let mainSets = lowRecovery ? 3 : (highRecovery ? 5 : 4)
-        let rpeCap = lowRecovery ? "RPE 7" : (highRecovery ? "RPE 9" : "RPE 8.5")
+        // Volume + intensity scale with recovery, then deload FURTHER when recent
+        // training load spiked over the athlete's baseline (acute:chronic ≥ 1.4) or
+        // hit a maximal day (≥ 15/21) — so a hard week trims the actual prescribed
+        // session, not just the headline. Never drops below the 3-set / RPE-7 floor.
+        var mainSets = lowRecovery ? 3 : (highRecovery ? 5 : 4)
+        var rpe = lowRecovery ? 7.0 : (highRecovery ? 9.0 : 8.5)
+        let highLoad = strainBaseline > 0 ? recentStrain / strainBaseline >= 1.4 : recentStrain >= 15
+        let baseSets = mainSets
+        if highLoad {
+            mainSets = max(3, mainSets - 1)
+            rpe = max(7.0, rpe - 0.5)
+        }
+        let trimmedASet = baseSets > mainSets
+        let rpeCap = "RPE " + (rpe == rpe.rounded() ? String(Int(rpe)) : String(format: "%.1f", rpe))
 
         var rationaleParts: [String] = []
-        if lowRecovery { rationaleParts.append("Recovery \(recovery): volume cut ~25% and intensity capped at RPE 7.") }
-        else if highRecovery { rationaleParts.append("Recovery \(recovery): green light — progression sets included.") }
-        else { rationaleParts.append("Recovery \(recovery): standard volume, top sets capped at RPE 8.5.") }
+        if highLoad {
+            let trimNote = trimmedASet ? "one set trimmed and top sets" : "top sets"
+            rationaleParts.append("Recovery \(recovery), but training load ran high (\(Int(recentStrain.rounded()))/21): \(trimNote) capped at \(rpeCap) to absorb the recent block.")
+        } else if lowRecovery {
+            rationaleParts.append("Recovery \(recovery): volume cut ~25% and intensity capped at \(rpeCap).")
+        } else if highRecovery {
+            rationaleParts.append("Recovery \(recovery): green light — progression sets included.")
+        } else {
+            rationaleParts.append("Recovery \(recovery): standard volume, top sets capped at \(rpeCap).")
+        }
         if kneeSafe { rationaleParts.append("Knee flag: squats, lunges, and leg press swapped for hip-dominant + tempo work; zero plyometrics.") }
         if shoulderSafe { rationaleParts.append("Shoulder flag: overhead pressing removed — landmine and neutral-grip variants instead.") }
         if backSafe { rationaleParts.append("Back flag: deadlifts, RDLs, and bent-over rows removed — chest-supported pulling only.") }
@@ -193,6 +212,13 @@ final class WorkoutService {
                      GeneratedBlock(label: "Main · Strength", note: "Rest fully", items: main),
                      GeneratedBlock(label: "Accessory", note: "Quality over load", items: accessory)]
         )
+    }
+
+    /// The session's display name without generating the whole plan — the Directive
+    /// needs the name, not the exercises, so it shouldn't pay for a full generate().
+    /// Must stay consistent with `generate(...).name`.
+    func workoutName(goal: Goal, injuries: [InjuryType]) -> String {
+        goalTitle(goal, kneeSafe: injuries.contains(.knee))
     }
 
     private func goalTitle(_ goal: Goal, kneeSafe: Bool) -> String {

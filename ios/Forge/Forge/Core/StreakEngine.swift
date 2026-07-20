@@ -1,7 +1,8 @@
 import Foundation
 
-/// Consecutive-day "showed up" streak from the dates the app recorded a
-/// Forge Score (one per day the athlete opened Forge). Pure and tested.
+/// Consecutive-day streak over a set of *action* dates (workouts + check-ins,
+/// via PersistenceService.activeDays) — days the athlete did the work, not days
+/// they opened the app. Pure, timezone-normalized, and tested.
 enum StreakEngine {
     /// Days ending today (or yesterday — today isn't over) that form an
     /// unbroken run. Dates may arrive unordered or duplicated.

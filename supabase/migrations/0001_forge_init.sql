@@ -19,18 +19,27 @@ create or replace function public.set_updated_at()
 returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end; $$;
 
--- ---- enums -----------------------------------------------------------------
-create type sex_t            as enum ('male','female','other');
-create type fitness_level_t  as enum ('beginner','intermediate','advanced','elite');
-create type activity_level_t as enum ('sedentary','light','moderate','active','very_active');
-create type goal_t           as enum ('build_muscle','lose_fat','endurance','strength','athletic','health','injury_recovery');
-create type injury_phase_t   as enum ('acute','subacute','rehab','return_to_sport','resolved');
-create type plan_t           as enum ('free','pro','elite');
+-- ---- enums (idempotent — Postgres has no `create type if not exists`) -------
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'sex_t') then
+    create type sex_t as enum ('male','female','other'); end if;
+  if not exists (select 1 from pg_type where typname = 'fitness_level_t') then
+    create type fitness_level_t as enum ('beginner','intermediate','advanced','elite'); end if;
+  if not exists (select 1 from pg_type where typname = 'activity_level_t') then
+    create type activity_level_t as enum ('sedentary','light','moderate','active','very_active'); end if;
+  if not exists (select 1 from pg_type where typname = 'goal_t') then
+    create type goal_t as enum ('build_muscle','lose_fat','endurance','strength','athletic','health','injury_recovery'); end if;
+  if not exists (select 1 from pg_type where typname = 'injury_phase_t') then
+    create type injury_phase_t as enum ('acute','subacute','rehab','return_to_sport','resolved'); end if;
+  if not exists (select 1 from pg_type where typname = 'plan_t') then
+    create type plan_t as enum ('free','pro','elite'); end if;
+end $$;
 
 -- ============================================================================
 -- IDENTITY
 -- ============================================================================
-create table public.profiles (
+create table if not exists public.profiles (
   id              uuid primary key references auth.users on delete cascade,
   name            text not null default '',
   sex             sex_t,
@@ -53,7 +62,7 @@ create table public.profiles (
   updated_at      timestamptz default now()
 );
 
-create table public.subscriptions (
+create table if not exists public.subscriptions (
   user_id              uuid primary key references auth.users on delete cascade,
   plan                 plan_t not null default 'free',
   status               text not null default 'active',     -- active | trialing | past_due | canceled
@@ -66,7 +75,7 @@ create table public.subscriptions (
 -- ============================================================================
 -- DAILY SIGNALS  (the inputs to Forge Score + Directive + Insight engines)
 -- ============================================================================
-create table public.recovery_days (
+create table if not exists public.recovery_days (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references auth.users on delete cascade,
   day           date not null,
@@ -83,7 +92,7 @@ create table public.recovery_days (
   unique (user_id, day)
 );
 
-create table public.sleep_days (
+create table if not exists public.sleep_days (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users on delete cascade,
   day         date not null,
@@ -102,7 +111,7 @@ create table public.sleep_days (
 -- ============================================================================
 -- TRAINING
 -- ============================================================================
-create table public.exercises (                 -- shared library (no user_id)
+create table if not exists public.exercises (                 -- shared library (no user_id)
   id          uuid primary key default gen_random_uuid(),
   slug        text unique not null,
   name        text not null,
@@ -112,7 +121,7 @@ create table public.exercises (                 -- shared library (no user_id)
   is_public   boolean default true
 );
 
-create table public.workouts (
+create table if not exists public.workouts (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users on delete cascade,
   name        text not null,
@@ -124,7 +133,7 @@ create table public.workouts (
   created_at  timestamptz default now()
 );
 
-create table public.workout_sets (
+create table if not exists public.workout_sets (
   id           uuid primary key default gen_random_uuid(),
   workout_id   uuid not null references public.workouts on delete cascade,
   user_id      uuid not null references auth.users on delete cascade,
@@ -137,7 +146,7 @@ create table public.workout_sets (
   is_pr        boolean default false
 );
 
-create table public.personal_records (
+create table if not exists public.personal_records (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users on delete cascade,
   exercise_name text not null,
@@ -150,7 +159,7 @@ create table public.personal_records (
 -- ============================================================================
 -- NUTRITION
 -- ============================================================================
-create table public.foods (                      -- shared + user-custom
+create table if not exists public.foods (                      -- shared + user-custom
   id        uuid primary key default gen_random_uuid(),
   user_id   uuid references auth.users on delete cascade,   -- null => public food
   name      text not null,
@@ -160,7 +169,7 @@ create table public.foods (                      -- shared + user-custom
   fiber numeric, sugar numeric
 );
 
-create table public.food_logs (
+create table if not exists public.food_logs (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references auth.users on delete cascade,
   food_id    uuid references public.foods,
@@ -170,14 +179,14 @@ create table public.food_logs (
   logged_at  timestamptz default now()
 );
 
-create table public.hydration_days (
+create table if not exists public.hydration_days (
   user_id   uuid not null references auth.users on delete cascade,
   day       date not null,
   water_oz  numeric not null default 0,
   primary key (user_id, day)
 );
 
-create table public.supplements (
+create table if not exists public.supplements (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users on delete cascade,
   name         text not null,
@@ -187,7 +196,7 @@ create table public.supplements (
   active       boolean default true
 );
 
-create table public.supplement_logs (
+create table if not exists public.supplement_logs (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references auth.users on delete cascade,
   supplement_id uuid not null references public.supplements on delete cascade,
@@ -199,7 +208,7 @@ create table public.supplement_logs (
 -- ============================================================================
 -- INJURY / PT  (a Forge differentiator)
 -- ============================================================================
-create table public.injuries (
+create table if not exists public.injuries (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users on delete cascade,
   type         text not null,                     -- knee|shoulder|...
@@ -213,7 +222,7 @@ create table public.injuries (
   notes        text
 );
 
-create table public.pain_logs (
+create table if not exists public.pain_logs (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references auth.users on delete cascade,
   injury_id  uuid not null references public.injuries on delete cascade,
@@ -222,7 +231,7 @@ create table public.pain_logs (
   unique (injury_id, day)
 );
 
-create table public.rts_checklist (
+create table if not exists public.rts_checklist (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references auth.users on delete cascade,
   injury_id  uuid not null references public.injuries on delete cascade,
@@ -234,7 +243,7 @@ create table public.rts_checklist (
 -- ============================================================================
 -- HEALTH / FORECASTS / SCORE / DIRECTIVE  (engine outputs, cached per day)
 -- ============================================================================
-create table public.bloodwork (
+create table if not exists public.bloodwork (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users on delete cascade,
   name        text not null,
@@ -245,7 +254,7 @@ create table public.bloodwork (
   taken_on    date
 );
 
-create table public.body_snapshots (
+create table if not exists public.body_snapshots (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users on delete cascade,
   day          date not null default current_date,
@@ -253,7 +262,7 @@ create table public.body_snapshots (
   unique (user_id, day)
 );
 
-create table public.forge_score_history (
+create table if not exists public.forge_score_history (
   user_id   uuid not null references auth.users on delete cascade,
   day       date not null,
   score     int not null,
@@ -261,7 +270,7 @@ create table public.forge_score_history (
   primary key (user_id, day)
 );
 
-create table public.directives (                  -- the cached daily plan + why
+create table if not exists public.directives (                  -- the cached daily plan + why
   user_id   uuid not null references auth.users on delete cascade,
   day       date not null,
   headline  text, rationale text, priority text,
@@ -269,7 +278,7 @@ create table public.directives (                  -- the cached daily plan + why
   primary key (user_id, day)
 );
 
-create table public.goals (
+create table if not exists public.goals (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users on delete cascade,
   title       text not null,
@@ -282,13 +291,13 @@ create table public.goals (
 -- ============================================================================
 -- AI COACH (conversation history; reused by web + mobile)
 -- ============================================================================
-create table public.coach_threads (
+create table if not exists public.coach_threads (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references auth.users on delete cascade,
   title      text,
   created_at timestamptz default now()
 );
-create table public.coach_messages (
+create table if not exists public.coach_messages (
   id         uuid primary key default gen_random_uuid(),
   thread_id  uuid not null references public.coach_threads on delete cascade,
   user_id    uuid not null references auth.users on delete cascade,
@@ -301,7 +310,7 @@ create table public.coach_messages (
 -- ============================================================================
 -- SOCIAL  (opt-in; minimal surface)
 -- ============================================================================
-create table public.posts (
+create table if not exists public.posts (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references auth.users on delete cascade,
   kind       text,                                -- pr|progress|workout|share
@@ -310,11 +319,11 @@ create table public.posts (
   visibility text default 'public',               -- public | followers | private
   created_at timestamptz default now()
 );
-create table public.challenges (
+create table if not exists public.challenges (
   id         uuid primary key default gen_random_uuid(),
   name       text not null, reward text, ends_on date
 );
-create table public.challenge_members (
+create table if not exists public.challenge_members (
   challenge_id uuid references public.challenges on delete cascade,
   user_id      uuid references auth.users on delete cascade,
   progress     numeric default 0,
@@ -324,8 +333,10 @@ create table public.challenge_members (
 -- ============================================================================
 -- updated_at triggers
 -- ============================================================================
+drop trigger if exists t_profiles_updated on public.profiles;
 create trigger t_profiles_updated   before update on public.profiles
   for each row execute function public.set_updated_at();
+drop trigger if exists t_subs_updated on public.subscriptions;
 create trigger t_subs_updated        before update on public.subscriptions
   for each row execute function public.set_updated_at();
 
@@ -337,6 +348,7 @@ begin
   insert into public.subscriptions (user_id) values (new.id);
   return new;
 end; $$;
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
 
@@ -355,6 +367,7 @@ begin
   ]
   loop
     execute format('alter table public.%I enable row level security;', t);
+    execute format('drop policy if exists "own" on public.%I;', t);
     -- profiles keys on id; everything else keys on user_id
     if t = 'profiles' then
       execute format($p$create policy "own" on public.%I
@@ -368,10 +381,14 @@ end $$;
 
 -- shared read-only catalogs (exercises, public foods, challenges) are world-readable
 alter table public.exercises enable row level security;
+drop policy if exists "read_public_exercises" on public.exercises;
 create policy "read_public_exercises" on public.exercises for select using (is_public);
-create policy "read_challenges" on public.challenges for select using (true);
 alter table public.challenges enable row level security;
+drop policy if exists "read_challenges" on public.challenges;
+create policy "read_challenges" on public.challenges for select using (true);
 
 -- public posts are readable by anyone; foods: public rows readable by all
+drop policy if exists "read_public_posts" on public.posts;
 create policy "read_public_posts" on public.posts for select using (visibility = 'public');
+drop policy if exists "read_public_foods" on public.foods;
 create policy "read_public_foods" on public.foods for select using (user_id is null);

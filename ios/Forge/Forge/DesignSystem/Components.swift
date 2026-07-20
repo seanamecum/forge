@@ -152,6 +152,10 @@ struct CapsuleBar: View {
     let target: Double
     var tone: Tone = .gold
     var height: CGFloat = 8
+    /// When set, VoiceOver reads this as the bar's value. When nil (the default),
+    /// the bar is treated as decorative — callers almost always place the value in
+    /// adjacent text, so hiding it keeps VoiceOver uncluttered.
+    var accessibilityLabel: String? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -166,6 +170,11 @@ struct CapsuleBar: View {
         }
         .frame(height: height)
         .animation(.easeOut(duration: 0.6), value: value)
+        .accessibilityElement()
+        .accessibilityHidden(accessibilityLabel == nil)
+        .accessibilityLabel(accessibilityLabel ?? "")
+        .accessibilityValue(accessibilityLabel == nil
+            ? "" : "\(Progress.displayPercent(value, of: target)) percent")
     }
 
     private var progress: CGFloat {

@@ -210,6 +210,9 @@ struct RunningView: View {
                           exerciseSummary: String(format: "%.2f mi GPS run", miles)),
             context: PersistenceService.context)
 
+        // Close the loop: the run's load flows into strain → Forge Score → Directive.
+        app.applyTrainingLoad()
+
         // Mirror to Apple Health as a real running workout.
         if app.healthKit.authState == .authorized, let start = tracker.startedAt {
             let meters = tracker.distanceMeters

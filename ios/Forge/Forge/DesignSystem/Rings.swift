@@ -90,5 +90,9 @@ struct MetricRing: View {
                 Spacer(minLength: 0)
             }
         }
+        // Read as one element ("Recovery, 78, HRV-weighted blend") instead of
+        // three fragments (ring label, caption, detail).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(value). \(detail)")
     }
 }

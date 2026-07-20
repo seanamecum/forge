@@ -1,4 +1,17 @@
 import SwiftUI
+import UIKit
+
+/// A built export file, wrapped so `.sheet(item:)` can present it.
+private struct ExportFile: Identifiable { let id = UUID(); let url: URL }
+
+/// Minimal system share sheet for a prepared file URL.
+private struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
+}
 
 struct ProfileView: View {
     @Environment(AppState.self) private var app
@@ -6,6 +19,8 @@ struct ProfileView: View {
     @State private var showFeedback = false
     @State private var confirmDelete = false
     @State private var deleting = false
+    @State private var exportFile: ExportFile?
+    @State private var exportError: String?
 
     var body: some View {
         ScreenScaffold {
@@ -64,32 +79,69 @@ struct ProfileView: View {
                 if let error = app.auth.lastError {
                     ErrorBanner(message: error) { app.auth.lastError = nil }
                 }
+                if let exportError {
+                    ErrorBanner(message: exportError) { self.exportError = nil }
+                }
                 HStack(spacing: 8) {
-                    ShareLink(item: PersistenceService.exportJSON(),
-                              preview: SharePreview("Forge data export")) {
+                    Button {
+                        do {
+                            exportFile = ExportFile(url: try PersistenceService.exportToTemporaryFile(profile: app.user))
+                        } catch {
+                            exportError = (error as? LocalizedError)?.errorDescription
+                                ?? "Couldn't export your data. Please try again."
+                        }
+                    } label: {
                         Label("Export my data", systemImage: "square.and.arrow.up")
                     }
                     .buttonStyle(GhostButtonStyle(compact: true))
-                    if app.auth.sessionEmail != nil {
-                        Button(deleting ? "Deleting…" : "Delete account") { confirmDelete = true }
-                            .buttonStyle(GhostButtonStyle(compact: true))
-                            .foregroundStyle(Theme.rubyBright)
-                            .disabled(deleting)
-                    }
+
+                    Button(deleting ? "Deleting…" : "Delete data…") { confirmDelete = true }
+                        .buttonStyle(GhostButtonStyle(compact: true))
+                        .foregroundStyle(Theme.rubyBright)
+                        .disabled(deleting)
                 }
             }
         }
-        .confirmationDialog("Delete your Forge account?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete account permanently", role: .destructive) {
-                deleting = true
-                Task { @MainActor in
-                    if await app.auth.deleteAccount() { app.logout() }
-                    deleting = false
-                }
+        .sheet(item: $exportFile) { ShareSheet(items: [$0.url]) }
+        .confirmationDialog("Delete Forge data", isPresented: $confirmDelete, titleVisibility: .visible) {
+            if app.auth.sessionEmail != nil {
+                Button("Delete cloud account only", role: .destructive) { deleteCloudAccount() }
+                Button("Delete account + all data on this phone", role: .destructive) { deleteEverything() }
             }
+            Button("Delete all data on this phone", role: .destructive) { deleteLocalData() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Removes your account and sign-in from Forge's servers. Data on this phone stays until you delete the app.")
+            Text(app.auth.sessionEmail != nil
+                 ? "Cloud deletion removes your account and sign-in from Forge's servers. Phone deletion erases your workouts, nutrition, check-ins, hydration and scores stored on this device. Neither touches Apple Health — Forge only reads it."
+                 : "This erases your workouts, nutrition, check-ins, hydration and scores stored on this device. It does not touch Apple Health — Forge only reads it.")
+        }
+    }
+
+    /// Cloud account only: server delete, then end the session. Local data stays.
+    private func deleteCloudAccount() {
+        deleting = true
+        Task { @MainActor in
+            if await app.auth.deleteAccount() { app.logout() }
+            deleting = false
+        }
+    }
+
+    /// Local only: wipe on-device Forge data; the user stays signed in.
+    private func deleteLocalData() {
+        PersistenceService.deleteAllLocalData()
+    }
+
+    /// Both: delete the cloud account first; only wipe local data if that
+    /// succeeds, so a failed server delete can be retried without losing data.
+    private func deleteEverything() {
+        deleting = true
+        Task { @MainActor in
+            let ok = await app.auth.deleteAccount()
+            if ok {
+                PersistenceService.deleteAllLocalData()
+                app.logout()
+            }
+            deleting = false
         }
     }
 

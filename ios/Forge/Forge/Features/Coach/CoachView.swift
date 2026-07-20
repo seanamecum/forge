@@ -167,7 +167,7 @@ struct CoachBubble: View {
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "list.number")
-                            Text(showSteps ? "Hide reasoning" : "Reasoning · \(message.steps.count) signals")
+                            Text(showSteps ? "Hide signals" : "Signals Forge used · \(message.steps.count)")
                         }
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Theme.gold)

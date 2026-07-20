@@ -21,6 +21,19 @@ final class RecoveryService {
 
     var forgeScoreTrend: [Double] { MockData.forgeScoreTrend }
 
+    /// Values of a named trend series (Recovery · Sleep · Strain · HRV), or empty.
+    /// One accessor instead of `trends.first { $0.name == … }` scattered around.
+    func series(_ name: String) -> [Double] {
+        trends.first { $0.name == name }?.values ?? []
+    }
+
+    /// The athlete's strain baseline — the single source for the acute:chronic
+    /// comparisons in the Directive and the workout generator.
+    var strainBaseline: Double {
+        let s = series("Strain")
+        return s.isEmpty ? 0 : s.reduce(0, +) / Double(s.count)
+    }
+
     var connectedCount: Int { wearables.filter(\.connected).count }
 
     func toggleConnection(_ device: WearableDevice) {
@@ -67,12 +80,47 @@ final class RecoveryService {
         return seeded + liveOverrides
     }
 
-    /// Ingest a real reading (e.g. from HealthKit) and re-resolve.
-    func updateReading(_ kind: MetricKind, value: Double, unit: String, source: DataSource) {
+    /// Metrics currently backed by a genuine live reading (not a demo seed).
+    var liveMetrics: Set<MetricKind> { Set(liveOverrides.map(\.kind)) }
+
+    /// Honest provenance of the recovery snapshot / Forge Score. `.demo` when
+    /// nothing is live; `.partial` once any live signal arrives (recovery, strain,
+    /// sleep-debt and readiness are still estimated, so it is never fully `.live`).
+    var provenance: DataProvenance {
+        liveMetrics.isEmpty ? .demo : .partial
+    }
+
+    /// Whether today's headline recovery number was derived from live signals
+    /// (vs. the demo seed). Drives the "estimate" labeling in the UI.
+    private(set) var recoveryFromLiveSignals = false
+
+    /// A live signal older than this is treated as stale — it no longer drives a
+    /// "live" recovery estimate (matches DataHub's 24h "good" boundary).
+    static let staleThresholdHours = 24.0
+
+    /// Ingest a real reading (e.g. from HealthKit) and re-resolve. `ageHours` is how
+    /// old the sample is — hardcoding it to 0 (the old behaviour) made a weeks-old
+    /// HRV read as fresh.
+    func updateReading(_ kind: MetricKind, value: Double, unit: String,
+                       source: DataSource, ageHours: Double = 0) {
         liveOverrides.removeAll { $0.kind == kind && $0.source == source }
         liveOverrides.append(MetricReading(kind: kind, value: value, unit: unit,
-                                           source: source, ageHours: 0))
+                                           source: source, ageHours: max(0, ageHours)))
         applyUnifiedSignals()
+    }
+
+    /// Age (hours) of the live sample currently feeding a metric — nil when the
+    /// value is demo-seeded rather than a genuine live reading.
+    func liveAgeHours(_ kind: MetricKind) -> Double? {
+        guard let winner = resolved(kind),
+              liveOverrides.contains(where: { $0.kind == kind && $0.source == winner.source })
+        else { return nil }
+        return winner.ageHours
+    }
+
+    /// True when any live signal feeding recovery is past the stale threshold.
+    var hasStaleLiveSignal: Bool {
+        liveMetrics.contains { (liveAgeHours($0) ?? 0) >= Self.staleThresholdHours }
     }
 
     /// The winning reading for a metric under priority + preference rules.
@@ -90,10 +138,29 @@ final class RecoveryService {
             today.sleep.hours = sleep.value
             today.sleep.score = Int((sleep.value * (81.0 / 7.2)).rounded()).clamped(to: 0...100)
         }
-        if let hrv = resolved(.hrv) { today.hrv = Int(hrv.value) }
+        let hrvReading = resolved(.hrv)
+        if let hrv = hrvReading { today.hrv = Int(hrv.value) }
         if let rhr = resolved(.restingHR) { today.restingHR = Int(rhr.value) }
         if let steps = resolved(.steps) { today.steps = Int(steps.value) }
         if let cal = resolved(.calories) { today.caloriesOut = Int(cal.value) }
+
+        // Derive the headline recovery from the user's own signals (a disclosed
+        // estimate) only when the *winning* HRV is a genuine live reading AND it's
+        // fresh — so a connected user never sees the demo athlete's recovery value,
+        // and a stale sample doesn't masquerade as today's. Otherwise keep the
+        // seeded, demo-labeled value untouched.
+        let hrvIsLive = hrvReading.map { winner in
+            liveOverrides.contains { $0.kind == .hrv && $0.source == winner.source }
+                && winner.ageHours < Self.staleThresholdHours
+        } ?? false
+        if hrvIsLive {
+            today.recovery = RecoveryEstimator.recovery(
+                hrv: today.hrv, hrvBaseline: today.hrvBaseline,
+                restingHR: today.restingHR, sleepHours: today.sleep.hours)
+            recoveryFromLiveSignals = true
+        } else {
+            recoveryFromLiveSignals = false
+        }
     }
 
     /// The sources actually competing for a metric right now — a picker only

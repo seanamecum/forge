@@ -25,6 +25,35 @@ enum TargetEngine {
         roundStep(Double(calories(p)) * 0.27 / 9.0, to: 5)
     }
 
+    /// Daily step goal scaled to how active the athlete already is — a labeled
+    /// default, not a universal 10,000. Real HealthKit/Watch move goals, when
+    /// available, should override this.
+    static func steps(_ p: UserProfile) -> Int {
+        switch p.activityLevel {
+        case .sedentary:  return 6_000
+        case .light:      return 7_000
+        case .moderate:   return 8_000
+        case .active:     return 10_000
+        case .veryActive: return 12_000
+        }
+    }
+
+    /// Daily active-energy goal (kcal) from body mass + activity — not a flat
+    /// 1,000 for everyone. A safe default until a real move goal is connected.
+    static func activeEnergy(_ p: UserProfile) -> Int {
+        roundStep(p.weightLb * activeKcalPerLb(p.activityLevel), to: 50)
+    }
+
+    private static func activeKcalPerLb(_ a: ActivityLevel) -> Double {
+        switch a {
+        case .sedentary:  return 1.5
+        case .light:      return 2.2
+        case .moderate:   return 3.0
+        case .active:     return 3.8
+        case .veryActive: return 4.6
+        }
+    }
+
     static func carbs(_ p: UserProfile) -> Int {
         let remaining = Double(calories(p) - protein(p) * 4 - fat(p) * 9)
         return max(0, roundStep(remaining / 4.0, to: 5))

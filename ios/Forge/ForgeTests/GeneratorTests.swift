@@ -45,4 +45,53 @@ final class GeneratorTests: XCTestCase {
                                              recovery: 88, injuries: [], level: .intermediate)
         XCTAssertTrue(plan.rationale.contains("green light"))
     }
+
+    private func schemes(_ plan: GeneratedWorkout) -> String {
+        plan.blocks.flatMap(\.items).map(\.scheme).joined(separator: " ")
+    }
+
+    func testHighTrainingLoadDeloadsThePrescribedSession() {
+        // Same high recovery; a load spike over baseline trims the actual session.
+        let normal = WorkoutService().generate(goal: .buildMuscle, minutes: 60, equipment: .fullGym,
+                                               recovery: 88, injuries: [], level: .intermediate,
+                                               recentStrain: 10, strainBaseline: 12)
+        let deloaded = WorkoutService().generate(goal: .buildMuscle, minutes: 60, equipment: .fullGym,
+                                                 recovery: 88, injuries: [], level: .intermediate,
+                                                 recentStrain: 20, strainBaseline: 12)
+        XCTAssertTrue(schemes(normal).contains("5 ×"), "Fresh high-recovery day keeps 5 main sets")
+        XCTAssertTrue(schemes(deloaded).contains("4 ×"), "High load trims a set")
+        XCTAssertFalse(schemes(deloaded).contains("5 ×"))
+        XCTAssertTrue(deloaded.rationale.lowercased().contains("training load"))
+    }
+
+    func testDeloadNeverGoesBelowTheFloor() {
+        // Low recovery already at the 3-set / RPE-7 floor: high load can't push under it.
+        let plan = WorkoutService().generate(goal: .buildMuscle, minutes: 60, equipment: .fullGym,
+                                             recovery: 45, injuries: [], level: .intermediate,
+                                             recentStrain: 20, strainBaseline: 12)
+        XCTAssertTrue(schemes(plan).contains("3 ×"))
+        XCTAssertFalse(schemes(plan).contains("2 ×"))
+        XCTAssertTrue(plan.rationale.contains("RPE 7"))
+    }
+
+    func testCheapWorkoutNameMatchesGeneratedPlanName() {
+        // The Directive uses workoutName(...) instead of running a full generate();
+        // the two must never diverge.
+        let svc = WorkoutService()
+        for injuries in [[InjuryType](), [.knee], [.shoulder]] {
+            for goal in [Goal.buildMuscle, .endurance, .loseFat, .strength] {
+                let plan = svc.generate(goal: goal, minutes: 60, equipment: .fullGym,
+                                        recovery: 78, injuries: injuries, level: .intermediate)
+                XCTAssertEqual(svc.workoutName(goal: goal, injuries: injuries), plan.name)
+            }
+        }
+    }
+
+    func testTypicalLoadLeavesTheSessionAlone() {
+        let plan = WorkoutService().generate(goal: .buildMuscle, minutes: 60, equipment: .fullGym,
+                                             recovery: 88, injuries: [], level: .intermediate,
+                                             recentStrain: 12, strainBaseline: 13.9)
+        XCTAssertTrue(plan.rationale.contains("green light"))
+        XCTAssertTrue(schemes(plan).contains("5 ×"))
+    }
 }

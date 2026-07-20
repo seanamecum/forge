@@ -4,7 +4,12 @@ struct ForecastView: View {
     var body: some View {
         ScreenScaffold {
             SectionHeader(eyebrow: "Digital Twin", title: "Forecast",
-                          subtitle: "Your trajectory, run forward. Current surplus, progression rate, recovery, and rehab phase — extrapolated with confidence bands.")
+                          subtitle: "A preview of the trajectory view. These are illustrative sample projections — personalized forecasting from your own logged history is coming.")
+
+            HStack {
+                Chip(text: "Sample data — not from your history", tone: .amber)
+                Spacer()
+            }
 
             ForEach(MockData.forecasts) { f in
                 Card {
@@ -18,7 +23,7 @@ struct ForecastView: View {
                             VStack(alignment: .trailing, spacing: 1) {
                                 Text("\(Int(f.confidence * 100))%")
                                     .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.cream)
-                                Text("confidence").font(.system(size: 8.5)).foregroundStyle(Theme.faint)
+                                Text("sample confidence").font(.system(size: 8.5)).foregroundStyle(Theme.faint)
                             }
                         }
                         HStack {
@@ -31,7 +36,7 @@ struct ForecastView: View {
                 }
             }
 
-            DisclaimerNote(text: "Forecasts are model estimates from current trends — direction, not destiny. Adherence, biology, and life all bend the curve.")
+            DisclaimerNote(text: "These are illustrative examples, not a prediction from your data yet. Real forecasts will show direction, not destiny — adherence and biology bend the curve.")
         }
         .navigationTitle("Digital Twin")
         .navigationBarTitleDisplayMode(.inline)

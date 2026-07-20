@@ -33,6 +33,25 @@ final class TargetEngineTests: XCTestCase {
         XCTAssertEqual(Double(macroCalories), Double(s.calorieTarget), accuracy: 60)
     }
 
+    func testStepAndEnergyGoalsAreDerivedNotHardcoded() {
+        // Replaces the flat 10,000 steps / 1,000 kcal. A more active athlete gets
+        // a higher goal; a sedentary one gets a lower, safer default.
+        var couch = MockData.sean; couch.activityLevel = .sedentary
+        var athlete = MockData.sean; athlete.activityLevel = .veryActive
+        XCTAssertLessThan(TargetEngine.steps(couch), TargetEngine.steps(athlete))
+        XCTAssertLessThan(TargetEngine.activeEnergy(couch), TargetEngine.activeEnergy(athlete))
+        // Sanity: goals are positive and not the old universal constants for everyone.
+        XCTAssertGreaterThan(TargetEngine.steps(couch), 0)
+        XCTAssertNotEqual(TargetEngine.steps(couch), 10_000)
+        XCTAssertGreaterThan(TargetEngine.activeEnergy(athlete), 0)
+    }
+
+    func testActiveEnergyScalesWithBodyweight() {
+        var small = MockData.sean; small.weightLb = 130
+        var big = MockData.sean;   big.weightLb = 250
+        XCTAssertLessThan(TargetEngine.activeEnergy(small), TargetEngine.activeEnergy(big))
+    }
+
     func testProfilePersistsThroughCodable() throws {
         // Backs profile persistence — a returning user must not revert to the demo.
         let data = try JSONEncoder().encode(MockData.sean)

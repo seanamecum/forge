@@ -183,6 +183,9 @@ struct WorkoutLoggerView: View {
                                    exercisesJSON: PersistenceService.encodeExercises(completed))
         PersistenceService.saveWorkout(record, context: modelContext)
 
+        // Close the loop: real training now moves strain → Forge Score → Directive.
+        app.applyTrainingLoad()
+
         // Mirror to Apple Health when connected (best-effort, never blocks the UI).
         if app.healthKit.authState == .authorized {
             let start = startedAt
