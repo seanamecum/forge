@@ -52,7 +52,11 @@ final class AppState {
     private static let demoKey = "forge.isDemoAccount"
 
     /// Today's morning check-in, if completed (in-memory; SwiftData holds history).
-    var checkIn: CheckInSnapshot?
+    /// Applying it lets the check-in drive recovery + the Forge Score when there's
+    /// no live wearable data.
+    var checkIn: CheckInSnapshot? {
+        didSet { recovery.applyCheckIn(checkIn) }
+    }
 
     // Services — mock-backed now, swap for networked implementations later.
     let auth = AuthService()

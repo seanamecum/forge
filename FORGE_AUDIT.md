@@ -818,6 +818,25 @@ sessions mixed with Sean's). There was no demo-vs-real distinction.
   onboarding start clean (empty history, `weeklyVolumeLb == 0`, no plateaus); demo-after-real restores the
   demo world. iOS **274 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
 
+## 12d. Product — the morning check-in now drives recovery + the Forge Score (2026-07-21)
+
+**Shipping functionality for every real user.** The daily check-in (sleep quality · soreness · energy ·
+stress) was collected and persisted but only triggered the directive's soreness override — it **did not
+touch the Forge Score or the recovery number.** So a user **without a wearable** (the launch majority)
+filled it out each morning while their flagship score stayed on the demo athlete's recovery.
+- **Fix:** new pure `Core/CheckInEngine.swift` maps the check-in into a subjective recovery (energy 30% ·
+  sleep 30% · soreness 25% · stress 15%), a sleep-component score, and a readiness band.
+  `RecoveryService.applyCheckIn(_:)` applies it to `today.recovery` / `sleep.score` / `readiness` **when
+  there's no live wearable data** (objective live HRV always wins), and flips provenance from `.demo` to
+  `.partial`. Wired via a `didSet` on `AppState.checkIn` (covers both the check-in flow and relaunch). The
+  recovery hero now reads *"From your morning check-in — connect Apple Health for HRV-based recovery."*
+  Because `today.recovery`/`sleep.score` feed the Forge Score breakdown (Recovery + Sleep = 36% of the
+  score) and the directive band, a real user's reported state now moves both.
+- **Tests:** `CheckInEngineTests` (+5) — bounds/direction, each dimension moves recovery correctly, sleep
+  score + readiness bands, an end-to-end proof a good vs bad check-in changes `today.recovery` **and**
+  `forgeScore` (no wearable), and live HRV overriding the check-in. iOS **279 tests, 2 skipped, 0 failures;
+  Debug+Release 0 warnings.**
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never

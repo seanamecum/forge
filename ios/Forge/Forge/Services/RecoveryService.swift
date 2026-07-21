@@ -87,12 +87,32 @@ final class RecoveryService {
     /// nothing is live; `.partial` once any live signal arrives (recovery, strain,
     /// sleep-debt and readiness are still estimated, so it is never fully `.live`).
     var provenance: DataProvenance {
-        liveMetrics.isEmpty ? .demo : .partial
+        if !liveMetrics.isEmpty { return .partial }
+        if recoveryFromCheckIn { return .partial }   // subjective, but the user's real input
+        return .demo
     }
 
     /// Whether today's headline recovery number was derived from live signals
     /// (vs. the demo seed). Drives the "estimate" labeling in the UI.
     private(set) var recoveryFromLiveSignals = false
+
+    /// Whether today's recovery was derived from the morning check-in (the athlete's
+    /// real signal when no wearable is connected). Mutually exclusive with live.
+    private(set) var recoveryFromCheckIn = false
+
+    /// Apply the morning check-in as the recovery signal when there is no live
+    /// wearable data — so a real user's reported sleep/energy/soreness/stress
+    /// actually drives their Recovery number and Forge Score. Live HRV wins.
+    func applyCheckIn(_ snapshot: CheckInSnapshot?) {
+        guard let ci = snapshot, !recoveryFromLiveSignals else {
+            recoveryFromCheckIn = false
+            return
+        }
+        today.recovery = CheckInEngine.recovery(ci)
+        today.sleep.score = CheckInEngine.sleepScore(ci.sleepQuality)
+        today.readiness = CheckInEngine.readiness(for: today.recovery)
+        recoveryFromCheckIn = true
+    }
 
     /// A live signal older than this is treated as stale — it no longer drives a
     /// "live" recovery estimate (matches DataHub's 24h "good" boundary).
@@ -158,6 +178,7 @@ final class RecoveryService {
                 hrv: today.hrv, hrvBaseline: today.hrvBaseline,
                 restingHR: today.restingHR, sleepHours: today.sleep.hours)
             recoveryFromLiveSignals = true
+            recoveryFromCheckIn = false   // objective HRV supersedes the check-in
         } else {
             recoveryFromLiveSignals = false
         }

@@ -51,6 +51,9 @@ struct RecoverHomeView: View {
            age >= RecoveryService.staleThresholdHours {
             return "\(base) — last HRV ~\(Int(age))h old, recovery held at estimate"
         }
+        if app.recovery.recoveryFromCheckIn {
+            return "From your morning check-in — connect Apple Health for HRV-based recovery"
+        }
         return "Demo recovery · \(base)"
     }
 
