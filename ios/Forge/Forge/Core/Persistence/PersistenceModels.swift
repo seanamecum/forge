@@ -3,6 +3,12 @@ import SwiftData
 
 // SwiftData records — user-generated data that must survive relaunch.
 // Mock data remains the demo read-model; everything the user *does* lands here.
+//
+// Cloud sync: every syncable record carries `syncID` (a stable UUID assigned on
+// first push), `syncUpdatedAt` (the last-write-wins key), and `syncPending` (dirty
+// flag). These are defaulted and NOT in the initializers, so a new insert is
+// automatically pending and existing stores migrate cleanly (new columns default
+// to pending → they upload on first sign-in). See `Core/Sync/`.
 
 @Model
 final class UserRecord {
@@ -11,6 +17,10 @@ final class UserRecord {
     var heightInches: Double
     var primaryGoal: String
     var updatedAt: Date
+
+    var syncID: String = ""
+    var syncUpdatedAt: Date = Date.now
+    var syncPending: Bool = true
 
     init(name: String, weightLb: Double, heightInches: Double, primaryGoal: String) {
         self.name = name
@@ -30,6 +40,10 @@ final class GoalRecord {
     var deadline: Date?
     var done: Bool
     var createdAt: Date
+
+    var syncID: String = ""
+    var syncUpdatedAt: Date = Date.now
+    var syncPending: Bool = true
 
     init(title: String, unit: String, targetValue: Double, currentValue: Double = 0, deadline: Date? = nil) {
         self.title = title
@@ -60,6 +74,10 @@ final class WorkoutRecord {
     // Full set detail (JSON) so repeat/ghost-values/analytics survive relaunch.
     var exercisesJSON: String = ""
 
+    var syncID: String = ""
+    var syncUpdatedAt: Date = Date.now
+    var syncPending: Bool = true
+
     init(name: String, date: Date, durationMin: Int, totalVolumeLb: Double,
          setCount: Int, avgRPE: Double, exerciseSummary: String,
          savedToHealthKit: Bool = false, exercisesJSON: String = "") {
@@ -88,6 +106,10 @@ final class NutritionEntryRecord {
     var fat: Double = 0
     var servings: Double = 1
 
+    var syncID: String = ""
+    var syncUpdatedAt: Date = Date.now
+    var syncPending: Bool = true
+
     init(entryID: String = "", date: Date, meal: String, name: String,
          calories: Int, protein: Double, carbs: Double = 0, fat: Double = 0,
          servings: Double = 1) {
@@ -111,6 +133,10 @@ final class RecoveryRecord {
     var restingHR: Int
     var strain: Double
 
+    var syncID: String = ""
+    var syncUpdatedAt: Date = Date.now
+    var syncPending: Bool = true
+
     init(date: Date, recovery: Int, hrv: Int, restingHR: Int, strain: Double) {
         self.date = date
         self.recovery = recovery
@@ -128,6 +154,10 @@ final class SleepRecord {
     var remHours: Double
     var score: Int
 
+    var syncID: String = ""
+    var syncUpdatedAt: Date = Date.now
+    var syncPending: Bool = true
+
     init(date: Date, hours: Double, deepHours: Double, remHours: Double, score: Int) {
         self.date = date
         self.hours = hours
@@ -142,6 +172,10 @@ final class ScoreRecord {
     var date: Date
     var score: Int
 
+    var syncID: String = ""
+    var syncUpdatedAt: Date = Date.now
+    var syncPending: Bool = true
+
     init(date: Date, score: Int) {
         self.date = date
         self.score = score
@@ -155,6 +189,10 @@ final class CheckInRecord {
     var soreness: Int       // 0–10
     var energy: Int         // 1–5
     var stress: Int         // 1–5
+
+    var syncID: String = ""
+    var syncUpdatedAt: Date = Date.now
+    var syncPending: Bool = true
 
     init(date: Date, sleepQuality: Int, soreness: Int, energy: Int, stress: Int) {
         self.date = date
@@ -172,6 +210,10 @@ final class WeightRecord {
     var date: Date
     var weightLb: Double
 
+    var syncID: String = ""
+    var syncUpdatedAt: Date = Date.now
+    var syncPending: Bool = true
+
     init(date: Date, weightLb: Double) {
         self.date = date
         self.weightLb = weightLb
@@ -188,6 +230,10 @@ final class SupplementRecord {
     var streak: Int
     var lastLoggedDate: Date?
     var createdAt: Date
+
+    var syncID: String = ""
+    var syncUpdatedAt: Date = Date.now
+    var syncPending: Bool = true
 
     init(name: String, dose: String, timing: String, benefit: String,
          streak: Int = 0, lastLoggedDate: Date? = nil, createdAt: Date = .now) {
@@ -209,6 +255,10 @@ final class BloodworkRecord {
     var optimalLow: Double
     var optimalHigh: Double
     var date: Date
+
+    var syncID: String = ""
+    var syncUpdatedAt: Date = Date.now
+    var syncPending: Bool = true
 
     init(name: String, category: String, value: Double, unit: String,
          normalLow: Double, normalHigh: Double, optimalLow: Double, optimalHigh: Double,

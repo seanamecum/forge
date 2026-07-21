@@ -209,6 +209,7 @@ struct RunningView: View {
                           totalVolumeLb: 0, setCount: 0, avgRPE: 6,
                           exerciseSummary: String(format: "%.2f mi GPS run", miles)),
             context: PersistenceService.context)
+        app.requestSync()
 
         // Close the loop: the run's load flows into strain → Forge Score → Directive.
         app.applyTrainingLoad()

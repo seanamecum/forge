@@ -20,7 +20,7 @@ enum PersistenceService {
             UserRecord.self, GoalRecord.self, WorkoutRecord.self,
             NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
             ScoreRecord.self, CheckInRecord.self, WeightRecord.self,
-            SupplementRecord.self, BloodworkRecord.self,
+            SupplementRecord.self, BloodworkRecord.self, SyncTombstone.self,
         ])
         do {
             return try ModelContainer(for: schema)
@@ -54,6 +54,7 @@ enum PersistenceService {
         try? context.delete(model: WeightRecord.self)
         try? context.delete(model: SupplementRecord.self)
         try? context.delete(model: BloodworkRecord.self)
+        try? context.delete(model: SyncTombstone.self)
         try? context.save()
         // Data keys only — the auth session (forge.auth.*) is cleared by the
         // separate cloud-account action, so a local wipe leaves you signed in.
@@ -80,6 +81,7 @@ enum PersistenceService {
         do {
             if let existing = try context.fetch(descriptor).first {
                 existing.score = score
+                SyncStamp.touch(existing)
             } else {
                 context.insert(ScoreRecord(date: .now, score: score))
             }
@@ -334,12 +336,19 @@ enum PersistenceService {
     }
     static func deleteSupplement(named name: String, context: ModelContext) {
         let d = FetchDescriptor<SupplementRecord>(predicate: #Predicate { $0.name == name })
-        for r in (try? context.fetch(d)) ?? [] { context.delete(r) }
+        for r in (try? context.fetch(d)) ?? [] {
+            SyncEngine.recordDeletion(kind: SupplementRecord.syncKind, syncID: r.syncID, context: context)
+            context.delete(r)
+        }
         try? context.save()
     }
     static func updateSupplement(named name: String, streak: Int, lastLogged: Date?, context: ModelContext) {
         let d = FetchDescriptor<SupplementRecord>(predicate: #Predicate { $0.name == name })
-        if let r = (try? context.fetch(d))?.first { r.streak = streak; r.lastLoggedDate = lastLogged; try? context.save() }
+        if let r = (try? context.fetch(d))?.first {
+            r.streak = streak; r.lastLoggedDate = lastLogged
+            SyncStamp.touch(r)
+            try? context.save()
+        }
     }
     @MainActor
     static func loadSupplements() -> [SupplementRecord] {
@@ -376,7 +385,10 @@ enum PersistenceService {
         let descriptor = FetchDescriptor<NutritionEntryRecord>(
             predicate: #Predicate { $0.entryID == key })
         guard let records = try? context.fetch(descriptor) else { return }
-        for record in records { context.delete(record) }
+        for record in records {
+            SyncEngine.recordDeletion(kind: NutritionEntryRecord.syncKind, syncID: record.syncID, context: context)
+            context.delete(record)
+        }
         try? context.save()
     }
 

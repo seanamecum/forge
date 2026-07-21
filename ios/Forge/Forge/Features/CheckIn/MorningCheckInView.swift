@@ -100,6 +100,7 @@ struct MorningCheckInView: View {
         context.insert(CheckInRecord(date: .now, sleepQuality: sleepQuality,
                                      soreness: soreness, energy: energy, stress: stress))
         try? context.save()
+        app.requestSync()
         dismiss()
     }
 }

@@ -32,6 +32,7 @@ struct ProfileView: View {
             subscriptionCard
             privacyCard
             accountCard
+            cloudSyncCard
 
             Button {
                 showFeedback = true
@@ -61,6 +62,60 @@ struct ProfileView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showDisclaimer) { DisclaimerSheet() }
         .sheet(isPresented: $showFeedback) { FeedbackSheet() }
+    }
+
+    /// Cloud sync status + a manual trigger. Shown only for real accounts (demo
+    /// mode never leaves the phone). Honest about offline: it says it will retry.
+    @ViewBuilder private var cloudSyncCard: some View {
+        if app.auth.sessionEmail != nil {
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    EyebrowLabel(text: "Cloud Sync")
+                    HStack(spacing: 8) {
+                        Image(systemName: syncIcon)
+                            .font(.system(size: 13)).foregroundStyle(syncTone)
+                        Text(syncLabel)
+                            .font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
+                        Spacer()
+                        if app.sync.status.isBusy {
+                            ProgressView().controlSize(.small).tint(Theme.gold)
+                        } else {
+                            Button("Sync now") { app.sync.syncNow() }
+                                .buttonStyle(GhostButtonStyle(compact: true))
+                        }
+                    }
+                    Text("Your data is backed up to your account and restores automatically on a new device or after reinstalling.")
+                        .font(.system(size: 11)).foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private var syncIcon: String {
+        switch app.sync.status {
+        case .synced: return "checkmark.icloud.fill"
+        case .syncing: return "arrow.triangle.2.circlepath.icloud"
+        case .offline: return "icloud.slash"
+        case .error: return "exclamationmark.icloud"
+        case .idle: return "icloud"
+        }
+    }
+    private var syncTone: Color {
+        switch app.sync.status {
+        case .synced: return Theme.green
+        case .offline, .error: return Theme.amber
+        default: return Theme.muted
+        }
+    }
+    private var syncLabel: String {
+        switch app.sync.status {
+        case .idle: return "Ready to sync"
+        case .syncing: return "Syncing…"
+        case .synced(let at): return "Backed up · \(at.formatted(date: .omitted, time: .shortened))"
+        case .offline: return "Offline — changes saved, will sync when you're back online"
+        case .error(let msg): return msg
+        }
     }
 
     /// Account & data ownership: export everything, delete the account

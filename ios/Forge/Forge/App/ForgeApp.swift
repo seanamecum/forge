@@ -13,8 +13,12 @@ struct ForgeApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Theme.gold)
                 .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active else { return }
+                    // Reconcile with the cloud on every return to foreground — the
+                    // safety net that catches anything logged during the session.
+                    appState.sync.syncNow()
                     // Fresh Health data on every return to foreground.
-                    guard phase == .active, appState.healthKit.authState == .authorized else { return }
+                    guard appState.healthKit.authState == .authorized else { return }
                     Task {
                         await appState.healthKit.refresh()
                         appState.ingestHealthKitSignals()

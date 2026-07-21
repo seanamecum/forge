@@ -81,6 +81,7 @@ final class AppState {
     let social = SocialService()
     let marketplace = MarketplaceService()
     let notifications = NotificationService()
+    let sync = SyncService()
 
     init() {
         // Restore demo/real mode (skipped in tests for hermeticity).
@@ -145,6 +146,9 @@ final class AppState {
         if !isDemoAccount {
             loadHealthData()
             injuries.clearDemoSeed()
+            // On launch, reconcile with the cloud (pull remote edits from other
+            // devices, push anything logged offline). No-op without a live session.
+            sync.syncNow()
         }
 
         refreshFuelPlan()
@@ -205,6 +209,7 @@ final class AppState {
             nutrition.restoreDemoSeed()
             injuries.restoreDemoSeed()
             user = MockData.sean
+            sync.reset()                 // demo mode never syncs to the cloud
             finishOnboarding()
         } else {
             workouts.clearDemoSeed()     // a real account starts with a clean slate
@@ -212,8 +217,14 @@ final class AppState {
             injuries.clearDemoSeed()
             weightSamples = []
             phase = .onboarding
+            // Pull this account's cloud data (restores a reinstall / new device) and
+            // push anything logged locally before sign-in.
+            sync.syncNow()
         }
     }
+
+    /// Views call this after a local edit to nudge a (debounced) cloud sync.
+    nonisolated func requestSync() { sync.requestSync() }
 
     func finishOnboarding() {
         if !PersistenceService.isTestRun { UserDefaults.standard.set(true, forKey: "forge.hasOnboarded") }
@@ -241,11 +252,15 @@ final class AppState {
         weightSamples = []
         user = Self.onboardingProfile(from: profile)
         injuries.setActive(from: selected)
+        // A freshly-onboarded real account: push its starting state and pull any
+        // data already in the cloud for this user.
+        sync.syncNow()
         finishOnboarding()
     }
 
     func logout() {
         auth.signOut()
+        sync.reset()
         UserDefaults.standard.set(false, forKey: "forge.hasOnboarded")
         user = MockData.sean
         selectedTab = .home
@@ -498,6 +513,7 @@ final class AppState {
         weightSamples.append(pounds)
         user.weightLb = pounds
         refreshFuelPlan()
+        sync.requestSync()
     }
 
     // MARK: - Supplements + bloodwork (real, persisted; demo keeps Sean's)
@@ -536,6 +552,7 @@ final class AppState {
         PersistenceService.insertSupplement(
             SupplementRecord(name: clean, dose: dose, timing: timing, benefit: benefit), context: context)
         loadHealthData()
+        sync.requestSync()
     }
 
     @MainActor
@@ -546,6 +563,7 @@ final class AppState {
         }
         PersistenceService.deleteSupplement(named: supplement.name, context: context)
         loadHealthData()
+        sync.requestSync()
     }
 
     @MainActor
@@ -558,6 +576,7 @@ final class AppState {
             PersistenceService.updateSupplement(named: supplement.name,
                 streak: nutrition.supplements[idx].streak,
                 lastLogged: nowLogged ? .now : nil, context: context)
+            sync.requestSync()
         }
     }
 
@@ -575,6 +594,7 @@ final class AppState {
                             optimalLow: entry.optimalLow, optimalHigh: entry.optimalHigh),
             context: context)
         loadHealthData()
+        sync.requestSync()
     }
 
     /// Publish today's directive to the home-screen widget's shared container

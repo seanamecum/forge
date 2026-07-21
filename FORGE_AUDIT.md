@@ -900,6 +900,55 @@ replies also hardcoded Sean's knee, labs, and forecasts. A real user was being s
   offline reply is honest not fabricated, while demo keeps its script; `forgeInsights` drops the knee chain
   when healthy. iOS **306 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
 
+## 12g. Product — offline-first cloud sync (2026-07-22)
+
+**Data now survives reinstall and syncs across devices.** Every user-generated
+record lived only in the device's local SwiftData store; a reinstall or a second
+device lost everything. This adds an offline-first sync engine over Supabase.
+- **Remote:** migration `0003_sync_engine.sql` — one owner-scoped generic document
+  table `public.sync_records (user_id, kind, record_id, payload, updated_at,
+  deleted, synced_at)` with RLS identical to every other user table. A trigger
+  enforces **server-side last-write-wins** (a stale `updated_at` never overwrites a
+  newer row) and stamps `synced_at` (the server-clock pull cursor). **Manual step:
+  `supabase db push` (blocked from auto-mode by the deploy classifier).**
+- **Local model:** each syncable `@Model` gained defaulted `syncID` / `syncUpdatedAt`
+  / `syncPending` columns (not in the initializers → clean lightweight migration;
+  existing rows default to *pending* so a pre-sync store uploads on first sign-in).
+  Deletions record a `SyncTombstone` so removals propagate.
+- **Engine (`Core/Sync/`):** a `Syncable` protocol + type-erased registry cover 11
+  record types (profile, goals, workouts, nutrition, recovery, sleep, score,
+  check-ins, weight, supplements, bloodwork). `SyncEngine` is pure — collect dirty
+  → push rows, apply pulled rows with **last-write-wins** (newer `updatedAt` wins;
+  tombstones delete unless the local edit is newer → resurrect). `SyncTransport` is
+  the one network seam (PostgREST upsert with `merge-duplicates` + a cursor'd GET),
+  swapped for a fake in tests.
+- **Offline-first + retry (`Services/SyncService.swift`):** SwiftData stays the
+  source of truth; sync is best-effort and never blocks the UI. A dropped
+  connection parks the work (dirty flags persist) and retries on an exponential
+  backoff ladder (5s→5m); edits coalesce via a debounce. Triggers: sign-in,
+  onboarding, app foreground, and after each mutating action. Demo mode and
+  signed-out never sync (credentials resolve to nil).
+- **Conflict strategy:** last-write-wins per `(user_id, kind, record_id)` on the
+  client's logical `updated_at`, enforced on **both** client and server, so the
+  outcome is identical no matter which device pushes last. Independent offline
+  inserts of the "same" real thing are kept as separate rows (documented; no natural
+  key).
+- **UI:** a Profile "Cloud Sync" card shows Backed up / Syncing / **Offline —
+  changes saved, will sync when you're back online** / error, plus a manual "Sync
+  now".
+- **Tests:** `SyncEngineTests` (+7, pure LWW/tombstone/collect/JWT/codec),
+  `SyncIntegrationTests` (+6, two devices over a fake server that mirrors server-side
+  LWW: cross-device propagation, **reinstall restores full history**, conflict →
+  latest wins even when pushed first, delete propagation, offline-queue-then-flush,
+  demo never syncs), `SyncMigrationTests` (+4, defaults/full-schema/registry/payload
+  round-trip). iOS **323 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+- **Scope/known gaps:** the mobile client uses the generic document store; the
+  normalized 0001 domain tables are untouched (a future web client / projection job
+  can back-fill from these rows). Profile + settings held in `UserDefaults` (vs the
+  SwiftData records) are not yet synced. End-to-end against live Supabase needs the
+  migration applied + a signed-in device (the engine itself is fully covered by the
+  fake-transport integration tests).
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never
