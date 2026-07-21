@@ -164,3 +164,16 @@ final class CheckInRecord {
         self.stress = stress
     }
 }
+
+/// A logged body-weight measurement — the athlete's real weigh-in history, which
+/// feeds the Body screen trend and the adaptive-nutrition weight-trend rule.
+@Model
+final class WeightRecord {
+    var date: Date
+    var weightLb: Double
+
+    init(date: Date, weightLb: Double) {
+        self.date = date
+        self.weightLb = weightLb
+    }
+}

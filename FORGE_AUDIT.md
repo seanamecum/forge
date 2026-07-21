@@ -837,6 +837,28 @@ filled it out each morning while their flagship score stayed on the demo athlete
   `forgeScore` (no wearable), and live HRV overriding the check-in. iOS **279 tests, 2 skipped, 0 failures;
   Debug+Release 0 warnings.**
 
+## 12e. Product — persisted weigh-ins → adaptive nutrition (2026-07-21)
+
+**Shipping functionality for every real user.** `AdaptiveNutritionEngine` adjusted a real user's calorie/
+protein targets from `MockData.weightTrend` (the demo athlete's weigh-ins), and the Body screen was 100%
+hardcoded demo with a "coming soon" log button — so fuel decisions were driven by *someone else's body*.
+- **Persistence:** new `WeightRecord` @Model (added to the SwiftData schema + `allModels` +
+  `deleteAllLocalData` + data export) with `PersistenceService.saveWeight`/`loadWeights`.
+- **Real trend, never demo:** `AppState.weightSamples` (loaded in `rehydrate` for real accounts, cleared on
+  onboarding/real-auth), `weightTrend` = **demo trend in demo mode, the user's own weigh-ins otherwise**,
+  `latestWeight`. `refreshFuelPlan` now feeds `weightTrend`. `logWeight(_:context:)` persists a weigh-in,
+  updates the profile weight (so **calorie/protein targets re-scale**), and re-runs the adaptive plan.
+- **Body screen rebuilt:** real weight chart + trend/min/max from the user's data, an **empty state** +
+  working **"Log weight"** sheet; body-fat/lean-mass show "—" (smart-scale) for real accounts; the
+  measurements/photos/comparison demo cards are shown in demo mode only.
+- **Honesty:** `nutritionBasis` now says "demo weight trend" in demo mode, or "N/10 weigh-ins to enable
+  weight-trend coaching" for a real user — never implying demo data is personal.
+- **Tests:** `WeighInTests` (+7) — `WeightRecord` round-trips in a fresh in-memory store (schema/migration
+  path); demo vs real trend never mix; `logWeight` persists + appends + rescales targets; non-positive
+  ignored; **12 flat weigh-ins fire the build-muscle nudge**; a new user gets **no** weight adjustment
+  (graceful); < 10 samples stays graceful. Demo-athlete nutrition coherence preserved. iOS **286 tests, 2
+  skipped, 0 failures; Debug+Release 0 warnings.**
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftData
 
 enum AppPhase {
     case welcome
@@ -57,6 +58,18 @@ final class AppState {
     var checkIn: CheckInSnapshot? {
         didSet { recovery.applyCheckIn(checkIn) }
     }
+
+    /// The real account's logged weigh-ins, oldest → newest (empty for a new user).
+    /// Demo mode reads the demo athlete's trend instead — see `weightTrend`.
+    private(set) var weightSamples: [Double] = []
+
+    /// Weight samples that drive the Body screen + adaptive nutrition. Never mixes
+    /// real and demo: the demo athlete's trend in demo mode, the user's own weigh-ins
+    /// otherwise.
+    var weightTrend: [Double] { isDemoAccount ? MockData.weightTrend : weightSamples }
+
+    /// Most recent weight, or nil when a real user hasn't logged one yet.
+    var latestWeight: Double? { weightTrend.last }
 
     // Services — mock-backed now, swap for networked implementations later.
     let auth = AuthService()
@@ -122,6 +135,10 @@ final class AppState {
         // Morning check-in done earlier today survives relaunch.
         checkIn = PersistenceService.loadTodayCheckIn()
 
+        // Real weigh-in history → Body screen + adaptive nutrition (demo uses the
+        // demo trend via `weightTrend`).
+        if !isDemoAccount { weightSamples = PersistenceService.loadWeights().map(\.weightLb) }
+
         refreshFuelPlan()
     }
     private var rehydrated = false
@@ -181,6 +198,7 @@ final class AppState {
             finishOnboarding()
         } else {
             workouts.clearDemoSeed()     // a real account starts with a clean slate
+            weightSamples = []
             phase = .onboarding
         }
     }
@@ -207,6 +225,7 @@ final class AppState {
     func commitOnboarding(profile: UserProfile, injuries selected: Set<InjuryType>) {
         isDemoAccount = false
         workouts.clearDemoSeed()          // idempotent — a real user builds their own history
+        weightSamples = []
         user = Self.onboardingProfile(from: profile)
         injuries.setActive(from: selected)
         finishOnboarding()
@@ -375,10 +394,12 @@ final class AppState {
 
         var missing: [String] = []
         if n.entries.isEmpty { missing.append("Today's logged meals (to track against the target)") }
-        // The adaptive weight-trend adjustments run on sample weigh-ins until real
-        // body-weight history exists — say so rather than imply it's personalized.
-        if n.activePlan?.isAdjusted == true {
-            missing.append("Real weigh-in history (trend adjustments use sample data)")
+        // Weight-trend coaching needs ~2 weeks of real weigh-ins. Be honest about
+        // whether it's running on the user's data, the demo trend, or not yet enough.
+        if isDemoAccount {
+            if n.activePlan?.isAdjusted == true { missing.append("Real weigh-in history (demo weight trend)") }
+        } else if weightSamples.count < 10 {
+            missing.append("A few more weigh-ins to enable weight-trend coaching (\(weightSamples.count)/10)")
         }
 
         let confidence: RecommendationBasis.Confidence = n.entries.isEmpty ? .moderate : .high
@@ -448,11 +469,22 @@ final class AppState {
             baseWaterOz: user.waterTargetOz,
             baseFat: user.fatTarget,
             goal: user.primaryGoal,
-            weightTrend: MockData.weightTrend,
+            weightTrend: weightTrend,          // the user's own weigh-ins (or demo trend)
             strainAvg7: strainAvg7,
             recoveryToday: recovery.today.recovery,
             injuryActive: !injuries.active.isEmpty,
             enduranceTomorrow: user.primaryGoal == .endurance))
+    }
+
+    /// Log a weigh-in: persists it, updates the current weight (so calorie/protein
+    /// targets re-scale), and re-runs the adaptive fuel plan against the real trend.
+    @MainActor
+    func logWeight(_ pounds: Double, context: ModelContext) {
+        guard pounds > 0 else { return }
+        PersistenceService.saveWeight(pounds, context: context)
+        weightSamples.append(pounds)
+        user.weightLb = pounds
+        refreshFuelPlan()
     }
 
     /// Publish today's directive to the home-screen widget's shared container

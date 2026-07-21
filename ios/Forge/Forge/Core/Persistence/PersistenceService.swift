@@ -8,7 +8,7 @@ enum PersistenceService {
     static let allModels: [any PersistentModel.Type] = [
         UserRecord.self, GoalRecord.self, WorkoutRecord.self,
         NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
-        ScoreRecord.self, CheckInRecord.self,
+        ScoreRecord.self, CheckInRecord.self, WeightRecord.self,
     ]
 
     /// One container for the whole app — views get it via .modelContainer,
@@ -18,7 +18,7 @@ enum PersistenceService {
         let schema = Schema([
             UserRecord.self, GoalRecord.self, WorkoutRecord.self,
             NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
-            ScoreRecord.self, CheckInRecord.self,
+            ScoreRecord.self, CheckInRecord.self, WeightRecord.self,
         ])
         do {
             return try ModelContainer(for: schema)
@@ -49,6 +49,7 @@ enum PersistenceService {
         try? context.delete(model: SleepRecord.self)
         try? context.delete(model: ScoreRecord.self)
         try? context.delete(model: CheckInRecord.self)
+        try? context.delete(model: WeightRecord.self)
         try? context.save()
         // Data keys only — the auth session (forge.auth.*) is cleared by the
         // separate cloud-account action, so a local wipe leaves you signed in.
@@ -188,6 +189,10 @@ enum PersistenceService {
             }
         }
 
+        if let weighIns = try? context.fetch(FetchDescriptor<WeightRecord>(sortBy: [SortDescriptor(\.date)])) {
+            doc["weigh_ins"] = weighIns.map { ["date": iso($0.date), "weight_lb": $0.weightLb] as [String: Any] }
+        }
+
         // Hydration (per-day, kept in UserDefaults rather than a model).
         let waterPrefix = "forge.water."
         let hydration = UserDefaults.standard.dictionaryRepresentation()
@@ -287,6 +292,21 @@ enum PersistenceService {
                     WorkoutSet(weightLb: $0.w, reps: $0.r, rpe: $0.rpe, completed: $0.done)
                 })
         }
+    }
+
+    // MARK: - Body weight (real weigh-in history)
+
+    static func saveWeight(_ pounds: Double, date: Date = .now, context: ModelContext) {
+        context.insert(WeightRecord(date: date, weightLb: pounds))
+        try? context.save()
+    }
+
+    /// The athlete's logged weigh-ins, oldest → newest.
+    @MainActor
+    static func loadWeights(limit: Int = 120) -> [WeightRecord] {
+        var descriptor = FetchDescriptor<WeightRecord>(sortBy: [SortDescriptor(\.date)])
+        descriptor.fetchLimit = limit
+        return (try? context.fetch(descriptor)) ?? []
     }
 
     // MARK: - Nutrition
