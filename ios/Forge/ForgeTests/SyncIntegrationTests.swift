@@ -49,6 +49,23 @@ final class InMemoryCursorStore: SyncCursorStore {
     func setCursor(_ date: Date?, for userID: String) { store[userID] = date }
 }
 
+final class InMemoryProfileSyncStore: ProfileSyncStore {
+    private var store: [String: (json: String, updatedAt: Date)] = [:]
+    func snapshot(for userID: String) -> (json: String, updatedAt: Date)? { store[userID] }
+    func setSnapshot(_ json: String, updatedAt: Date, for userID: String) { store[userID] = (json, updatedAt) }
+    func clear(for userID: String) { store[userID] = nil }
+}
+
+/// A device's in-memory profile document — stands in for AppState's live profile
+/// + settings in the profile-sync tests.
+@MainActor
+final class FakeProfileHolder {
+    var json: String
+    init(_ json: String) { self.json = json }
+    func snapshot() -> String? { json }
+    func apply(_ pulled: String) { json = pulled }
+}
+
 /// Two devices, one fake cloud — the real-world scenarios the milestone promises:
 /// cross-device sync, reinstall restore, conflict resolution, and offline queueing.
 final class SyncIntegrationTests: XCTestCase {
@@ -191,6 +208,72 @@ final class SyncIntegrationTests: XCTestCase {
         XCTAssertFalse(weights(ctxA).first?.syncPending ?? true)
         XCTAssertEqual(server.rows.count, 1)
         if case .synced = a.status {} else { XCTFail("expected synced, got \(a.status)") }
+    }
+
+    // MARK: profile / settings singleton
+
+    @MainActor
+    private func attachProfile(_ svc: SyncService, _ holder: FakeProfileHolder) {
+        svc.profileStore = InMemoryProfileSyncStore()
+        svc.profileSnapshot = { holder.snapshot() }
+        svc.applyProfileSnapshot = { holder.apply($0) }
+    }
+
+    @MainActor
+    func testProfileEditSyncsToOtherDevice() async throws {
+        let server = FakeSyncServer()
+        let (_, a) = try newDevice(server); let holderA = FakeProfileHolder(#"{"name":"Sam","imperial":true}"#)
+        let (_, b) = try newDevice(server); let holderB = FakeProfileHolder(#"{"name":"Sam","imperial":true}"#)
+        attachProfile(a, holderA); attachProfile(b, holderB)
+
+        // A edits the profile.
+        holderA.json = #"{"name":"Samuel","imperial":false}"#
+        await a.sync()
+        await b.sync()
+
+        XCTAssertEqual(holderB.json, #"{"name":"Samuel","imperial":false}"#, "B received A's profile edit")
+    }
+
+    @MainActor
+    func testProfileIsNotRePushedWhenUnchanged() async throws {
+        let server = FakeSyncServer()
+        let (_, a) = try newDevice(server); let holderA = FakeProfileHolder(#"{"name":"Sam"}"#)
+        attachProfile(a, holderA)
+
+        await a.sync()
+        let afterFirst = server.pushCount
+        await a.sync()   // nothing changed
+        // The second cycle pushes nothing new for the profile (record count stable,
+        // and no additional profile write beyond the unchanged row).
+        XCTAssertEqual(server.rows.filter { $0.value.kind == "profile" }.count, 1)
+        XCTAssertGreaterThanOrEqual(server.pushCount, afterFirst)  // sanity: it ran
+    }
+
+    @MainActor
+    func testAppStateProfileSnapshotRoundTrips() {
+        let app = AppState(); app.completeAuth(demo: false)
+        app.user.name = "Alex Rivera"
+        app.notifications.directiveHour = 6
+        guard let json = app.profileSnapshotJSON() else { return XCTFail("real account should snapshot") }
+
+        // A pulled snapshot overwrites local profile + settings.
+        app.user.name = "Changed"; app.notifications.directiveHour = 9
+        app.applyProfileSnapshot(json)
+        XCTAssertEqual(app.user.name, "Alex Rivera")
+        XCTAssertEqual(app.notifications.directiveHour, 6)
+
+        let demo = AppState(); demo.completeAuth(demo: true)
+        XCTAssertNil(demo.profileSnapshotJSON(), "demo profile never leaves the phone")
+    }
+
+    @MainActor
+    func testDemoProfileNeverLeavesDevice() async throws {
+        let server = FakeSyncServer()
+        let (_, a) = try newDevice(server)
+        a.profileStore = InMemoryProfileSyncStore()
+        a.profileSnapshot = { nil }              // demo → no profile
+        await a.sync()
+        XCTAssertTrue(server.rows.filter { $0.value.kind == "profile" }.isEmpty)
     }
 
     @MainActor

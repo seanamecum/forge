@@ -35,8 +35,10 @@ struct AnySyncHandler {
 enum SyncRegistry {
     /// Every syncable type, in a deterministic order (parents before children is
     /// irrelevant here — the store is flat — but a stable order keeps tests stable).
+    // Note: the profile/settings singleton is NOT here — it's a converging
+    // per-user document handled specially by SyncService (see ProfileSync).
     static let handlers: [AnySyncHandler] = [
-        make(UserRecord.self), make(GoalRecord.self), make(WorkoutRecord.self),
+        make(GoalRecord.self), make(WorkoutRecord.self),
         make(NutritionEntryRecord.self), make(RecoveryRecord.self), make(SleepRecord.self),
         make(ScoreRecord.self), make(CheckInRecord.self), make(WeightRecord.self),
         make(SupplementRecord.self), make(BloodworkRecord.self),
@@ -104,23 +106,6 @@ enum SyncRegistry {
 }
 
 // MARK: - Per-model conformances (domain fields only in each Payload)
-
-extension UserRecord: Syncable {
-    static var syncKind: String { "profile" }
-    private struct Payload: Codable { var name: String; var weightLb: Double; var heightInches: Double; var primaryGoal: String; var updatedAt: Date }
-    func syncPayload() throws -> Data {
-        try SyncCoder.encoder.encode(Payload(name: name, weightLb: weightLb, heightInches: heightInches, primaryGoal: primaryGoal, updatedAt: updatedAt))
-    }
-    static func instantiate(payload: Data) throws -> UserRecord {
-        let p = try SyncCoder.decoder.decode(Payload.self, from: payload)
-        let r = UserRecord(name: p.name, weightLb: p.weightLb, heightInches: p.heightInches, primaryGoal: p.primaryGoal)
-        r.updatedAt = p.updatedAt; return r
-    }
-    func applyPayload(_ payload: Data) throws {
-        let p = try SyncCoder.decoder.decode(Payload.self, from: payload)
-        name = p.name; weightLb = p.weightLb; heightInches = p.heightInches; primaryGoal = p.primaryGoal; updatedAt = p.updatedAt
-    }
-}
 
 extension GoalRecord: Syncable {
     static var syncKind: String { "goal" }

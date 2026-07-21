@@ -47,11 +47,13 @@ final class SyncMigrationTests: XCTestCase {
     func testEverySyncKindIsRegisteredAndUnique() {
         let kinds = SyncRegistry.handlers.map(\.kind)
         XCTAssertEqual(kinds.count, Set(kinds).count, "sync kinds must be unique")
-        // The document store covers the durable, user-generated record types.
-        for expected in ["profile", "goal", "workout", "nutrition", "weight", "supplement", "bloodwork", "checkin"] {
+        // The document store covers the durable, append-style record types. (The
+        // profile/settings singleton is handled specially by SyncService, not here.)
+        for expected in ["goal", "workout", "nutrition", "weight", "supplement", "bloodwork", "checkin"] {
             XCTAssertTrue(kinds.contains(expected), "missing sync handler for \(expected)")
         }
         XCTAssertNotNil(SyncRegistry.byKind["weight"])
+        XCTAssertNil(SyncRegistry.byKind["profile"], "profile is a special-cased singleton")
     }
 
     @MainActor

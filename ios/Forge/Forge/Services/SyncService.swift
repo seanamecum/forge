@@ -43,10 +43,20 @@ final class SyncService {
               let uid = SyncAuth.userID(fromJWT: token) else { return nil }
         return SyncCredentials(userID: uid, token: token)
     }
+    /// Profile/settings singleton: AppState supplies the current snapshot JSON
+    /// (nil in demo / signed out) and applies a pulled one. Dirty is detected by
+    /// content diff, so no per-field mutation hooks are needed.
+    var profileSnapshot: () -> String? = { nil }
+    var applyProfileSnapshot: (String) -> Void = { _ in }
+
     /// Test seams.
     var transportOverride: SyncTransport?
     var contextOverride: ModelContext?
     var cursorStore: SyncCursorStore = UserDefaultsCursorStore()
+    var profileStore: ProfileSyncStore = UserDefaultsProfileSyncStore()
+
+    private static let profileKind = "profile"
+    private static let profileRecordID = "singleton"
 
     nonisolated init() {}
 
@@ -107,17 +117,28 @@ final class SyncService {
         status = .syncing
 
         do {
-            // Push everything dirty, then mark it clean once accepted.
-            let pending = SyncEngine.collectPending(context: ctx)
-            try await transport.push(pending)
-            SyncEngine.markPushed(pending, context: ctx)
-
-            // Pull everything new since our cursor and merge (LWW).
+            // Pull first, then push — so a device incorporates the account's current
+            // state (esp. the profile singleton) before deciding what's still dirty.
+            // This makes a fresh device adopt the account's profile instead of
+            // clobbering it with an unchanged local baseline.
             let cursor = cursorStore.cursor(for: creds.userID)
             let pulled = try await transport.pull(since: cursor)
-            SyncEngine.applyPulled(pulled, context: ctx)
+            SyncEngine.applyPulled(pulled.filter { $0.kind != Self.profileKind }, context: ctx)
+            for row in pulled where row.kind == Self.profileKind {
+                applyPulledProfile(row, for: creds.userID)
+            }
             if let newest = pulled.compactMap(\.syncedAt).max() {
                 cursorStore.setCursor(newest, for: creds.userID)
+            }
+
+            // Push everything still dirty (records + a genuinely-changed profile).
+            var pending = SyncEngine.collectPending(context: ctx)
+            let profileRow = pendingProfileRow(for: creds.userID)
+            if let profileRow { pending.append(profileRow) }
+            try await transport.push(pending)
+            SyncEngine.markPushed(pending, context: ctx)
+            if let profileRow {
+                profileStore.setSnapshot(profileRow.payload, updatedAt: profileRow.updatedAt, for: creds.userID)
             }
 
             retryStep = 0
@@ -139,6 +160,27 @@ final class SyncService {
             coalesceAnother = false
             await sync()
         }
+    }
+
+    // MARK: - Profile / settings singleton
+
+    /// A push row iff the current profile snapshot differs from what we last synced.
+    private func pendingProfileRow(for userID: String) -> SyncRow? {
+        guard let current = profileSnapshot() else { return nil }
+        let last = profileStore.snapshot(for: userID)
+        guard last?.json != current else { return nil }
+        return SyncRow(userID: nil, kind: Self.profileKind, recordID: Self.profileRecordID,
+                       payload: current, updatedAt: .now, deleted: false, syncedAt: nil)
+    }
+
+    /// Apply a pulled profile if it's newer than what we've reconciled (LWW). After
+    /// applying, cache the *canonical* local snapshot so we don't immediately re-push.
+    private func applyPulledProfile(_ row: SyncRow, for userID: String) {
+        let local = profileStore.snapshot(for: userID)
+        guard local == nil || row.updatedAt > local!.updatedAt else { return }
+        applyProfileSnapshot(row.payload)
+        let canonical = profileSnapshot() ?? row.payload
+        profileStore.setSnapshot(canonical, updatedAt: row.updatedAt, for: userID)
     }
 
     // MARK: - Retry

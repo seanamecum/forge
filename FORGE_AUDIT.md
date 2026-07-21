@@ -951,6 +951,36 @@ device lost everything. This adds an offline-first sync engine over Supabase.
   migration applied + a signed-in device (the engine itself is fully covered by the
   fake-transport integration tests).
 
+## 12h. Product — profile + settings sync (2026-07-22)
+
+**The account's profile and app settings now sync too.** The generic document
+store (12g) covered the append-style records; the profile (name, body metrics,
+goals, sport, level/XP/streak, units) and notification settings lived only in
+`UserDefaults`, so a new device or reinstall started from defaults.
+- **Model:** profile + settings serialize into one `ProfileSnapshot` synced as a
+  per-user singleton (`kind = "profile"`, `record_id = "singleton"`) — so every
+  device converges on one row. Handled specially by `SyncService` (not the generic
+  registry; the never-written `UserRecord` was dropped from it to free the kind).
+- **Dirty detection by content diff:** no per-field mutation hooks — each cycle
+  compares the current snapshot JSON (deterministic sorted-keys) to the last one
+  synced; different ⇒ push. Simple and complete.
+- **Pull-then-push cycle:** the sync cycle now pulls before pushing, so a fresh
+  device **adopts the account's existing profile** instead of clobbering it with an
+  unchanged local baseline. (Also tightened record conflict handling — a device
+  incorporates remote edits before re-pushing.) Profile LWW is last-sync-wins on
+  the reconciled timestamp (documented; profiles are rarely edited concurrently).
+- **Wiring:** `AppState.profileSnapshotJSON()` / `applyProfileSnapshot(_:)` read and
+  apply live profile + `NotificationService` prefs; nil in demo mode (nothing
+  leaves the phone). Triggers ride the existing sign-in / foreground / post-edit
+  syncs.
+- **Tests:** `SyncIntegrationTests` (+4) — a profile edit on one device reaches the
+  other, an unchanged profile isn't re-pushed, demo profile never leaves the
+  device, and `AppState` snapshot↔apply round-trips (with demo returning nil).
+  Registry test updated (profile is special-cased). iOS **327 tests, 2 skipped, 0
+  failures; Debug+Release 0 warnings.**
+- **Gap:** still `UserDefaults`-scoped and not yet synced — per-day water totals and
+  the injuries blob (`forge.injuries.v1`); minor vs the profile/settings now covered.
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never

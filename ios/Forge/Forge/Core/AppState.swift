@@ -114,6 +114,10 @@ final class AppState {
         guard !rehydrated else { return }
         rehydrated = true
 
+        // Wire profile/settings sync to live app state (read + apply).
+        sync.profileSnapshot = { [weak self] in self?.profileSnapshotJSON() }
+        sync.applyProfileSnapshot = { [weak self] json in self?.applyProfileSnapshot(json) }
+
         // Today's food + water: real log only. A fresh day starts honestly empty.
         nutrition.entries = PersistenceService.loadTodayEntries()
         nutrition.waterOz = PersistenceService.loadTodayWater()
@@ -225,6 +229,31 @@ final class AppState {
 
     /// Views call this after a local edit to nudge a (debounced) cloud sync.
     nonisolated func requestSync() { sync.requestSync() }
+
+    /// The account's profile + app settings as one syncable document. Nil in demo
+    /// mode (nothing leaves the phone).
+    @MainActor
+    func profileSnapshotJSON() -> String? {
+        guard !isDemoAccount else { return nil }
+        let snap = ProfileSnapshot(
+            profile: user,
+            morningDirectiveOn: notifications.morningDirectiveOn,
+            smartNudgesOn: notifications.smartNudgesOn,
+            directiveHour: notifications.directiveHour,
+            directiveMinute: notifications.directiveMinute)
+        return ProfileSnapshotCoder.encode(snap)
+    }
+
+    /// Apply a profile+settings snapshot pulled from another device.
+    @MainActor
+    func applyProfileSnapshot(_ json: String) {
+        guard let snap = ProfileSnapshotCoder.decode(json) else { return }
+        user = snap.profile
+        notifications.morningDirectiveOn = snap.morningDirectiveOn
+        notifications.smartNudgesOn = snap.smartNudgesOn
+        notifications.directiveHour = snap.directiveHour
+        notifications.directiveMinute = snap.directiveMinute
+    }
 
     func finishOnboarding() {
         if !PersistenceService.isTestRun { UserDefaults.standard.set(true, forKey: "forge.hasOnboarded") }
