@@ -910,7 +910,9 @@ device lost everything. This adds an offline-first sync engine over Supabase.
   deleted, synced_at)` with RLS identical to every other user table. A trigger
   enforces **server-side last-write-wins** (a stale `updated_at` never overwrites a
   newer row) and stamps `synced_at` (the server-clock pull cursor). **Manual step:
-  `supabase db push` (blocked from auto-mode by the deploy classifier).**
+  `supabase db push` (blocked from auto-mode by the deploy classifier) — full
+  deploy + verification checklist in `supabase/SYNC_DEPLOY_VERIFICATION.md`
+  (schema/RLS/trigger-LWW smoke test + anon-probe denial + authed round-trip).**
 - **Local model:** each syncable `@Model` gained defaulted `syncID` / `syncUpdatedAt`
   / `syncPending` columns (not in the initializers → clean lightweight migration;
   existing rows default to *pending* so a pre-sync store uploads on first sign-in).
