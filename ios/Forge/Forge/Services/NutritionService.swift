@@ -9,9 +9,26 @@ final class NutritionService {
     var nutrientGroups: [NutrientGroup] = MockData.nutrientGroups
     var deficiencies: [DeficiencyAlert] = MockData.deficiencies
     var supplements: [Supplement] = MockData.supplements
+    var bloodwork: [BloodworkMarker] = MockData.bloodwork
     var waterOz: Double = 74
 
-    let user = MockData.sean
+    var user = MockData.sean
+
+    /// A real account builds its own stack/labs — the demo athlete's supplement,
+    /// micronutrient, deficiency, and bloodwork data belong to demo mode only.
+    func clearDemoSeed() {
+        supplements = []
+        nutrientGroups = []
+        deficiencies = []
+        bloodwork = []
+    }
+
+    func restoreDemoSeed() {
+        supplements = MockData.supplements
+        nutrientGroups = MockData.nutrientGroups
+        deficiencies = MockData.deficiencies
+        bloodwork = MockData.bloodwork
+    }
 
     /// Today's coached plan (set by AppState from live cross-module signals).
     /// When present, IT defines the targets; base TargetEngine numbers otherwise.

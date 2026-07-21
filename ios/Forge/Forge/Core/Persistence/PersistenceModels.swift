@@ -177,3 +177,44 @@ final class WeightRecord {
         self.weightLb = weightLb
     }
 }
+
+/// A supplement in the athlete's real stack, with adherence (streak + last-logged).
+@Model
+final class SupplementRecord {
+    var name: String
+    var dose: String
+    var timing: String
+    var benefit: String
+    var streak: Int
+    var lastLoggedDate: Date?
+    var createdAt: Date
+
+    init(name: String, dose: String, timing: String, benefit: String,
+         streak: Int = 0, lastLoggedDate: Date? = nil, createdAt: Date = .now) {
+        self.name = name; self.dose = dose; self.timing = timing; self.benefit = benefit
+        self.streak = streak; self.lastLoggedDate = lastLoggedDate; self.createdAt = createdAt
+    }
+}
+
+/// A bloodwork marker the athlete entered from a real lab panel. Reference ranges
+/// come from the catalog; the value is the user's.
+@Model
+final class BloodworkRecord {
+    var name: String
+    var category: String        // BloodworkMarker.Category rawValue
+    var value: Double
+    var unit: String
+    var normalLow: Double
+    var normalHigh: Double
+    var optimalLow: Double
+    var optimalHigh: Double
+    var date: Date
+
+    init(name: String, category: String, value: Double, unit: String,
+         normalLow: Double, normalHigh: Double, optimalLow: Double, optimalHigh: Double,
+         date: Date = .now) {
+        self.name = name; self.category = category; self.value = value; self.unit = unit
+        self.normalLow = normalLow; self.normalHigh = normalHigh
+        self.optimalLow = optimalLow; self.optimalHigh = optimalHigh; self.date = date
+    }
+}

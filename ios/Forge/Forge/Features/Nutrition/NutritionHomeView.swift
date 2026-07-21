@@ -157,12 +157,34 @@ struct NutritionHomeView: View {
     private var navLinks: some View {
         VStack(spacing: 10) {
             NavRow(icon: "pills.fill", title: "Supplements",
-                   subtitle: "\(app.nutrition.supplements.filter(\.loggedToday).count)/\(app.nutrition.supplements.count) logged today") { SupplementsView() }
+                   subtitle: supplementsSubtitle) { SupplementsView() }
             NavRow(icon: "exclamationmark.shield.fill", title: "Deficiency Detection",
-                   subtitle: "\(app.nutrition.deficiencies.count) flags · Mg + D + Omega-3") { DeficienciesView() }
+                   subtitle: deficiencySubtitle) { DeficienciesView() }
             NavRow(icon: "chart.bar.doc.horizontal.fill", title: "Micronutrients",
-                   subtitle: "35 tracked · 7-day averages") { MicronutrientsView() }
+                   subtitle: micronutrientSubtitle) { MicronutrientsView() }
         }
+    }
+
+    private var supplementsSubtitle: String {
+        let stack = app.nutrition.supplements
+        guard !stack.isEmpty else { return "Build your stack" }
+        return "\(stack.filter(\.loggedToday).count)/\(stack.count) logged today"
+    }
+
+    private var deficiencySubtitle: String {
+        let defs = app.nutrition.deficiencies
+        if defs.isEmpty {
+            return app.nutrition.bloodwork.isEmpty ? "Add bloodwork to detect" : "No flags — all optimal"
+        }
+        let names = defs.prefix(3).map(\.nutrient).joined(separator: " · ")
+        return "\(defs.count) flag\(defs.count == 1 ? "" : "s") · \(names)"
+    }
+
+    private var micronutrientSubtitle: String {
+        let groups = app.nutrition.nutrientGroups
+        guard !groups.isEmpty else { return "Log intake to track" }
+        let count = groups.reduce(0) { $0 + $1.items.count }
+        return "\(count) tracked · 7-day averages"
     }
 }
 

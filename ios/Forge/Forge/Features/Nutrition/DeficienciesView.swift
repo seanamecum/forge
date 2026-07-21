@@ -6,7 +6,16 @@ struct DeficienciesView: View {
     var body: some View {
         ScreenScaffold {
             SectionHeader(eyebrow: "Fuel · AI Detection", title: "Deficiencies",
-                          subtitle: "Cross-referenced against intake, training load, bloodwork, and sleep — only real signal surfaces here.")
+                          subtitle: "Derived from your bloodwork — markers below their optimal range. Only real signal surfaces here.")
+
+            if app.nutrition.deficiencies.isEmpty {
+                EmptyStateView(
+                    icon: "checkmark.seal",
+                    title: app.nutrition.bloodwork.isEmpty ? "No labs yet" : "Nothing flagged",
+                    message: app.nutrition.bloodwork.isEmpty
+                        ? "Add your bloodwork on the Health screen and Forge flags any marker sitting below its optimal range."
+                        : "Every marker you've logged is at or above its optimal range. Forge will surface a flag the moment one drops.")
+            }
 
             ForEach(app.nutrition.deficiencies) { d in
                 Card {

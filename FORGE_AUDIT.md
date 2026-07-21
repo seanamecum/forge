@@ -859,6 +859,47 @@ hardcoded demo with a "coming soon" log button — so fuel decisions were driven
   (graceful); < 10 samples stays graceful. Demo-athlete nutrition coherence preserved. iOS **286 tests, 2
   skipped, 0 failures; Debug+Release 0 warnings.**
 
+## 12f. Product — real nutrition & health, and a coach that only sees your data (2026-07-21)
+
+**Ended the last major demo-data leak into a real user's health picture — and the AI coach.** Supplements,
+micronutrients, deficiencies, bloodwork, the active injury, and its rehab plan were all hardcoded `MockData`
+(Sean's), shown identically to every real account; the AI coach's system prompt and its default offline
+replies also hardcoded Sean's knee, labs, and forecasts. A real user was being shown — and coached on —
+*someone else's body*.
+- **Persistence:** two new @Model types — `SupplementRecord` (name/dose/timing/benefit/streak/lastLogged) and
+  `BloodworkRecord` (marker + normal/optimal ranges + value/date) — added to the SwiftData schema,
+  `allModels`, `deleteAllLocalData`, and the data export. `PersistenceService` gains insert/load/delete/
+  update for supplements and insert/load for bloodwork.
+- **New pure engine:** `Core/DeficiencyEngine.swift` derives deficiency flags from the user's **real**
+  bloodwork (markers below `optimalLow`), high-severity below the normal range. Lower-is-better markers
+  (LDL, hs-CRP; `optimalLow ≈ 0`) are never mislabelled. No labs → no flags (honest empty state).
+- **Reference (not user) data:** `Models/BloodworkCatalog.swift` — 10 reference markers with their ranges the
+  user picks from when entering their own result.
+- **Demo/real separation (the pattern, extended):** `NutritionService` gains `clearDemoSeed`/`restoreDemoSeed`
+  (supplements/micros/deficiencies/bloodwork) and `InjuryService` gains the same (active injury, rehab
+  checklist, and a clean `cleanRisk` read instead of Sean's 22% moderate). Wired into `completeAuth`,
+  `commitOnboarding`, and `rehydrate` alongside the existing workout/weight gating. Real accounts load their
+  own stack + labs from persistence in `rehydrate`; demo keeps Sean's.
+- **AppState management:** `addSupplement`/`removeSupplement`/`toggleSupplement`/`addBloodwork` persist for
+  real accounts (adherence + streak survive relaunch) and mutate **in-memory only** for the demo athlete —
+  demo never touches the store, a real account's store is never seeded with demo rows.
+- **AI coach only sees your data:** `CoachContext` gained clinical fields (`injuryLine`, `deficiencyLine`,
+  `bloodworkLine`, `forecastLine`, `rehabLine`, injury name/phase/pain/risk) built by shared formatters.
+  `AIService.systemPrompt` no longer references `MockData` at all — a healthy real user's prompt simply omits
+  the injury/rehab/forecast sections. The default **offline** coach now routes real accounts to a new
+  `contextualReply` synthesized entirely from their own live numbers (honest empty states for un-logged
+  injury/labs), while the demo athlete keeps the rich canned script.
+- **Views:** `SupplementsView` (empty state + add sheet + persisted toggle + remove), `BloodworkView` (routes
+  to `app.nutrition.bloodwork`, empty state, catalog-driven add sheet), `DeficienciesView`/`Micronutrients
+  View` (empty states; the demo gap-callout is demo-only), `NutritionHomeView` (subtitle counts derive from
+  real data, not "Mg + D + Omega-3").
+- **Tests:** `NutritionHealthTests` (+20) — `DeficiencyEngine` severity/thresholds/lower-is-better/empty;
+  Supplement+Bloodwork record round-trip/update/delete (schema/migration path); demo vs real never mix
+  (stack, labs, deficiencies, injury, **risk**); real add/toggle/remove persists and demo stays in-memory;
+  bloodwork derives a deficiency; the real coach context + system prompt carry **no** Sean data and the
+  offline reply is honest not fabricated, while demo keeps its script; `forgeInsights` drops the knee chain
+  when healthy. iOS **306 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never

@@ -9,6 +9,7 @@ enum PersistenceService {
         UserRecord.self, GoalRecord.self, WorkoutRecord.self,
         NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
         ScoreRecord.self, CheckInRecord.self, WeightRecord.self,
+        SupplementRecord.self, BloodworkRecord.self,
     ]
 
     /// One container for the whole app — views get it via .modelContainer,
@@ -19,6 +20,7 @@ enum PersistenceService {
             UserRecord.self, GoalRecord.self, WorkoutRecord.self,
             NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
             ScoreRecord.self, CheckInRecord.self, WeightRecord.self,
+            SupplementRecord.self, BloodworkRecord.self,
         ])
         do {
             return try ModelContainer(for: schema)
@@ -50,6 +52,8 @@ enum PersistenceService {
         try? context.delete(model: ScoreRecord.self)
         try? context.delete(model: CheckInRecord.self)
         try? context.delete(model: WeightRecord.self)
+        try? context.delete(model: SupplementRecord.self)
+        try? context.delete(model: BloodworkRecord.self)
         try? context.save()
         // Data keys only — the auth session (forge.auth.*) is cleared by the
         // separate cloud-account action, so a local wipe leaves you signed in.
@@ -193,6 +197,20 @@ enum PersistenceService {
             doc["weigh_ins"] = weighIns.map { ["date": iso($0.date), "weight_lb": $0.weightLb] as [String: Any] }
         }
 
+        if let supps = try? context.fetch(FetchDescriptor<SupplementRecord>(sortBy: [SortDescriptor(\.createdAt)])) {
+            doc["supplements"] = supps.map {
+                ["name": $0.name, "dose": $0.dose, "timing": $0.timing, "benefit": $0.benefit,
+                 "streak": $0.streak, "last_logged": $0.lastLoggedDate.map(iso) ?? NSNull()] as [String: Any]
+            }
+        }
+        if let labs = try? context.fetch(FetchDescriptor<BloodworkRecord>(sortBy: [SortDescriptor(\.date)])) {
+            doc["bloodwork"] = labs.map {
+                ["name": $0.name, "category": $0.category, "value": $0.value, "unit": $0.unit,
+                 "normal_low": $0.normalLow, "normal_high": $0.normalHigh,
+                 "optimal_low": $0.optimalLow, "optimal_high": $0.optimalHigh, "date": iso($0.date)] as [String: Any]
+            }
+        }
+
         // Hydration (per-day, kept in UserDefaults rather than a model).
         let waterPrefix = "forge.water."
         let hydration = UserDefaults.standard.dictionaryRepresentation()
@@ -307,6 +325,35 @@ enum PersistenceService {
         var descriptor = FetchDescriptor<WeightRecord>(sortBy: [SortDescriptor(\.date)])
         descriptor.fetchLimit = limit
         return (try? context.fetch(descriptor)) ?? []
+    }
+
+    // MARK: - Supplements (real stack + adherence)
+
+    static func insertSupplement(_ record: SupplementRecord, context: ModelContext) {
+        context.insert(record); try? context.save()
+    }
+    static func deleteSupplement(named name: String, context: ModelContext) {
+        let d = FetchDescriptor<SupplementRecord>(predicate: #Predicate { $0.name == name })
+        for r in (try? context.fetch(d)) ?? [] { context.delete(r) }
+        try? context.save()
+    }
+    static func updateSupplement(named name: String, streak: Int, lastLogged: Date?, context: ModelContext) {
+        let d = FetchDescriptor<SupplementRecord>(predicate: #Predicate { $0.name == name })
+        if let r = (try? context.fetch(d))?.first { r.streak = streak; r.lastLoggedDate = lastLogged; try? context.save() }
+    }
+    @MainActor
+    static func loadSupplements() -> [SupplementRecord] {
+        (try? context.fetch(FetchDescriptor<SupplementRecord>(sortBy: [SortDescriptor(\.createdAt)]))) ?? []
+    }
+
+    // MARK: - Bloodwork (real lab entries)
+
+    static func insertBloodwork(_ record: BloodworkRecord, context: ModelContext) {
+        context.insert(record); try? context.save()
+    }
+    @MainActor
+    static func loadBloodwork() -> [BloodworkRecord] {
+        (try? context.fetch(FetchDescriptor<BloodworkRecord>(sortBy: [SortDescriptor(\.date, order: .reverse)]))) ?? []
     }
 
     // MARK: - Nutrition

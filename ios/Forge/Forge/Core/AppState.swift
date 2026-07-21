@@ -139,6 +139,14 @@ final class AppState {
         // demo trend via `weightTrend`).
         if !isDemoAccount { weightSamples = PersistenceService.loadWeights().map(\.weightLb) }
 
+        // Real supplement stack + bloodwork → derived deficiencies (demo keeps Sean's).
+        // Injuries: a real account keeps only its own logged/managed set — clear the
+        // demo knee, its risk read, and rehab checklist.
+        if !isDemoAccount {
+            loadHealthData()
+            injuries.clearDemoSeed()
+        }
+
         refreshFuelPlan()
     }
     private var rehydrated = false
@@ -194,10 +202,14 @@ final class AppState {
         isDemoAccount = demo
         if demo {
             workouts.restoreDemoSeed()   // in case a prior real session cleared it
+            nutrition.restoreDemoSeed()
+            injuries.restoreDemoSeed()
             user = MockData.sean
             finishOnboarding()
         } else {
             workouts.clearDemoSeed()     // a real account starts with a clean slate
+            nutrition.clearDemoSeed()
+            injuries.clearDemoSeed()
             weightSamples = []
             phase = .onboarding
         }
@@ -225,6 +237,7 @@ final class AppState {
     func commitOnboarding(profile: UserProfile, injuries selected: Set<InjuryType>) {
         isDemoAccount = false
         workouts.clearDemoSeed()          // idempotent — a real user builds their own history
+        nutrition.clearDemoSeed()
         weightSamples = []
         user = Self.onboardingProfile(from: profile)
         injuries.setActive(from: selected)
@@ -487,6 +500,83 @@ final class AppState {
         refreshFuelPlan()
     }
 
+    // MARK: - Supplements + bloodwork (real, persisted; demo keeps Sean's)
+
+    /// Rebuild the in-memory stack + bloodwork from persistence and derive
+    /// deficiencies from the user's real labs. Real accounts only.
+    @MainActor
+    func loadHealthData() {
+        nutrition.supplements = PersistenceService.loadSupplements().map { r in
+            Supplement(name: r.name, dose: r.dose, timing: r.timing, benefit: r.benefit,
+                       streak: r.streak,
+                       loggedToday: r.lastLoggedDate.map { Calendar.current.isDateInToday($0) } ?? false)
+        }
+        nutrition.bloodwork = PersistenceService.loadBloodwork().map { r in
+            BloodworkMarker(name: r.name,
+                            category: BloodworkMarker.Category(rawValue: r.category) ?? .metabolic,
+                            value: r.value, unit: r.unit,
+                            normalLow: r.normalLow, normalHigh: r.normalHigh,
+                            optimalLow: r.optimalLow, optimalHigh: r.optimalHigh,
+                            takenAt: r.date.formatted(date: .abbreviated, time: .omitted), aiNote: "")
+        }
+        nutrition.deficiencies = DeficiencyEngine.detect(bloodwork: nutrition.bloodwork)
+    }
+
+    @MainActor
+    func addSupplement(name: String, dose: String, timing: String, benefit: String, context: ModelContext) {
+        let clean = name.trimmingCharacters(in: .whitespaces)
+        guard !clean.isEmpty else { return }
+        // Demo mode never touches persistence — it mutates Sean's in-memory stack so
+        // the demo stays self-contained and a real user's store stays untouched.
+        if isDemoAccount {
+            nutrition.supplements.append(
+                Supplement(name: clean, dose: dose, timing: timing, benefit: benefit, streak: 0, loggedToday: false))
+            return
+        }
+        PersistenceService.insertSupplement(
+            SupplementRecord(name: clean, dose: dose, timing: timing, benefit: benefit), context: context)
+        loadHealthData()
+    }
+
+    @MainActor
+    func removeSupplement(_ supplement: Supplement, context: ModelContext) {
+        if isDemoAccount {
+            nutrition.supplements.removeAll { $0.id == supplement.id }
+            return
+        }
+        PersistenceService.deleteSupplement(named: supplement.name, context: context)
+        loadHealthData()
+    }
+
+    @MainActor
+    func toggleSupplement(_ supplement: Supplement, context: ModelContext) {
+        guard let idx = nutrition.supplements.firstIndex(where: { $0.id == supplement.id }) else { return }
+        let nowLogged = !nutrition.supplements[idx].loggedToday
+        nutrition.supplements[idx].loggedToday = nowLogged
+        nutrition.supplements[idx].streak = max(0, nutrition.supplements[idx].streak + (nowLogged ? 1 : -1))
+        if !isDemoAccount {
+            PersistenceService.updateSupplement(named: supplement.name,
+                streak: nutrition.supplements[idx].streak,
+                lastLogged: nowLogged ? .now : nil, context: context)
+        }
+    }
+
+    @MainActor
+    func addBloodwork(_ entry: BloodworkCatalogEntry, value: Double, context: ModelContext) {
+        guard value > 0 else { return }
+        if isDemoAccount {
+            nutrition.bloodwork.append(entry.marker(value: value, takenAt: "Today"))
+            nutrition.deficiencies = DeficiencyEngine.detect(bloodwork: nutrition.bloodwork)
+            return
+        }
+        PersistenceService.insertBloodwork(
+            BloodworkRecord(name: entry.name, category: entry.category.rawValue, value: value, unit: entry.unit,
+                            normalLow: entry.normalLow, normalHigh: entry.normalHigh,
+                            optimalLow: entry.optimalLow, optimalHigh: entry.optimalHigh),
+            context: context)
+        loadHealthData()
+    }
+
     /// Publish today's directive to the home-screen widget's shared container
     /// and push it to the paired Apple Watch.
     func publishWidgetSnapshot() {
@@ -560,6 +650,7 @@ final class AppState {
     var coachContext: CoachContext {
         let d = recovery.today
         let mg = magnesiumStatus
+        let injury = injuries.active.first
         return CoachContext(
             name: user.name, age: user.age, sport: user.sport,
             goals: user.goals.map(\.rawValue).joined(separator: ", "),
@@ -577,7 +668,20 @@ final class AppState {
             deviceNarrative: deviceNarrative,
             plateauNote: workouts.plateaus.first.map {
                 "\($0.exerciseName) flat \($0.sessions) sessions at e1RM \(Int($0.bestE1RM)) lb (avg top-set RPE \(String(format: "%.1f", $0.avgTopRPE)))."
-            } ?? "")
+            } ?? "",
+            isDemo: isDemoAccount,
+            injuryName: injury?.type.rawValue ?? "",
+            injuryPhase: injury?.phase.rawValue ?? "",
+            injuryPain: injury?.painToday ?? 0,
+            injuryRiskPercent: injuries.risk.percent,
+            injuryRiskBand: injuries.risk.band,
+            injuryLine: CoachContext.injuryLine(for: injury),
+            deficiencyLine: CoachContext.deficiencyLine(from: nutrition.deficiencies),
+            bloodworkLine: CoachContext.bloodworkLine(from: nutrition.bloodwork),
+            // No performance-forecast engine yet — the demo athlete keeps the mock
+            // forecast; a real account shows none rather than a fabricated projection.
+            forecastLine: isDemoAccount ? CoachContext.forecastLine(from: MockData.forecasts) : "",
+            rehabLine: CoachContext.rehabLine(plan: injuryRehabPlan, readiness: returnReadiness))
     }
 
     /// The most valuable supplement not yet taken today — bedtime-relevant first.
