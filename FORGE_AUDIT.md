@@ -998,6 +998,45 @@ goals, sport, level/XP/streak, units) and notification settings lived only in
 - **Gap:** still `UserDefaults`-scoped and not yet synced — per-day water totals and
   the injuries blob (`forge.injuries.v1`); minor vs the profile/settings now covered.
 
+## 12i. Product — real HealthKit ingestion: personal baselines + persistence (2026-07-25)
+
+**A connected user's recovery is now computed against their OWN physiology, and
+real daily signals persist + sync.** The read layer already pulled real HRV/sleep/
+HR, but two anchors were still the demo athlete's: `hrvBaseline` (hardcoded 62 ms)
+and `sleepDebtHours` (3.1 h) — and `RecoveryEstimator.recovery()` divides real HRV
+by that baseline, so every connected user's recovery was measured against Sean's
+physiology. Separately, the `RecoveryRecord`/`SleepRecord` models were never
+written, so daily HealthKit signals evaporated on relaunch.
+- **New pure engine `Core/HealthBaselineEngine.swift`:** `hrvBaseline(fromDailyHRV:)`
+  (median over ≥14 real days, else nil — junk/zero samples filtered, robust to
+  spikes), `sleepDebt(recentNights:need:window:)` (sum of nightly shortfalls over
+  the last N nights, surplus never negative, clamped 0–40 h), `sleepNeed(fromNights:)`
+  (median night length, bounded 6–9 h so chronic deprivation isn't normalized).
+  Below the data threshold each returns nil → the caller keeps the demo-labeled
+  value rather than fabricating a baseline. Disclosed heuristic, not clinical.
+- **`HealthKitService` historical reads:** `dailyAverages(…)` via
+  `HKStatisticsCollectionQuery` (daily HRV buckets, 30 d) and per-night sleep over
+  10 nights; `refreshBaselines()` computes `hrvBaselineLive` / `sleepDebtLive` on
+  every refresh. Mirrors the existing query patterns.
+- **Ingestion wiring:** `ingestHealthKitSignals()` applies the personal baseline +
+  sleep debt **before** the recovery re-derivation, only when real history exists,
+  so a connected user's recovery estimate uses their own numbers and a data-poor
+  user still sees the honest demo-labeled value. Provenance stays `.partial` (strain
+  / readiness remain derived — no overclaiming `.live`).
+- **Persistence + sync:** `PersistenceService.upsertRecoveryRecord/upsertSleepRecord`
+  (one row per calendar day, `SyncStamp.touch` on update) write today's real snapshot
+  on ingestion (real accounts only) → survives relaunch and rides the 12g sync
+  engine to other devices.
+- **Tests:** `HealthIngestionTests` (+9) — median odd/even/empty; HRV baseline
+  min-days gating + median + junk-filtering; sleep-debt shortfall sum / surplus-floor
+  / window / clamp / empty-nil; sleep-need fallback + 6–9 h bounds; a real baseline
+  provably moves the recovery estimate off the demo anchor; recovery/sleep upserts
+  are one-row-per-day and re-mark sync-pending. iOS **336 tests, 2 skipped, 0
+  failures; Debug+Release 0 warnings.**
+- **Device-bound (untestable here, mirrors tested patterns):** the raw
+  `HKStatisticsCollectionQuery`/sleep queries and the auth-gated ingest path need a
+  real device — covered by the on-device verification checklist (next milestone).
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never

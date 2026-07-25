@@ -650,8 +650,15 @@ final class AppState {
     /// Feed real HealthKit values into the unified stream as Apple Watch readings.
     /// From here the DataHub's priority/preference rules decide whether they win —
     /// live data enters the same pipeline as every other source, never a side door.
+    @MainActor
     func ingestHealthKitSignals() {
         guard healthKit.authState == .authorized, !healthKit.usingMockData else { return }
+        // Personal baselines first, so the recovery re-derivation inside
+        // updateReading uses the athlete's OWN HRV baseline / sleep debt instead of
+        // the demo athlete's seeded values. Only overwrite when real history exists.
+        if let baseline = healthKit.hrvBaselineLive { recovery.today.hrvBaseline = baseline }
+        if let debt = healthKit.sleepDebtLive { recovery.today.sleepDebtHours = debt }
+
         // Pass each sample's real age so a stale HRV/HR no longer reads as current.
         // Steps & energy are same-day sums (inherently fresh → age 0).
         func age(_ kind: MetricKind) -> Double { healthKit.ageHours(for: kind) ?? 0 }
@@ -661,6 +668,24 @@ final class AppState {
         recovery.updateReading(.heartRate, value: Double(healthKit.heartRate), unit: "bpm", source: .appleWatch, ageHours: age(.heartRate))
         recovery.updateReading(.steps, value: Double(healthKit.steps), unit: "", source: .appleWatch)
         recovery.updateReading(.calories, value: Double(healthKit.activeEnergy), unit: "kcal", source: .appleWatch)
+
+        // Persist today's real recovery + sleep snapshot so it survives relaunch and
+        // syncs across devices (real accounts only; demo never persists Health data).
+        if !isDemoAccount { persistTodayHealthSnapshot() }
+    }
+
+    /// Upsert today's recovery + sleep record from the live snapshot, then nudge a
+    /// sync. Keyed by calendar day so re-ingesting during the day updates one row.
+    @MainActor
+    private func persistTodayHealthSnapshot() {
+        let d = recovery.today
+        PersistenceService.upsertRecoveryRecord(
+            recovery: d.recovery, hrv: d.hrv, restingHR: d.restingHR, strain: d.strainYesterday,
+            context: PersistenceService.context)
+        PersistenceService.upsertSleepRecord(
+            hours: d.sleep.hours, deepHours: d.sleep.deepHours, remHours: d.sleep.remHours,
+            score: d.sleep.score, context: PersistenceService.context)
+        sync.requestSync()
     }
 
     /// The cross-device story for today — "WHOOP HRV dropped, sleep was short…" —

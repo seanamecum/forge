@@ -314,6 +314,45 @@ enum PersistenceService {
         }
     }
 
+    // MARK: - Daily health snapshots (real HealthKit ingestion → persist + sync)
+
+    /// Upsert today's recovery snapshot (one row per calendar day). Marked
+    /// sync-pending on every change so the cloud mirror stays current.
+    @MainActor
+    static func upsertRecoveryRecord(recovery: Int, hrv: Int, restingHR: Int, strain: Double,
+                                     context: ModelContext) {
+        let startOfDay = startOfToday()
+        var d = FetchDescriptor<RecoveryRecord>(predicate: #Predicate { $0.date >= startOfDay })
+        d.fetchLimit = 1
+        if let existing = try? context.fetch(d).first {
+            existing.recovery = recovery; existing.hrv = hrv
+            existing.restingHR = restingHR; existing.strain = strain
+            SyncStamp.touch(existing)
+        } else {
+            context.insert(RecoveryRecord(date: .now, recovery: recovery, hrv: hrv,
+                                          restingHR: restingHR, strain: strain))
+        }
+        try? context.save()
+    }
+
+    /// Upsert today's sleep snapshot (one row per calendar day).
+    @MainActor
+    static func upsertSleepRecord(hours: Double, deepHours: Double, remHours: Double, score: Int,
+                                  context: ModelContext) {
+        let startOfDay = startOfToday()
+        var d = FetchDescriptor<SleepRecord>(predicate: #Predicate { $0.date >= startOfDay })
+        d.fetchLimit = 1
+        if let existing = try? context.fetch(d).first {
+            existing.hours = hours; existing.deepHours = deepHours
+            existing.remHours = remHours; existing.score = score
+            SyncStamp.touch(existing)
+        } else {
+            context.insert(SleepRecord(date: .now, hours: hours, deepHours: deepHours,
+                                       remHours: remHours, score: score))
+        }
+        try? context.save()
+    }
+
     // MARK: - Body weight (real weigh-in history)
 
     static func saveWeight(_ pounds: Double, date: Date = .now, context: ModelContext) {
