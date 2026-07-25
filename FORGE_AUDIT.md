@@ -1037,6 +1037,20 @@ written, so daily HealthKit signals evaporated on relaunch.
   `HKStatisticsCollectionQuery`/sleep queries and the auth-gated ingest path need a
   real device — covered by the on-device verification checklist (next milestone).
 
+## 12j. Real-device E2E verification checklist (2026-07-25)
+
+Produced `appstore/DEVICE_VERIFICATION_E2E.md` — a precise, step-by-step on-device
+script grounded in the actual UI (WearablesView "Connect Apple Health", Profile
+"Cloud Sync" card, real usage strings + entitlement). Nine sections: HealthKit
+permissions & live HRV/sleep/recovery reads (incl. personal-baseline engagement and
+the <14-day no-fabrication case), Forge Score/Directive updates from live data,
+workout + weight write-back to Apple Health, denied/missing/offline/error states,
+two-device sync, reinstall/restore, last-write-wins conflict handling (online,
+offline, and delete-vs-edit), the sync-status UI states, and demo isolation/privacy.
+**Nothing is marked verified** — the checklist is the harness; the pass happens on
+the user's hardware and gets recorded here (§12a/§12i) only when complete. **Real-
+device verification remains an open blocker until then.**
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never
