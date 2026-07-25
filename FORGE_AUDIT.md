@@ -1051,6 +1051,26 @@ offline, and delete-vs-edit), the sync-status UI states, and demo isolation/priv
 the user's hardware and gets recorded here (§12a/§12i) only when complete. **Real-
 device verification remains an open blocker until then.**
 
+## 12k. Performance & launch polish (2026-07-25, in progress)
+
+Running alongside the user's on-device verification.
+- **Sync scalability (perf):** the sync engine fetched every row of every type then
+  filtered in memory (O(total history)) each cycle, and pull applied+saved one
+  record at a time (O(n) main-actor saves on reinstall restore). Now `collectPending`
+  / `markSynced` fetch only `#Predicate { syncPending }` (O(dirty)), `apply` looks up
+  the single record by id with `fetchLimit 1` (O(1) vs O(n·m) on pull), and handlers
+  mutate-only while `SyncEngine` saves once per batch (a full-history restore is one
+  write). Behaviour-preserving — all 21 sync tests pass; +2 scale tests.
+- **Version string (launch correctness):** `ProfileView` hardcoded "Forge v1.0"
+  (would lie on the next version bump). New `AppInfo` reads version/build from the
+  bundle as one source of truth; footer + export + feedback payload all use it
+  (deduped two helper copies). +1 test.
+- **Cold-start reviewed:** launch `rehydrate()` uses bounded/capped fetches
+  (workouts 60, weights 120, today-only entries) and async non-blocking sync — no
+  unbounded main-thread work at startup. No change needed.
+- Codebase scan: no TODO/FIXME/placeholder/debug-print left in shipping code.
+- iOS **339 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never
