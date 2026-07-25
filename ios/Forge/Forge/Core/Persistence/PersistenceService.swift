@@ -125,11 +125,7 @@ enum PersistenceService {
 
     static let exportSchemaVersion = 2
 
-    private static func appVersion() -> String {
-        let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        let b = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
-        return "\(v) (\(b))"
-    }
+    private static func appVersion() -> String { AppInfo.versionWithBuild }
 
     /// Everything the athlete owns and Forge stores locally, as one versioned JSON
     /// document with stable field names, units, timezone, and ISO-8601 timestamps.

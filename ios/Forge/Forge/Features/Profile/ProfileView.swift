@@ -54,7 +54,7 @@ struct ProfileView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
 
-            Text("Forge v1.0 · Built for athletes")
+            Text("\(AppInfo.shortLabel) · Built for athletes")
                 .font(.system(size: 10)).foregroundStyle(Theme.faint)
                 .frame(maxWidth: .infinity)
         }
