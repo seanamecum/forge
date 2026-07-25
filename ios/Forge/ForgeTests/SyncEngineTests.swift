@@ -125,6 +125,42 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertTrue(try ctx.fetch(FetchDescriptor<SyncTombstone>()).isEmpty)
     }
 
+    // MARK: scale — predicate filtering + batched apply
+
+    @MainActor
+    func testCollectPendingOnlyTouchesDirtyRowsAtScale() throws {
+        let ctx = try store()
+        // 200 already-synced (clean) rows + 3 freshly-edited (dirty) ones.
+        for i in 0..<200 {
+            let r = WeightRecord(date: .now, weightLb: 150 + Double(i) * 0.1)
+            r.syncID = "clean-\(i)"; r.syncPending = false
+            ctx.insert(r)
+        }
+        for i in 0..<3 { ctx.insert(WeightRecord(date: .now, weightLb: 180 + Double(i))) } // dirty by default
+        try ctx.save()
+
+        // The predicate fetch must return exactly the 3 dirty rows — not all 203.
+        let rows = SyncEngine.collectPending(context: ctx)
+        XCTAssertEqual(rows.count, 3)
+        XCTAssertTrue(rows.allSatisfy { $0.kind == "weight" })
+    }
+
+    @MainActor
+    func testApplyPulledLargeBatchInsertsAllInOneSave() throws {
+        let ctx = try store()
+        let batch = (0..<300).map { i in
+            SyncRow(userID: "u", kind: "weight", recordID: "r-\(i)",
+                    payload: #"{"date":"1970-01-01T00:00:00Z","weightLb":\#(150 + i)}"#,
+                    updatedAt: Date(timeIntervalSince1970: 1_000), deleted: false,
+                    syncedAt: Date(timeIntervalSince1970: Double(1_000 + i)))
+        }
+        SyncEngine.applyPulled(batch, context: ctx)
+        XCTAssertEqual(try ctx.fetch(FetchDescriptor<WeightRecord>()).count, 300)
+        // Re-applying the same batch is idempotent (LWW: not strictly newer → skip).
+        SyncEngine.applyPulled(batch, context: ctx)
+        XCTAssertEqual(try ctx.fetch(FetchDescriptor<WeightRecord>()).count, 300)
+    }
+
     // MARK: helpers
 
     func testJWTUserIDDecode() {

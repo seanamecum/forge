@@ -51,10 +51,13 @@ enum SyncRegistry {
         AnySyncHandler(
             kind: T.syncKind,
             collectPending: { ctx in
-                let all = (try? ctx.fetch(FetchDescriptor<T>())) ?? []
+                // Fetch only the dirty rows (DB-side predicate), not the whole table —
+                // O(pending), not O(total history), each sync cycle.
+                let dirty = (try? ctx.fetch(FetchDescriptor<T>(
+                    predicate: #Predicate { $0.syncPending }))) ?? []
                 var rows: [SyncRow] = []
                 var changed = false
-                for r in all where r.syncPending {
+                for r in dirty {
                     if r.syncID.isEmpty { r.syncID = UUID().uuidString; changed = true }
                     let payload = (try? r.syncPayload())
                         .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
@@ -67,20 +70,27 @@ enum SyncRegistry {
             },
             markSynced: { ctx, ids in
                 guard !ids.isEmpty else { return }
-                let all = (try? ctx.fetch(FetchDescriptor<T>())) ?? []
-                var changed = false
-                for r in all where r.syncPending && ids.contains(r.syncID) {
-                    r.syncPending = false; changed = true
+                // Only scan dirty rows, then clear the acknowledged ids. The caller
+                // (SyncEngine.markPushed) saves once for the whole batch.
+                let dirty = (try? ctx.fetch(FetchDescriptor<T>(
+                    predicate: #Predicate { $0.syncPending }))) ?? []
+                for r in dirty where ids.contains(r.syncID) {
+                    r.syncPending = false
                 }
-                if changed { try? ctx.save() }
             },
             apply: { row, ctx in
-                let all = (try? ctx.fetch(FetchDescriptor<T>())) ?? []
-                let local = all.first { $0.syncID == row.recordID }
+                // Look up the single matching record by id (DB-side), not a full-table
+                // scan per pulled row — O(1) lookup instead of O(total) each.
+                let targetID = row.recordID
+                var descriptor = FetchDescriptor<T>(predicate: #Predicate { $0.syncID == targetID })
+                descriptor.fetchLimit = 1
+                let local = (try? ctx.fetch(descriptor))?.first
+                // Mutations only — SyncEngine.applyPulled saves once for the batch,
+                // so a full-history restore is one save, not one-per-record.
                 if row.deleted {
                     // Tombstone wins only if it's at least as new as the local edit.
                     if let local, local.syncUpdatedAt <= row.updatedAt {
-                        ctx.delete(local); try? ctx.save()
+                        ctx.delete(local)
                     }
                     return
                 }
@@ -92,14 +102,12 @@ enum SyncRegistry {
                     try? local.applyPayload(data)
                     local.syncUpdatedAt = row.updatedAt
                     local.syncPending = false
-                    try? ctx.save()
                 } else {
                     guard let obj = try? T.instantiate(payload: data) else { return }
                     obj.syncID = row.recordID
                     obj.syncUpdatedAt = row.updatedAt
                     obj.syncPending = false
                     ctx.insert(obj)
-                    try? ctx.save()
                 }
             })
     }

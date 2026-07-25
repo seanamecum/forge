@@ -24,16 +24,21 @@ enum SyncEngine {
         for (kind, kindRows) in Dictionary(grouping: live, by: \.kind) {
             SyncRegistry.byKind[kind]?.markSynced(context, Set(kindRows.map(\.recordID)))
         }
+        try? context.save()   // one save for all cleared dirty flags
         let deletedKeys = Set(rows.filter(\.deleted).map { TombstoneKey(kind: $0.kind, recordID: $0.recordID) })
         clearTombstones(deletedKeys, context: context)
     }
 
     /// Apply a batch pulled from the server. Each row resolves independently via
     /// LWW inside its handler, so order within the batch doesn't affect the result.
+    /// Handlers mutate only; we save once here so a full-history restore (reinstall)
+    /// is a single write, not one per record.
     static func applyPulled(_ rows: [SyncRow], context: ModelContext) {
+        guard !rows.isEmpty else { return }
         for row in rows {
             SyncRegistry.byKind[row.kind]?.apply(row, context)
         }
+        try? context.save()
     }
 
     // MARK: - Tombstones
