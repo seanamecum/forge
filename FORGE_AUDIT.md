@@ -720,6 +720,23 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
 
 ## 12a. Remote Supabase state
 
+> **✅ UPDATE 2026-07-25 — MIGRATIONS `0003` + `0004` APPLIED + VERIFIED on the live DB.**
+> `supabase migration list` now shows **all four `0001→0004` in the Remote column** and `db push --dry-run`
+> reports *"Remote database is up to date."* Diagnosis of the earlier "push finished but nothing recorded"
+> issue: the interactive `[Y/n]` confirmation was never answered (chat `!`/non-TTY runs aborted after
+> printing the plan) — **not** a migration failure, rollback, or permissions issue (remote connection and
+> history reads succeeded throughout). Fixed by `supabase db push --yes`. Live anon-key PostgREST probes
+> confirm the new tables are deployed and owner-scoped:
+> - **`sync_records`** — anon `GET` → `200 []` (RLS filters all rows); anon `INSERT` → **`401`** (owner-only
+>   write enforced; the whole point of cloud sync's security). **Offline-first cloud sync is now live E2E.**
+> - **`waitlist_signups` / `beta_applications`** (0004) — anon `GET` → `200 []` (submissions never publicly
+>   readable); anon `INSERT waitlist_signups` → `201` (public funnel insert works, service-role read only).
+> - Server-side LWW trigger smoke test (§4 of `SYNC_DEPLOY_VERIFICATION.md`) still worth one run via the SQL
+>   editor (service-role only; not reachable from anon probes) — but client-side LWW is covered by the
+>   fake-transport integration tests.
+> - **Cleanup TODO:** a single probe row `probe+rlscheck@forge.test` was inserted into `waitlist_signups`
+>   during verification; delete it from the Dashboard/SQL editor (anon has no delete policy, by design).
+>
 > **✅ UPDATE 2026-07-20 — MIGRATION APPLIED + RLS VERIFIED on the live DB.**
 > The user ran `supabase db push`; `migration list` now shows **`0001→0001` and `0002→0002` in the Remote
 > column** and `db push --dry-run` reports *"Remote database is up to date."* Live anon-key PostgREST probes
