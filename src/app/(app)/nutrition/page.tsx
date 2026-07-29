@@ -157,10 +157,10 @@ export default function NutritionPage() {
         </div>
       </div>
 
-      {/* Today's meals */}
+      {/* Today&apos;s meals */}
       <div className="card p-6">
         <div className="mb-4 flex items-center justify-between">
-          <div className="display text-xl text-cream-50">Today's meals</div>
+          <div className="display text-xl text-cream-50">Today&apos;s meals</div>
           <button className="btn-ghost text-xs" onClick={() => { setPickedMeal("dinner"); setModal("search"); }}>+ Add meal</button>
         </div>
         <div className="space-y-3">

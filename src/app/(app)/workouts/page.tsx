@@ -29,7 +29,7 @@ export default function WorkoutsPage() {
       <div className="card card-gold p-6">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.22em] text-gold-300">Today's Session</div>
+            <div className="text-[10px] uppercase tracking-[0.22em] text-gold-300">Today&apos;s Session</div>
             <h3 className="display mt-1 text-2xl text-cream-50">{todaysWorkout.name}</h3>
             <p className="mt-1 text-sm text-obsidian-200">
               {todaysWorkout.exercises.length} exercises · ~{todaysWorkout.durationMin} min
