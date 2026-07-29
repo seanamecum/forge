@@ -51,6 +51,9 @@ struct RecoverHomeView: View {
            age >= RecoveryService.staleThresholdHours {
             return "\(base) — last HRV ~\(Int(age))h old, recovery held at estimate"
         }
+        if app.recovery.recoveryFromCheckIn {
+            return "From your morning check-in — connect Apple Health for HRV-based recovery"
+        }
         return "Demo recovery · \(base)"
     }
 
@@ -100,31 +103,58 @@ struct RecoverHomeView: View {
                     StatTile(label: "Strain today",
                              value: String(format: "%.1f", d.strainToday), unit: "/ 21", tone: .green)
                 }
-                CoachNote(text: "You're 3.1 h behind this week. At 21, your ceiling is 8.5–9 h — that single change moves recovery, HRV, testosterone, and the bench plateau at once. Lights out 22:30.")
+                if let note = sleepDebtNote { CoachNote(text: note) }
             }
         }
+    }
+
+    /// The sleep-debt coaching line. Demo keeps the rich mock narrative; a real
+    /// account gets a factual line from its OWN debt (or none when well-rested) —
+    /// never the demo athlete's "3.1 h / bench plateau" story.
+    private var sleepDebtNote: String? {
+        let debt = app.recovery.today.sleepDebtHours
+        if app.isDemoAccount {
+            return "You're 3.1 h behind this week. At 21, your ceiling is 8.5–9 h — that single change moves recovery, HRV, testosterone, and the bench plateau at once. Lights out 22:30."
+        }
+        guard debt >= 1 else { return nil }   // well-rested → no nagging
+        let h = String(format: "%.1f", debt)
+        return "You're \(h) h behind on sleep this week — closing that gap is the single highest-leverage move for your recovery and HRV."
     }
 
     private var trendsCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 14) {
-                EyebrowLabel(text: "14-Day Trends")
-                ForEach(app.recovery.trends) { trend in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(trend.name).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.creamDim)
-                            Spacer()
-                            Text("\(String(format: "%g", trend.latest)) \(trend.unit)")
-                                .font(.system(size: 11.5)).foregroundStyle(Theme.gold)
+                EyebrowLabel(text: "Trends")
+                // A real account with too little history yet shows an honest
+                // "building" state instead of the demo athlete's trend or a lonely
+                // one-point chart.
+                if app.recovery.trendsAreLive && !hasEnoughTrend {
+                    EmptyStateView(
+                        icon: "chart.xyaxis.line",
+                        title: "Your trends are building",
+                        message: "Keep logging and connect Apple Health — your recovery, HRV, sleep, and Forge Score charts fill in over the next couple of weeks.")
+                } else {
+                    ForEach(app.recovery.trends.filter { !$0.values.isEmpty }) { trend in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(trend.name).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.creamDim)
+                                Spacer()
+                                Text("\(String(format: "%g", trend.latest)) \(trend.unit)")
+                                    .font(.system(size: 11.5)).foregroundStyle(Theme.gold)
+                            }
+                            Sparkline(values: trend.values,
+                                      color: trend.name == "Strain" ? Theme.amber : Theme.gold,
+                                      height: 34,
+                                      accessibilityLabel: "\(trend.name) trend, \(trend.unit)")
                         }
-                        Sparkline(values: trend.values,
-                                  color: trend.name == "Strain" ? Theme.amber : Theme.gold,
-                                  height: 34,
-                                  accessibilityLabel: "\(trend.name) trend, \(trend.unit)")
                     }
                 }
             }
         }
+    }
+
+    private var hasEnoughTrend: Bool {
+        app.recovery.trends.contains { $0.values.count >= TrendBuilder.minPointsToShow }
     }
 
     private var navLinks: some View {

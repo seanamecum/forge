@@ -62,8 +62,9 @@ struct OnboardingFlowView: View {
 
     private func advance() {
         if step == totalSteps - 1 {
-            app.user = draft
-            app.finishOnboarding()
+            // Commit the real profile AND the declared injuries (which used to be
+            // collected here and then silently dropped).
+            app.commitOnboarding(profile: draft, injuries: selectedInjuries)
         } else {
             withAnimation { step += 1 }
         }

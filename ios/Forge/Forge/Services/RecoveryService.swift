@@ -12,14 +12,44 @@ final class RecoveryService {
         applyUnifiedSignals()
     }
 
-    let trends: [TrendSeries] = [
+    /// The demo athlete's seeded trends — used in demo mode and as the fallback
+    /// before a real account's own history loads.
+    static let demoTrends: [TrendSeries] = [
         TrendSeries(name: "Recovery", unit: "/100", values: MockData.recoveryTrend),
         TrendSeries(name: "HRV", unit: "ms", values: MockData.hrvTrend),
         TrendSeries(name: "Sleep", unit: "h", values: MockData.sleepTrend),
         TrendSeries(name: "Strain", unit: "/21", values: MockData.strainTrend),
     ]
 
-    var forgeScoreTrend: [Double] { MockData.forgeScoreTrend }
+    /// A real account's OWN trends (set by AppState from persisted history); nil in
+    /// demo mode or before load → the demo trends show.
+    private var liveTrends: [TrendSeries]?
+    private var liveForgeScoreTrend: [Double]?
+
+    var trends: [TrendSeries] { liveTrends ?? Self.demoTrends }
+    var forgeScoreTrend: [Double] { liveForgeScoreTrend ?? MockData.forgeScoreTrend }
+
+    /// True when the displayed trends are the athlete's own (not the demo seed) —
+    /// lets the UI show a "building" state while real history is still thin.
+    var trendsAreLive: Bool { liveTrends != nil }
+
+    /// Replace the demo trends with the athlete's real history. Empty arrays are
+    /// valid (a new user with no history yet) and stay empty — never demo.
+    func setLiveTrends(_ series: TrendBuilder.Series) {
+        liveTrends = [
+            TrendSeries(name: "Recovery", unit: "/100", values: series.recovery),
+            TrendSeries(name: "HRV", unit: "ms", values: series.hrv),
+            TrendSeries(name: "Sleep", unit: "h", values: series.sleep),
+            TrendSeries(name: "Strain", unit: "/21", values: series.strain),
+        ]
+        liveForgeScoreTrend = series.forgeScore
+    }
+
+    /// Return to the demo trends (demo mode / sign-out).
+    func clearLiveTrends() {
+        liveTrends = nil
+        liveForgeScoreTrend = nil
+    }
 
     /// Values of a named trend series (Recovery · Sleep · Strain · HRV), or empty.
     /// One accessor instead of `trends.first { $0.name == … }` scattered around.
@@ -87,12 +117,32 @@ final class RecoveryService {
     /// nothing is live; `.partial` once any live signal arrives (recovery, strain,
     /// sleep-debt and readiness are still estimated, so it is never fully `.live`).
     var provenance: DataProvenance {
-        liveMetrics.isEmpty ? .demo : .partial
+        if !liveMetrics.isEmpty { return .partial }
+        if recoveryFromCheckIn { return .partial }   // subjective, but the user's real input
+        return .demo
     }
 
     /// Whether today's headline recovery number was derived from live signals
     /// (vs. the demo seed). Drives the "estimate" labeling in the UI.
     private(set) var recoveryFromLiveSignals = false
+
+    /// Whether today's recovery was derived from the morning check-in (the athlete's
+    /// real signal when no wearable is connected). Mutually exclusive with live.
+    private(set) var recoveryFromCheckIn = false
+
+    /// Apply the morning check-in as the recovery signal when there is no live
+    /// wearable data — so a real user's reported sleep/energy/soreness/stress
+    /// actually drives their Recovery number and Forge Score. Live HRV wins.
+    func applyCheckIn(_ snapshot: CheckInSnapshot?) {
+        guard let ci = snapshot, !recoveryFromLiveSignals else {
+            recoveryFromCheckIn = false
+            return
+        }
+        today.recovery = CheckInEngine.recovery(ci)
+        today.sleep.score = CheckInEngine.sleepScore(ci.sleepQuality)
+        today.readiness = CheckInEngine.readiness(for: today.recovery)
+        recoveryFromCheckIn = true
+    }
 
     /// A live signal older than this is treated as stale — it no longer drives a
     /// "live" recovery estimate (matches DataHub's 24h "good" boundary).
@@ -158,6 +208,7 @@ final class RecoveryService {
                 hrv: today.hrv, hrvBaseline: today.hrvBaseline,
                 restingHR: today.restingHR, sleepHours: today.sleep.hours)
             recoveryFromLiveSignals = true
+            recoveryFromCheckIn = false   // objective HRV supersedes the check-in
         } else {
             recoveryFromLiveSignals = false
         }

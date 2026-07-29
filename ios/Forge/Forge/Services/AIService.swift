@@ -42,6 +42,21 @@ struct CoachContext {
     var deviceNarrative: String = ""
     // Lift watch — the current plateau, if any, so the coach diagnoses it.
     var plateauNote: String = ""
+    // True only for the demo athlete — gates the rich canned offline replies so a
+    // real account never receives the demo athlete's fabricated numbers.
+    var isDemo: Bool = false
+    // Clinical context, from the athlete's OWN data (empty for a real user with
+    // none) — the coach never sees the demo athlete's injuries/labs/deficiencies.
+    var injuryName: String = ""
+    var injuryPhase: String = ""
+    var injuryPain: Int = 0
+    var injuryRiskPercent: Int = 0
+    var injuryRiskBand: String = ""
+    var injuryLine: String = ""      // full INJURY bullet, or "" when healthy
+    var deficiencyLine: String = ""  // e.g. "Magnesium 240/400mg (6d low), …", or ""
+    var bloodworkLine: String = ""   // e.g. " Bloodwork Vitamin D 24 ng/mL (low).", or ""
+    var forecastLine: String = ""    // e.g. "Bench Press: 180 → 205 by …", or ""
+    var rehabLine: String = ""       // full REHAB block, or "" when no active injury
 
     /// Demo snapshot mirroring the mock athlete — used by previews and tests.
     static var demo: CoachContext {
@@ -70,7 +85,61 @@ struct CoachContext {
             waterTargetOz: u.waterTargetOz,
             proteinRemaining: 72, hydrationPct: 62,
             magnesiumPct: 52, magnesiumDaysLow: 6,
-            directive: directive)
+            directive: directive,
+            isDemo: true,
+            injuryName: knee.type.rawValue, injuryPhase: knee.phase.rawValue,
+            injuryPain: knee.painToday,
+            injuryRiskPercent: MockData.injuryRisk.percent, injuryRiskBand: MockData.injuryRisk.band,
+            injuryLine: injuryLine(for: knee),
+            deficiencyLine: deficiencyLine(from: MockData.deficiencies),
+            bloodworkLine: bloodworkLine(from: MockData.bloodwork),
+            forecastLine: forecastLine(from: MockData.forecasts),
+            rehabLine: rehabLine(
+                plan: RehabEngine.plan(for: knee, library: MockData.ptExercises, protocols: MockData.protocols),
+                readiness: RehabEngine.readiness(checklist: MockData.kneeRTSChecklist, injury: knee)))
+    }
+
+    // MARK: - Clinical line formatting (shared by demo + AppState.coachContext)
+    // These turn the athlete's OWN data into the exact strings the coach reads, so
+    // the demo snapshot and a live account produce identically-shaped context — and
+    // a real user with no injury/labs simply gets empty strings (honest silence).
+
+    /// The INJURY bullet — "" when the athlete is healthy.
+    static func injuryLine(for injury: InjuryProfile?) -> String {
+        guard let i = injury else { return "" }
+        return "\(i.name): day \(i.daysOld), \(i.phase.rawValue), pain \(i.painToday)/10."
+    }
+
+    /// The 7-day deficiency summary (top 3) — "" when there are none.
+    static func deficiencyLine(from deficiencies: [DeficiencyAlert]) -> String {
+        deficiencies.prefix(3)
+            .map { "\($0.nutrient) \($0.current)/\($0.target) (\($0.daysLow)d low)" }
+            .joined(separator: ", ")
+    }
+
+    /// A one-marker bloodwork callout (Vitamin D if present) — "" when no labs.
+    static func bloodworkLine(from bloodwork: [BloodworkMarker]) -> String {
+        guard let vitD = bloodwork.first(where: { $0.name.contains("Vitamin D") }) else { return "" }
+        return " Bloodwork Vitamin D \(Int(vitD.value)) ng/mL (low)."
+    }
+
+    /// The lead performance forecast — "" when none is available yet.
+    static func forecastLine(from forecasts: [Forecast]) -> String {
+        guard let f = forecasts.first(where: { $0.metric == "Bench Press" }) ?? forecasts.first else { return "" }
+        return "\(f.metric): \(f.current) → \(f.projected) by \(f.eta) if consistent."
+    }
+
+    /// The REHAB block — the exact PT prescription + return-to-sport read. "" when
+    /// there is no active injury to rehab.
+    static func rehabLine(plan: RehabPlan?, readiness: ReturnReadiness?) -> String {
+        guard let plan else { return "" }
+        var s = "\(plan.title): \(plan.focus)\n- "
+        s += plan.exercises.prefix(4).map { "\($0.name) \($0.prescription)" }.joined(separator: " · ")
+        if let r = readiness {
+            s += "\n- Return-to-sport readiness \(r.percent)% (\(r.band)), \(r.etaText)."
+            if let next = r.nextMilestone { s += " Next milestone: \(next)." }
+        }
+        return s
     }
 }
 
@@ -113,7 +182,8 @@ enum AIService {
         // real context in mock and live mode, never fabricated reasoning.
         let signals = contextSignals(context)
         guard ForgeConfig.aiMode != .mock else {
-            var reply = mockReply(to: question); reply.steps = signals; return reply
+            var reply = offlineReply(to: question, context: context)
+            reply.steps = signals; return reply
         }
         do {
             let text = try await callClaude(question: question, history: history,
@@ -121,8 +191,16 @@ enum AIService {
             return CoachMessage(role: .coach, text: text, steps: signals,
                                 suggestions: Array(quickPrompts.prefix(4)))
         } catch {
-            var reply = mockReply(to: question); reply.steps = signals; return reply
+            var reply = offlineReply(to: question, context: context)
+            reply.steps = signals; return reply
         }
+    }
+
+    /// The offline (no-API) reply. The demo athlete gets the rich canned script that
+    /// matches Sean's mock data; a real account gets an honest answer synthesized
+    /// from ITS OWN live numbers — never the demo athlete's fabricated stats.
+    static func offlineReply(to question: String, context c: CoachContext) -> CoachMessage {
+        c.isDemo ? mockReply(to: question) : contextualReply(to: question, context: c)
     }
 
     /// The live signals Forge hands the coach, as short honest labels — the real
@@ -222,11 +300,17 @@ enum AIService {
     /// state, so the coach and the on-screen app can never disagree.
     /// Exposed `internal` so tests can assert it carries the right signals.
     static func systemPrompt(context c: CoachContext, checkInNote: String?) -> String {
-        let knee = MockData.knee
-        let defs = MockData.deficiencies.prefix(3).map { "\($0.nutrient) \($0.current)/\($0.target) (\($0.daysLow)d low)" }.joined(separator: ", ")
-        let vitD = MockData.bloodwork.first { $0.name.contains("Vitamin D") }
-        let benchForecast = MockData.forecasts.first { $0.metric == "Bench Press" }
         let directive = c.directive
+        // Clinical blocks come straight from `c` (the athlete's OWN data). A real
+        // user with no labs/injury gets empty strings → the section drops out
+        // entirely, never a demo athlete's knee or Vitamin D bleeding through.
+        let deficiencyBlock: String = {
+            guard !c.deficiencyLine.isEmpty || !c.bloodworkLine.isEmpty else { return "" }
+            let defs = c.deficiencyLine.isEmpty ? "none flagged" : c.deficiencyLine
+            return "\n- Deficiencies (7-day): \(defs).\(c.bloodworkLine)"
+        }()
+        let injuryBlock = c.injuryLine.isEmpty ? "" : "\n\nINJURY\n- \(c.injuryLine)"
+        let forecastBlock = c.forecastLine.isEmpty ? "" : "\n\nFORECAST\n- \(c.forecastLine)"
 
         var ctx = """
         You are Forge — an elite, premium AI performance coach inside a human-performance app. \
@@ -244,14 +328,7 @@ enum AIService {
 
         FUEL
         - Targets: \(c.calorieTarget) kcal / \(c.proteinTarget)g protein / \(c.waterTargetOz)oz water.
-        - Right now: \(c.proteinRemaining)g protein still to go today; hydration at \(c.hydrationPct)% of target.
-        - Deficiencies (7-day): \(defs).\(vitD.map { " Bloodwork Vitamin D \(Int($0.value)) ng/mL (low)." } ?? "")
-
-        INJURY
-        - \(knee.name): day \(knee.daysOld), \(knee.phase.rawValue), pain \(knee.painToday)/10. Avoid plyometrics and skating sprints; heavy-slow-resistance and isometrics only.
-
-        FORECAST
-        - \(benchForecast.map { "\($0.metric): \($0.current) → \($0.projected) by \($0.eta) if consistent." } ?? "Trending up if recovery holds.")
+        - Right now: \(c.proteinRemaining)g protein still to go today; hydration at \(c.hydrationPct)% of target.\(deficiencyBlock)\(injuryBlock)\(forecastBlock)
 
         SAFETY
         - You provide educational guidance, not medical advice. For severe pain, swelling, head injury, chest pain, or neurological symptoms, tell the athlete to see a physician or physical therapist.
@@ -288,22 +365,22 @@ enum AIService {
             recovery: c.recovery, sleepDebtHours: c.sleepDebtHours,
             hrv: c.hrv, hrvBaseline: c.hrvBaseline,
             proteinRemaining: c.proteinRemaining, hydrationPct: c.hydrationPct,
-            injuryName: knee.type.rawValue, injuryPhase: knee.phase.rawValue, injuryPain: knee.painToday,
-            injuryRiskPercent: MockData.injuryRisk.percent, injuryRiskBand: MockData.injuryRisk.band,
+            injuryName: c.injuryName.isEmpty ? nil : c.injuryName,
+            injuryPhase: c.injuryPhase.isEmpty ? nil : c.injuryPhase,
+            injuryPain: c.injuryName.isEmpty ? nil : c.injuryPain,
+            injuryRiskPercent: c.injuryRiskPercent, injuryRiskBand: c.injuryRiskBand,
             magnesiumPct: c.magnesiumPct, magnesiumDaysLow: c.magnesiumDaysLow)
         if !insights.isEmpty {
             ctx += "\n\nCROSS-MODULE CONNECTIONS (reason in these chains — this is how Forge thinks)"
             for ins in insights.prefix(3) { ctx += "\n- \(ins.chain) → \(ins.action)" }
         }
 
-        // Rehab — today's PT prescription + return-to-sport readiness.
-        let rehab = RehabEngine.plan(for: knee, library: MockData.ptExercises, protocols: MockData.protocols)
-        let readiness = RehabEngine.readiness(checklist: MockData.kneeRTSChecklist, injury: knee)
-        ctx += "\n\nREHAB (prescribe this exact plan when asked about the injury or rehab)"
-        ctx += "\n- \(rehab.title): \(rehab.focus)"
-        ctx += "\n- " + rehab.exercises.prefix(4).map { "\($0.name) \($0.prescription)" }.joined(separator: " · ")
-        ctx += "\n- Return-to-sport readiness \(readiness.percent)% (\(readiness.band)), \(readiness.etaText)."
-        if let next = readiness.nextMilestone { ctx += " Next milestone: \(next)." }
+        // Rehab — today's PT prescription + return-to-sport readiness (from the
+        // athlete's own active injury; absent entirely when they're healthy).
+        if !c.rehabLine.isEmpty {
+            ctx += "\n\nREHAB (prescribe this exact plan when asked about the injury or rehab)"
+            ctx += "\n- \(c.rehabLine)"
+        }
 
         if let note = checkInNote, !note.isEmpty {
             ctx += "\n\nMORNING CHECK-IN\n- \(note) Weigh this heavily — it's today's freshest signal."
@@ -398,5 +475,155 @@ enum AIService {
             suggestions: ["What should I train today?", "Why is my recovery low?", "Should I deload?",
                           "How do I hit 225 bench?", "How do I fix my knee pain?",
                           "What supplements am I missing?"])
+    }
+
+    // MARK: - Real-account offline engine (honest, data-grounded)
+
+    /// The offline coach for a REAL account. Every sentence is built from the user's
+    /// own live context — targets, directive, recovery, their logged injury/labs —
+    /// and empty data yields an honest empty-state answer, never a fabricated stat.
+    /// Pure + tested.
+    static func contextualReply(to question: String, context c: CoachContext) -> CoachMessage {
+        let q = question.lowercased()
+        let d = c.directive
+        func f(_ x: Double) -> String { String(format: "%.1f", x) }
+
+        // TODAY / PLAN — mirror the on-screen directive exactly.
+        if q.contains("do today") || q.contains("plan my day") || q.contains("train today")
+            || q.contains("what should i train") || q.contains("plan my") {
+            var text = "\(d.headline) \(d.priorityAction)"
+            let plan = d.actions.prefix(3).map { "\($0.label.lowercased()) \($0.value.lowercased())" }.joined(separator: ", ")
+            if !plan.isEmpty { text += " Today: \(plan)." }
+            return CoachMessage(role: .coach, text: text,
+                cards: d.actions.prefix(3).map { CoachCard(label: $0.label, value: $0.value, tone: .green) },
+                suggestions: ["Should I train hard?", "What should I eat today?", "Why is my recovery low?"])
+        }
+
+        // FATIGUE / RECOVERY — decompose from real inputs.
+        if q.contains("tired") || q.contains("fatigue") || q.contains("drained")
+            || q.contains("recovery low") || q.contains("why is my recovery") {
+            var parts: [String] = []
+            if c.sleepDebtHours >= 0.5 { parts.append("\(f(c.sleepDebtHours)) h of sleep debt this week") }
+            if c.hrv < c.hrvBaseline { parts.append("HRV \(c.hrv) ms, under your \(c.hrvBaseline) ms baseline") }
+            if c.magnesiumPct < 80 && c.magnesiumDaysLow > 0 {
+                parts.append("magnesium at \(c.magnesiumPct)% of target for \(c.magnesiumDaysLow) days")
+            }
+            var text = parts.isEmpty
+                ? "Recovery is \(c.recovery)/100 and nothing in your inputs is flashing red — sleep, HRV, and load are all in range. Train as planned."
+                : "Recovery is \(c.recovery)/100. In order of weight: " + parts.joined(separator: ", ") + "."
+            if c.sleepDebtHours >= 1 { text += " Closing the sleep gap is your highest-leverage fix." }
+            return CoachMessage(role: .coach, text: text,
+                cards: [CoachCard(label: "Recovery", value: "\(c.recovery)/100", tone: c.recovery >= 66 ? .green : .amber),
+                        CoachCard(label: "HRV", value: "\(c.hrv) ms", tone: c.hrv >= c.hrvBaseline ? .green : .amber)],
+                suggestions: ["What should I train today?", "Should I deload?"])
+        }
+
+        // TRAIN HARD — gate on real recovery/readiness, respect a logged injury.
+        if q.contains("train hard") || q.contains("push today") || q.contains("go heavy") || q.contains("should i train hard") {
+            let green = c.recovery >= 66
+            var text = green
+                ? "Green light — recovery \(c.recovery)/100 and readiness \(c.readiness). Take your top sets to prescription; cap at RPE 9."
+                : "Ease off — recovery \(c.recovery)/100 is below the line for a hard session. Hold volume and cap top sets around RPE 8 today."
+            if !c.injuryName.isEmpty {
+                text += " Work around your \(c.injuryName.lowercased()) (\(c.injuryPhase.lowercased())) — no loading that aggravates it; see your rehab plan."
+            }
+            return CoachMessage(role: .coach, text: text,
+                cards: [CoachCard(label: "Recovery", value: "\(c.recovery)/100", tone: green ? .green : .amber),
+                        CoachCard(label: "Cap", value: green ? "RPE 9" : "RPE 8", tone: green ? .green : .amber)],
+                suggestions: ["What should I train today?", "Should I deload?"])
+        }
+
+        // DELOAD — from real recovery + load.
+        if q.contains("deload") {
+            let heavy = c.recovery < 55 || c.strainYesterday >= 16
+            let text = heavy
+                ? "There's a case for it — recovery \(c.recovery)/100 with yesterday's load at \(f(c.strainYesterday))/21. Pull volume ~30% for 5 days and cap intensity at RPE 8; re-check when recovery climbs back above 66."
+                : "Not yet — recovery \(c.recovery)/100 doesn't warrant a full deload. Hold volume flat and cap top sets at RPE 8.5. If recovery stays under 60 for several days, then deload."
+            return CoachMessage(role: .coach, text: text,
+                cards: [CoachCard(label: "Recovery", value: "\(c.recovery)/100", tone: heavy ? .amber : .green)],
+                suggestions: ["Why is my recovery low?", "What should I train today?"])
+        }
+
+        // FUEL — real targets + what's left today.
+        if q.contains("eat") || q.contains("food") || q.contains("meal") || q.contains("nutrition") || q.contains("protein") {
+            var text = "Targets today: \(c.calorieTarget) kcal and \(c.proteinTarget) g protein."
+            text += c.proteinRemaining > 0
+                ? " You have \(c.proteinRemaining) g of protein still to go — make your next meal protein-first."
+                : " Protein target is met — nice work."
+            if c.hydrationPct < 90 { text += " Hydration is at \(c.hydrationPct)% of target; get another bottle in." }
+            return CoachMessage(role: .coach, text: text,
+                cards: [CoachCard(label: "Protein left", value: "\(c.proteinRemaining) g", tone: c.proteinRemaining > 0 ? .amber : .green),
+                        CoachCard(label: "Hydration", value: "\(c.hydrationPct)%", tone: c.hydrationPct >= 90 ? .green : .amber)],
+                suggestions: ["What supplements am I missing?", "What is holding me back?"])
+        }
+
+        // LIFT PLATEAU — only if we actually detected one.
+        if q.contains("bench") || q.contains("225") || q.contains("plateau") || q.contains("not increasing") || q.contains("stall") {
+            let text = c.plateauNote.isEmpty
+                ? "No plateau is showing in your logged lifts right now — keep progressive overload on the bar and log every top set so I can flag a stall the moment one starts."
+                : "Here's the stall: \(c.plateauNote) That pattern usually points at recovery, not programming — hold intensity at RPE 8 for two weeks, add a back-off set, and protect sleep on lifting days before you re-test."
+            return CoachMessage(role: .coach, text: text,
+                suggestions: ["Should I train hard?", "What is holding me back?"])
+        }
+
+        // INJURY / REHAB — from the user's own logged injury, or an honest empty state.
+        if q.contains("knee") || q.contains("injury") || q.contains("pain") || q.contains("rehab") || q.contains("recover from") {
+            if c.injuryLine.isEmpty {
+                return CoachMessage(role: .coach,
+                    text: "You have no active injury logged. If something's bothering you, add it on the Injury screen — I'll build a rehab plan and automatically block the lifts that aggravate it. For sharp pain, swelling, or a head knock, see a physician or physio first.",
+                    suggestions: ["What should I train today?", "Should I deload?"])
+            }
+            var text = "\(c.injuryLine)"
+            if !c.rehabLine.isEmpty { text += " Your plan: \(c.rehabLine.replacingOccurrences(of: "\n- ", with: " — "))" }
+            text += " If pain spikes above 5/10 or the joint swells, stop and see a physio — that's not a call I make for you."
+            return CoachMessage(role: .coach, text: text,
+                suggestions: ["What should I train today?", "Can I still train around it?"])
+        }
+
+        // SUPPLEMENTS / DEFICIENCIES — from real labs, or an honest empty state.
+        if q.contains("supplement") || q.contains("missing") || q.contains("vitamin") || q.contains("deficien") {
+            if c.deficiencyLine.isEmpty && c.bloodworkLine.isEmpty {
+                return CoachMessage(role: .coach,
+                    text: "No deficiencies are flagged from your data yet. Add your bloodwork on the Health screen and I'll flag anything below its optimal range and tailor your stack to it — until then I won't guess at numbers you haven't measured.",
+                    suggestions: ["What should I eat today?", "Why is my recovery low?"])
+            }
+            var text = "From your labs: "
+            text += c.deficiencyLine.isEmpty ? "no 7-day deficiencies flagged." : "\(c.deficiencyLine)."
+            if !c.bloodworkLine.isEmpty { text += c.bloodworkLine }
+            text += " Discuss correction — diet, supplementation, dosing — with your clinician."
+            return CoachMessage(role: .coach, text: text,
+                suggestions: ["What should I eat today?", "Why am I tired?"])
+        }
+
+        // BIGGEST LEVER.
+        if q.contains("holding me back") || q.contains("weakness") || q.contains("what should i change") || q.contains("improve") {
+            let text: String
+            if c.sleepDebtHours >= 1.5 {
+                text = "One thing, clearly: sleep. You're carrying \(f(c.sleepDebtHours)) h of debt this week, and it's the common cause behind a dipped HRV and slower progress. Fix the sleep and several things improve at once."
+            } else if c.recovery < 60 {
+                text = "Recovery — it's sitting at \(c.recovery)/100. Protect sleep and keep load progressive rather than spiky, and the rest of your numbers follow it up."
+            } else if c.proteinRemaining > 0 {
+                text = "Consistency on fuel — you're regularly leaving protein on the table (\(c.proteinRemaining) g short today). Hit \(c.proteinTarget) g daily and recovery and body composition both move."
+            } else {
+                text = "Honestly, nothing is red right now — recovery \(c.recovery)/100, protein on target, sleep in range. Keep the streak and stay progressive; that's what compounds."
+            }
+            return CoachMessage(role: .coach, text: text,
+                suggestions: ["Why is my recovery low?", "What should I eat today?"])
+        }
+
+        // FORECAST — honest about the current capability.
+        if q.contains("12 weeks") || q.contains("look like") || q.contains("forecast") || q.contains("future") || q.contains("projection") {
+            return CoachMessage(role: .coach,
+                text: "I don't project a performance forecast yet — that needs more of your own logged history before any number would be honest. What I can tell you: keep recovery above ~66, progressive load on the bar, and protein at \(c.proteinTarget) g, and the trend follows. Log consistently and forecasts unlock as your data builds.",
+                suggestions: ["What should I train today?", "What is holding me back?"])
+        }
+
+        // DEFAULT — grounded overview, no fabricated specifics.
+        var overview = "Reading your live picture: Forge Score \(c.forgeScore)/100, recovery \(c.recovery)/100, \(f(c.sleepHours)) h sleep."
+        if c.proteinRemaining > 0 { overview += " \(c.proteinRemaining) g protein left today." }
+        overview += " Ask me about today's plan, your recovery, fuel, or anything you've logged."
+        return CoachMessage(role: .coach, text: overview,
+            suggestions: ["What should I train today?", "Why is my recovery low?", "What should I eat today?",
+                          "What is holding me back?", "What supplements am I missing?"])
     }
 }

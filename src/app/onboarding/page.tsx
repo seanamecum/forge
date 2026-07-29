@@ -267,7 +267,7 @@ function Finalize({ data }: any) {
       <ForgeMark size={56} />
       <h1 className="display mt-4 text-3xl text-cream-50">Welcome to The Forge.</h1>
       <p className="mx-auto mt-2 max-w-md text-sm text-obsidian-200">
-        We've drafted your first profile, a starting Forge Score, and your training week. Adjust anything from the dashboard.
+        We&apos;ve drafted your first profile, a starting Forge Score, and your training week. Adjust anything from the dashboard.
       </p>
       <div className="mt-6 grid gap-2 text-left text-[12px] text-cream-200">
         {data.name && <Line k="Name" v={data.name} />}

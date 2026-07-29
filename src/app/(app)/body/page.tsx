@@ -105,7 +105,7 @@ function Measurement({ label, value, delta }: { label: string; value: string; de
       <div className="mt-1 text-sm text-cream-100">{value}</div>
       {delta && (
         <div className={`text-[11px] ${delta.startsWith("−") ? "text-forge-green" : "text-gold-300"}`}>
-          {delta}" / 30d
+          {delta}&quot; / 30d
         </div>
       )}
     </div>

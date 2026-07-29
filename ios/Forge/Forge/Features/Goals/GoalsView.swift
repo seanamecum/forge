@@ -5,6 +5,7 @@ import SwiftData
 /// everything survives relaunch.
 struct GoalsView: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppState.self) private var app
     @Query(sort: \GoalRecord.createdAt, order: .reverse) private var goals: [GoalRecord]
     @State private var showNew = false
 
@@ -46,6 +47,7 @@ struct GoalsView: View {
                         context.insert(GoalRecord(title: s.title, unit: s.unit,
                                                   targetValue: s.target, currentValue: s.current))
                         try? context.save()
+                        app.requestSync()
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
@@ -87,6 +89,7 @@ struct GoalSuggestion: Identifiable {
 
 struct GoalCard: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppState.self) private var app
     let goal: GoalRecord
 
     var body: some View {
@@ -122,21 +125,27 @@ struct GoalCard: View {
                         Button("Log progress") {
                             goal.currentValue = min(goal.targetValue, goal.currentValue + max(1, goal.targetValue * 0.05))
                             if goal.currentValue >= goal.targetValue { goal.done = true }
+                            SyncStamp.touch(goal)
                             try? context.save()
+                            app.requestSync()
                         }
                         .buttonStyle(GhostButtonStyle(compact: true))
 
                         Button("Mark done") {
                             goal.done = true
                             goal.currentValue = goal.targetValue
+                            SyncStamp.touch(goal)
                             try? context.save()
+                            app.requestSync()
                         }
                         .buttonStyle(GhostButtonStyle(compact: true))
                     }
                     Spacer()
                     Button {
+                        SyncEngine.recordDeletion(kind: GoalRecord.syncKind, syncID: goal.syncID, context: context)
                         context.delete(goal)
                         try? context.save()
+                        app.requestSync()
                     } label: {
                         Image(systemName: "trash")
                             .font(.system(size: 13)).foregroundStyle(Theme.rubyBright.opacity(0.7))
@@ -153,6 +162,7 @@ struct GoalCard: View {
 
 struct NewGoalSheet: View {
     @Environment(\.modelContext) private var context
+    @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var unit = "lb"
@@ -185,6 +195,7 @@ struct NewGoalSheet: View {
                                           currentValue: Double(current) ?? 0,
                                           deadline: hasDeadline ? deadline : nil))
                 try? context.save()
+                app.requestSync()
                 dismiss()
             }
             .buttonStyle(GoldButtonStyle())

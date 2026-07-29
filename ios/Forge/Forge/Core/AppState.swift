@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftData
 
 enum AppPhase {
     case welcome
@@ -40,8 +41,36 @@ final class AppState {
         didSet { Self.persistUser(user) }
     }
 
+    /// True in demo mode (exploring Sean's world), false for a real account. Drives
+    /// whether the demo athlete's seeded training/health data is shown. Persisted;
+    /// restored in `init`. Hermetic in tests.
+    var isDemoAccount = false {
+        didSet {
+            nutrition.isDemo = isDemoAccount   // demo interactions must never persist
+            guard !PersistenceService.isTestRun else { return }
+            UserDefaults.standard.set(isDemoAccount, forKey: Self.demoKey)
+        }
+    }
+    private static let demoKey = "forge.isDemoAccount"
+
     /// Today's morning check-in, if completed (in-memory; SwiftData holds history).
-    var checkIn: CheckInSnapshot?
+    /// Applying it lets the check-in drive recovery + the Forge Score when there's
+    /// no live wearable data.
+    var checkIn: CheckInSnapshot? {
+        didSet { recovery.applyCheckIn(checkIn) }
+    }
+
+    /// The real account's logged weigh-ins, oldest → newest (empty for a new user).
+    /// Demo mode reads the demo athlete's trend instead — see `weightTrend`.
+    private(set) var weightSamples: [Double] = []
+
+    /// Weight samples that drive the Body screen + adaptive nutrition. Never mixes
+    /// real and demo: the demo athlete's trend in demo mode, the user's own weigh-ins
+    /// otherwise.
+    var weightTrend: [Double] { isDemoAccount ? MockData.weightTrend : weightSamples }
+
+    /// Most recent weight, or nil when a real user hasn't logged one yet.
+    var latestWeight: Double? { weightTrend.last }
 
     // Services — mock-backed now, swap for networked implementations later.
     let auth = AuthService()
@@ -53,8 +82,13 @@ final class AppState {
     let social = SocialService()
     let marketplace = MarketplaceService()
     let notifications = NotificationService()
+    let sync = SyncService()
 
     init() {
+        // Restore demo/real mode (skipped in tests for hermeticity).
+        if !PersistenceService.isTestRun {
+            isDemoAccount = UserDefaults.standard.bool(forKey: Self.demoKey)
+        }
         // Restore the saved profile so a returning user never reverts to the demo athlete.
         if let saved = Self.loadUser() { user = saved }
         // Forge speaks imperial — migrate any previously saved metric preference.
@@ -81,14 +115,31 @@ final class AppState {
         guard !rehydrated else { return }
         rehydrated = true
 
+        // Wire profile/settings sync to live app state (read + apply).
+        sync.profileSnapshot = { [weak self] in self?.profileSnapshotJSON() }
+        sync.applyProfileSnapshot = { [weak self] json in self?.applyProfileSnapshot(json) }
+        // After a pull restores records (reinstall / second device), rebuild the
+        // derived UI so the data shows without an app restart.
+        sync.onDidApplyRemoteChanges = { [weak self] in
+            guard let self, !self.isDemoAccount else { return }
+            self.loadHealthData()
+            self.refreshTrends()
+        }
+
         // Today's food + water: real log only. A fresh day starts honestly empty.
         nutrition.entries = PersistenceService.loadTodayEntries()
         nutrition.waterOz = PersistenceService.loadTodayWater()
 
-        // Real workout history layered over the demo baseline (newest first).
+        // Workout history: a real account sees only its own logged sessions; demo
+        // mode keeps the demo athlete's baseline (with any saved layered on top).
         let saved = PersistenceService.loadWorkouts()
-        if !saved.isEmpty {
-            workouts.history = (saved + workouts.history).sorted { $0.date > $1.date }
+        if isDemoAccount {
+            if !saved.isEmpty {
+                workouts.history = (saved + workouts.history).sorted { $0.date > $1.date }
+            }
+        } else {
+            workouts.clearDemoSeed()
+            workouts.history = saved.sorted { $0.date > $1.date }
         }
 
         // Real training load from logged sessions → strain → Forge Score + Directive.
@@ -97,9 +148,43 @@ final class AppState {
         // Morning check-in done earlier today survives relaunch.
         checkIn = PersistenceService.loadTodayCheckIn()
 
+        // Real weigh-in history → Body screen + adaptive nutrition (demo uses the
+        // demo trend via `weightTrend`).
+        if !isDemoAccount { weightSamples = PersistenceService.loadWeights().map(\.weightLb) }
+
+        // Real supplement stack + bloodwork → derived deficiencies (demo keeps Sean's).
+        // Injuries: a real account keeps only its own logged/managed set — clear the
+        // demo knee, its risk read, and rehab checklist.
+        if !isDemoAccount {
+            loadHealthData()
+            injuries.clearDemoSeed()
+            refreshTrends()          // real trend charts from this account's own history
+            // On launch, reconcile with the cloud (pull remote edits from other
+            // devices, push anything logged offline). No-op without a live session.
+            sync.syncNow()
+        }
+
         refreshFuelPlan()
     }
     private var rehydrated = false
+
+    /// Rebuild the recovery/HRV/sleep/strain/Forge-Score trend charts from THIS
+    /// account's persisted daily history — so a real user never sees the demo
+    /// athlete's trends. Demo mode keeps the seeded trends. Empty history → empty
+    /// (honest "building" state), never fabricated.
+    @MainActor
+    func refreshTrends() {
+        guard !isDemoAccount else { recovery.clearLiveTrends(); return }
+        let recoveries = PersistenceService.loadRecoveryHistory()
+        let sleeps = PersistenceService.loadSleepHistory()
+        let scores = PersistenceService.loadScoreHistory()
+        recovery.setLiveTrends(TrendBuilder.make(
+            recovery: recoveries.map(\.recovery),
+            hrv: recoveries.map(\.hrv),
+            sleepHours: sleeps.map(\.hours),
+            strain: recoveries.map(\.strain),
+            scores: scores.map(\.score)))
+    }
 
     // MARK: - Training load → intelligence layer
 
@@ -136,32 +221,105 @@ final class AppState {
     private static let userKey = "forge.user.v1"
 
     private static func persistUser(_ profile: UserProfile) {
+        guard !PersistenceService.isTestRun else { return }   // hermetic tests
         if let data = try? JSONEncoder().encode(profile) {
             UserDefaults.standard.set(data, forKey: userKey)
         }
     }
 
     private static func loadUser() -> UserProfile? {
-        guard let data = UserDefaults.standard.data(forKey: userKey) else { return nil }
+        guard !PersistenceService.isTestRun,
+              let data = UserDefaults.standard.data(forKey: userKey) else { return nil }
         return try? JSONDecoder().decode(UserProfile.self, from: data)
     }
 
+    @MainActor
     func completeAuth(demo: Bool) {
+        isDemoAccount = demo
         if demo {
+            workouts.restoreDemoSeed()   // in case a prior real session cleared it
+            nutrition.restoreDemoSeed()
+            injuries.restoreDemoSeed()
+            recovery.clearLiveTrends()   // demo shows the seeded trends
             user = MockData.sean
+            sync.reset()                 // demo mode never syncs to the cloud
             finishOnboarding()
         } else {
+            workouts.clearDemoSeed()     // a real account starts with a clean slate
+            nutrition.clearDemoSeed()
+            injuries.clearDemoSeed()
+            weightSamples = []
+            refreshTrends()              // this account's own (initially empty) trends
             phase = .onboarding
+            // Pull this account's cloud data (restores a reinstall / new device) and
+            // push anything logged locally before sign-in.
+            sync.syncNow()
         }
     }
 
+    /// Views call this after a local edit to nudge a (debounced) cloud sync.
+    nonisolated func requestSync() { sync.requestSync() }
+
+    /// The account's profile + app settings as one syncable document. Nil in demo
+    /// mode (nothing leaves the phone).
+    @MainActor
+    func profileSnapshotJSON() -> String? {
+        guard !isDemoAccount else { return nil }
+        let snap = ProfileSnapshot(
+            profile: user,
+            morningDirectiveOn: notifications.morningDirectiveOn,
+            smartNudgesOn: notifications.smartNudgesOn,
+            directiveHour: notifications.directiveHour,
+            directiveMinute: notifications.directiveMinute)
+        return ProfileSnapshotCoder.encode(snap)
+    }
+
+    /// Apply a profile+settings snapshot pulled from another device.
+    @MainActor
+    func applyProfileSnapshot(_ json: String) {
+        guard let snap = ProfileSnapshotCoder.decode(json) else { return }
+        user = snap.profile
+        notifications.morningDirectiveOn = snap.morningDirectiveOn
+        notifications.smartNudgesOn = snap.smartNudgesOn
+        notifications.directiveHour = snap.directiveHour
+        notifications.directiveMinute = snap.directiveMinute
+    }
+
     func finishOnboarding() {
-        UserDefaults.standard.set(true, forKey: "forge.hasOnboarded")
+        if !PersistenceService.isTestRun { UserDefaults.standard.set(true, forKey: "forge.hasOnboarded") }
         phase = .main
+    }
+
+    /// A real athlete starts fresh — strip the demo seed's identity/gamification
+    /// so a new user never inherits Sean's streak, level, XP, or sport. Pure.
+    static func onboardingProfile(from draft: UserProfile) -> UserProfile {
+        var p = draft
+        p.streakDays = 0
+        p.level = 1
+        p.xp = 0
+        if p.sport == MockData.sean.sport { p.sport = "" }   // don't inherit "Hockey"
+        return p
+    }
+
+    /// Commit onboarding: the user's real profile AND their declared injuries
+    /// (previously dropped, leaving every new user with the demo knee). Empty
+    /// injuries → healthy.
+    func commitOnboarding(profile: UserProfile, injuries selected: Set<InjuryType>) {
+        isDemoAccount = false
+        workouts.clearDemoSeed()          // idempotent — a real user builds their own history
+        nutrition.clearDemoSeed()
+        weightSamples = []
+        user = Self.onboardingProfile(from: profile)
+        injuries.setActive(from: selected)
+        // A freshly-onboarded real account: push its starting state and pull any
+        // data already in the cloud for this user.
+        sync.syncNow()
+        finishOnboarding()
     }
 
     func logout() {
         auth.signOut()
+        sync.reset()
         UserDefaults.standard.set(false, forKey: "forge.hasOnboarded")
         user = MockData.sean
         selectedTab = .home
@@ -323,10 +481,12 @@ final class AppState {
 
         var missing: [String] = []
         if n.entries.isEmpty { missing.append("Today's logged meals (to track against the target)") }
-        // The adaptive weight-trend adjustments run on sample weigh-ins until real
-        // body-weight history exists — say so rather than imply it's personalized.
-        if n.activePlan?.isAdjusted == true {
-            missing.append("Real weigh-in history (trend adjustments use sample data)")
+        // Weight-trend coaching needs ~2 weeks of real weigh-ins. Be honest about
+        // whether it's running on the user's data, the demo trend, or not yet enough.
+        if isDemoAccount {
+            if n.activePlan?.isAdjusted == true { missing.append("Real weigh-in history (demo weight trend)") }
+        } else if weightSamples.count < 10 {
+            missing.append("A few more weigh-ins to enable weight-trend coaching (\(weightSamples.count)/10)")
         }
 
         let confidence: RecommendationBasis.Confidence = n.entries.isEmpty ? .moderate : .high
@@ -396,11 +556,111 @@ final class AppState {
             baseWaterOz: user.waterTargetOz,
             baseFat: user.fatTarget,
             goal: user.primaryGoal,
-            weightTrend: MockData.weightTrend,
+            weightTrend: weightTrend,          // the user's own weigh-ins (or demo trend)
             strainAvg7: strainAvg7,
             recoveryToday: recovery.today.recovery,
             injuryActive: !injuries.active.isEmpty,
             enduranceTomorrow: user.primaryGoal == .endurance))
+    }
+
+    /// Log a weigh-in: persists it, updates the current weight (so calorie/protein
+    /// targets re-scale), and re-runs the adaptive fuel plan against the real trend.
+    @MainActor
+    func logWeight(_ pounds: Double, context: ModelContext) {
+        guard pounds > 0 else { return }
+        // Demo mode updates the in-memory profile only — never persists/syncs, so a
+        // demo weigh-in can't leak into a real account's cloud data.
+        guard !isDemoAccount else {
+            user.weightLb = pounds
+            refreshFuelPlan()
+            return
+        }
+        PersistenceService.saveWeight(pounds, context: context)
+        weightSamples.append(pounds)
+        user.weightLb = pounds
+        refreshFuelPlan()
+        sync.requestSync()
+    }
+
+    // MARK: - Supplements + bloodwork (real, persisted; demo keeps Sean's)
+
+    /// Rebuild the in-memory stack + bloodwork from persistence and derive
+    /// deficiencies from the user's real labs. Real accounts only.
+    @MainActor
+    func loadHealthData() {
+        nutrition.supplements = PersistenceService.loadSupplements().map { r in
+            Supplement(name: r.name, dose: r.dose, timing: r.timing, benefit: r.benefit,
+                       streak: r.streak,
+                       loggedToday: r.lastLoggedDate.map { Calendar.current.isDateInToday($0) } ?? false)
+        }
+        nutrition.bloodwork = PersistenceService.loadBloodwork().map { r in
+            BloodworkMarker(name: r.name,
+                            category: BloodworkMarker.Category(rawValue: r.category) ?? .metabolic,
+                            value: r.value, unit: r.unit,
+                            normalLow: r.normalLow, normalHigh: r.normalHigh,
+                            optimalLow: r.optimalLow, optimalHigh: r.optimalHigh,
+                            takenAt: r.date.formatted(date: .abbreviated, time: .omitted), aiNote: "")
+        }
+        nutrition.deficiencies = DeficiencyEngine.detect(bloodwork: nutrition.bloodwork)
+    }
+
+    @MainActor
+    func addSupplement(name: String, dose: String, timing: String, benefit: String, context: ModelContext) {
+        let clean = name.trimmingCharacters(in: .whitespaces)
+        guard !clean.isEmpty else { return }
+        // Demo mode never touches persistence — it mutates Sean's in-memory stack so
+        // the demo stays self-contained and a real user's store stays untouched.
+        if isDemoAccount {
+            nutrition.supplements.append(
+                Supplement(name: clean, dose: dose, timing: timing, benefit: benefit, streak: 0, loggedToday: false))
+            return
+        }
+        PersistenceService.insertSupplement(
+            SupplementRecord(name: clean, dose: dose, timing: timing, benefit: benefit), context: context)
+        loadHealthData()
+        sync.requestSync()
+    }
+
+    @MainActor
+    func removeSupplement(_ supplement: Supplement, context: ModelContext) {
+        if isDemoAccount {
+            nutrition.supplements.removeAll { $0.id == supplement.id }
+            return
+        }
+        PersistenceService.deleteSupplement(named: supplement.name, context: context)
+        loadHealthData()
+        sync.requestSync()
+    }
+
+    @MainActor
+    func toggleSupplement(_ supplement: Supplement, context: ModelContext) {
+        guard let idx = nutrition.supplements.firstIndex(where: { $0.id == supplement.id }) else { return }
+        let nowLogged = !nutrition.supplements[idx].loggedToday
+        nutrition.supplements[idx].loggedToday = nowLogged
+        nutrition.supplements[idx].streak = max(0, nutrition.supplements[idx].streak + (nowLogged ? 1 : -1))
+        if !isDemoAccount {
+            PersistenceService.updateSupplement(named: supplement.name,
+                streak: nutrition.supplements[idx].streak,
+                lastLogged: nowLogged ? .now : nil, context: context)
+            sync.requestSync()
+        }
+    }
+
+    @MainActor
+    func addBloodwork(_ entry: BloodworkCatalogEntry, value: Double, context: ModelContext) {
+        guard value > 0 else { return }
+        if isDemoAccount {
+            nutrition.bloodwork.append(entry.marker(value: value, takenAt: "Today"))
+            nutrition.deficiencies = DeficiencyEngine.detect(bloodwork: nutrition.bloodwork)
+            return
+        }
+        PersistenceService.insertBloodwork(
+            BloodworkRecord(name: entry.name, category: entry.category.rawValue, value: value, unit: entry.unit,
+                            normalLow: entry.normalLow, normalHigh: entry.normalHigh,
+                            optimalLow: entry.optimalLow, optimalHigh: entry.optimalHigh),
+            context: context)
+        loadHealthData()
+        sync.requestSync()
     }
 
     /// Publish today's directive to the home-screen widget's shared container
@@ -427,8 +687,15 @@ final class AppState {
     /// Feed real HealthKit values into the unified stream as Apple Watch readings.
     /// From here the DataHub's priority/preference rules decide whether they win —
     /// live data enters the same pipeline as every other source, never a side door.
+    @MainActor
     func ingestHealthKitSignals() {
         guard healthKit.authState == .authorized, !healthKit.usingMockData else { return }
+        // Personal baselines first, so the recovery re-derivation inside
+        // updateReading uses the athlete's OWN HRV baseline / sleep debt instead of
+        // the demo athlete's seeded values. Only overwrite when real history exists.
+        if let baseline = healthKit.hrvBaselineLive { recovery.today.hrvBaseline = baseline }
+        if let debt = healthKit.sleepDebtLive { recovery.today.sleepDebtHours = debt }
+
         // Pass each sample's real age so a stale HRV/HR no longer reads as current.
         // Steps & energy are same-day sums (inherently fresh → age 0).
         func age(_ kind: MetricKind) -> Double { healthKit.ageHours(for: kind) ?? 0 }
@@ -438,6 +705,25 @@ final class AppState {
         recovery.updateReading(.heartRate, value: Double(healthKit.heartRate), unit: "bpm", source: .appleWatch, ageHours: age(.heartRate))
         recovery.updateReading(.steps, value: Double(healthKit.steps), unit: "", source: .appleWatch)
         recovery.updateReading(.calories, value: Double(healthKit.activeEnergy), unit: "kcal", source: .appleWatch)
+
+        // Persist today's real recovery + sleep snapshot so it survives relaunch and
+        // syncs across devices (real accounts only; demo never persists Health data).
+        if !isDemoAccount { persistTodayHealthSnapshot() }
+    }
+
+    /// Upsert today's recovery + sleep record from the live snapshot, then nudge a
+    /// sync. Keyed by calendar day so re-ingesting during the day updates one row.
+    @MainActor
+    private func persistTodayHealthSnapshot() {
+        let d = recovery.today
+        PersistenceService.upsertRecoveryRecord(
+            recovery: d.recovery, hrv: d.hrv, restingHR: d.restingHR, strain: d.strainYesterday,
+            context: PersistenceService.context)
+        PersistenceService.upsertSleepRecord(
+            hours: d.sleep.hours, deepHours: d.sleep.deepHours, remHours: d.sleep.remHours,
+            score: d.sleep.score, context: PersistenceService.context)
+        refreshTrends()          // today's new snapshot flows into the trend charts
+        sync.requestSync()
     }
 
     /// The cross-device story for today — "WHOOP HRV dropped, sleep was short…" —
@@ -476,6 +762,7 @@ final class AppState {
     var coachContext: CoachContext {
         let d = recovery.today
         let mg = magnesiumStatus
+        let injury = injuries.active.first
         return CoachContext(
             name: user.name, age: user.age, sport: user.sport,
             goals: user.goals.map(\.rawValue).joined(separator: ", "),
@@ -493,7 +780,20 @@ final class AppState {
             deviceNarrative: deviceNarrative,
             plateauNote: workouts.plateaus.first.map {
                 "\($0.exerciseName) flat \($0.sessions) sessions at e1RM \(Int($0.bestE1RM)) lb (avg top-set RPE \(String(format: "%.1f", $0.avgTopRPE)))."
-            } ?? "")
+            } ?? "",
+            isDemo: isDemoAccount,
+            injuryName: injury?.type.rawValue ?? "",
+            injuryPhase: injury?.phase.rawValue ?? "",
+            injuryPain: injury?.painToday ?? 0,
+            injuryRiskPercent: injuries.risk.percent,
+            injuryRiskBand: injuries.risk.band,
+            injuryLine: CoachContext.injuryLine(for: injury),
+            deficiencyLine: CoachContext.deficiencyLine(from: nutrition.deficiencies),
+            bloodworkLine: CoachContext.bloodworkLine(from: nutrition.bloodwork),
+            // No performance-forecast engine yet — the demo athlete keeps the mock
+            // forecast; a real account shows none rather than a fabricated projection.
+            forecastLine: isDemoAccount ? CoachContext.forecastLine(from: MockData.forecasts) : "",
+            rehabLine: CoachContext.rehabLine(plan: injuryRehabPlan, readiness: returnReadiness))
     }
 
     /// The most valuable supplement not yet taken today — bedtime-relevant first.

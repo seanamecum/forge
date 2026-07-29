@@ -28,6 +28,10 @@ final class AuthService {
     var sessionEmail: String? { Self.loadSession()?.email }
     var sessionToken: String? { Self.loadSession()?.accessToken }
 
+    /// The current access token read statically from the Keychain — lets cloud
+    /// sync fetch a live token without capturing an `AuthService` instance.
+    static func currentToken() -> String? { loadSession()?.accessToken }
+
     /// Self-service account deletion (App Store 5.1.1(v)) via the
     /// delete-account edge function — the server deletes whoever the JWT
     /// belongs to; no id ever comes from the client.

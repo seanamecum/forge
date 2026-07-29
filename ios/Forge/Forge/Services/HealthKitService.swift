@@ -37,6 +37,15 @@ final class HealthKitService {
     /// freshness ("HRV as of 2 days ago") instead of treating every read as current.
     private(set) var sampleDates: [MetricKind: Date] = [:]
 
+    /// The athlete's OWN baselines, computed from HealthKit history (nil until
+    /// there's enough real data — the caller then keeps the demo-labeled value).
+    private(set) var hrvBaselineLive: Int?
+    private(set) var sleepDebtLive: Double?
+    /// Recent real history, exposed so the intelligence layer can chart the user's
+    /// own trend instead of the demo athlete's (empty until read).
+    private(set) var dailyHRVHistory: [Double] = []
+    private(set) var nightlySleepHistory: [Double] = []
+
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
     /// How old (hours) the latest real sample for a metric is, or nil if none.
@@ -117,6 +126,10 @@ final class HealthKitService {
         if let r = await latest(.bodyMass, unit: .pound()) { bodyMassLb = r.value; gotRealData = true }
         if let v = await sleepHours() { sleepHoursLastNight = v; gotRealData = true }
         if let v = await workoutCount(days: 7) { workoutsLast7Days = v; gotRealData = true }
+
+        // Personal baselines from real history — the athlete's own HRV baseline and
+        // sleep debt, so recovery isn't computed against the demo athlete's numbers.
+        await refreshBaselines()
 
         usingMockData = !gotRealData
         statusMessage = gotRealData
@@ -248,11 +261,68 @@ final class HealthKitService {
         }
     }
 
+    // MARK: - Historical reads → personal baselines
+
+    /// Recompute the athlete's HRV baseline + sleep debt from real history.
+    @MainActor
+    private func refreshBaselines() async {
+        let hrv = await dailyAverages(.heartRateVariabilitySDNN,
+                                      unit: .secondUnit(with: .milli), days: 30)
+        let nights = await nightlySleepHours(nights: 10)
+        dailyHRVHistory = hrv
+        nightlySleepHistory = nights
+        hrvBaselineLive = HealthBaselineEngine.hrvBaseline(fromDailyHRV: hrv)
+        let need = HealthBaselineEngine.sleepNeed(fromNights: nights)
+        sleepDebtLive = HealthBaselineEngine.sleepDebt(recentNights: nights, need: need)
+    }
+
+    /// Per-day averages of a discrete quantity over the last `days`, oldest→newest,
+    /// skipping days with no sample. Used for the HRV baseline.
+    private func dailyAverages(_ id: HKQuantityTypeIdentifier, unit: HKUnit, days: Int) async -> [Double] {
+        let type = HKQuantityType(id)
+        let cal = Calendar.current
+        let end = cal.startOfDay(for: .now)
+        guard let start = cal.date(byAdding: .day, value: -days, to: end) else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: .now)
+        var interval = DateComponents(); interval.day = 1
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: type, quantitySamplePredicate: predicate,
+                options: .discreteAverage, anchorDate: start, intervalComponents: interval)
+            query.initialResultsHandler = { _, results, _ in
+                var values: [Double] = []
+                results?.enumerateStatistics(from: start, to: .now) { stats, _ in
+                    if let avg = stats.averageQuantity()?.doubleValue(for: unit) { values.append(avg) }
+                }
+                continuation.resume(returning: values)
+            }
+            store.execute(query)
+        }
+    }
+
+    /// Asleep hours for each of the last `nights` calendar nights, oldest→newest,
+    /// skipping nights with no sleep sample. Feeds the sleep-debt + need baselines.
+    private func nightlySleepHours(nights: Int) async -> [Double] {
+        var out: [Double] = []
+        for offset in stride(from: nights - 1, through: 0, by: -1) {
+            if let h = await asleepHours(dayOffset: offset), h > 0 { out.append(h) }
+        }
+        return out
+    }
+
     /// Sum asleep-stage durations from the last 24 h.
     private func sleepHours() async -> Double? {
+        await asleepHours(dayOffset: 0)
+    }
+
+    /// Asleep hours for the 24 h window ending at midnight of `dayOffset` days ago
+    /// (offset 0 = last night, ending now).
+    private func asleepHours(dayOffset: Int) async -> Double? {
         let type = HKCategoryType(.sleepAnalysis)
-        let start = Calendar.current.date(byAdding: .hour, value: -24, to: .now) ?? .now
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: .now)
+        // The 24 h window ending `dayOffset` days ago (offset 0 = last night → now).
+        let windowEnd = Calendar.current.date(byAdding: .day, value: -dayOffset, to: .now) ?? .now
+        let start = Calendar.current.date(byAdding: .hour, value: -24, to: windowEnd) ?? windowEnd
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: windowEnd)
         let asleepValues: Set<Int> = [
             HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
             HKCategoryValueSleepAnalysis.asleepCore.rawValue,

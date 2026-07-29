@@ -9,9 +9,26 @@ final class NutritionService {
     var nutrientGroups: [NutrientGroup] = MockData.nutrientGroups
     var deficiencies: [DeficiencyAlert] = MockData.deficiencies
     var supplements: [Supplement] = MockData.supplements
+    var bloodwork: [BloodworkMarker] = MockData.bloodwork
     var waterOz: Double = 74
 
-    let user = MockData.sean
+    var user = MockData.sean
+
+    /// A real account builds its own stack/labs — the demo athlete's supplement,
+    /// micronutrient, deficiency, and bloodwork data belong to demo mode only.
+    func clearDemoSeed() {
+        supplements = []
+        nutrientGroups = []
+        deficiencies = []
+        bloodwork = []
+    }
+
+    func restoreDemoSeed() {
+        supplements = MockData.supplements
+        nutrientGroups = MockData.nutrientGroups
+        deficiencies = MockData.deficiencies
+        bloodwork = MockData.bloodwork
+    }
 
     /// Today's coached plan (set by AppState from live cross-module signals).
     /// When present, IT defines the targets; base TargetEngine numbers otherwise.
@@ -54,19 +71,27 @@ final class NutritionService {
         entries.filter { $0.meal == meal }
     }
 
+    /// True while showing the demo athlete's world. Demo interactions update the
+    /// in-memory view but NEVER persist — otherwise demo food/water would land in
+    /// the shared store and sync into a real account (kept in sync by AppState).
+    var isDemo = false
+
     func add(food: Food, to meal: MealType, servings: Double = 1) {
         let entry = FoodEntry(meal: meal, food: food, servings: servings, time: "Now")
         entries.append(entry)
+        guard !isDemo else { return }
         Task { @MainActor in PersistenceService.saveEntry(entry) }
     }
 
     func remove(_ entry: FoodEntry) {
         entries.removeAll { $0.id == entry.id }
+        guard !isDemo else { return }
         Task { @MainActor in PersistenceService.deleteEntry(id: entry.id) }
     }
 
     func addWater(_ oz: Double) {
         waterOz = min(Double(waterTargetOz) * 1.5, waterOz + oz)
+        guard !isDemo else { return }
         PersistenceService.saveWater(waterOz)
     }
 

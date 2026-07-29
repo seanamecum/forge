@@ -720,6 +720,23 @@ Beyond the launch audit, ongoing work to make "every system feeds the intelligen
 
 ## 12a. Remote Supabase state
 
+> **✅ UPDATE 2026-07-25 — MIGRATIONS `0003` + `0004` APPLIED + VERIFIED on the live DB.**
+> `supabase migration list` now shows **all four `0001→0004` in the Remote column** and `db push --dry-run`
+> reports *"Remote database is up to date."* Diagnosis of the earlier "push finished but nothing recorded"
+> issue: the interactive `[Y/n]` confirmation was never answered (chat `!`/non-TTY runs aborted after
+> printing the plan) — **not** a migration failure, rollback, or permissions issue (remote connection and
+> history reads succeeded throughout). Fixed by `supabase db push --yes`. Live anon-key PostgREST probes
+> confirm the new tables are deployed and owner-scoped:
+> - **`sync_records`** — anon `GET` → `200 []` (RLS filters all rows); anon `INSERT` → **`401`** (owner-only
+>   write enforced; the whole point of cloud sync's security). **Offline-first cloud sync is now live E2E.**
+> - **`waitlist_signups` / `beta_applications`** (0004) — anon `GET` → `200 []` (submissions never publicly
+>   readable); anon `INSERT waitlist_signups` → `201` (public funnel insert works, service-role read only).
+> - Server-side LWW trigger smoke test (§4 of `SYNC_DEPLOY_VERIFICATION.md`) still worth one run via the SQL
+>   editor (service-role only; not reachable from anon probes) — but client-side LWW is covered by the
+>   fake-transport integration tests.
+> - **Cleanup TODO:** a single probe row `probe+rlscheck@forge.test` was inserted into `waitlist_signups`
+>   during verification; delete it from the Dashboard/SQL editor (anon has no delete policy, by design).
+>
 > **✅ UPDATE 2026-07-20 — MIGRATION APPLIED + RLS VERIFIED on the live DB.**
 > The user ran `supabase db push`; `migration list` now shows **`0001→0001` and `0002→0002` in the Remote
 > column** and `db push --dry-run` reports *"Remote database is up to date."* Live anon-key PostgREST probes
@@ -781,6 +798,317 @@ supabase db push                                    # applies 0001 (idempotent) 
 supabase migration list                             # confirm 0002 shows in the Remote column
 ```
 Then run `supabase/RLS_VERIFICATION.md` §A–D (anon probes) to confirm the P0s are closed on the live DB.
+
+## 12b. Product — new-user onboarding now applies the real user's state (2026-07-20)
+
+**Highest-impact shipped-product fix of the session.** Onboarding collected the user's declared injuries
+(`InjuryStep`, step 9) into `selectedInjuries` and then **silently dropped them** — `advance()` only did
+`app.user = draft`. Because `draft` starts from `MockData.sean`, every real user inherited **Sean's demo
+knee injury** (a specific "patellar tendinopathy · day 12 · phase 2" diagnosis + rehab plan they don't
+have — misleading and safety-adjacent), plus Sean's **23-day streak / level / XP / "Hockey."**
+- **Fix:** `AppState.commitOnboarding(profile:injuries:)` now (a) applies the user's **declared injuries**
+  via new `InjuryService.setActive(from:)` — empty set → healthy, clearing the demo knee — and (b) strips
+  the demo seed's gamification/sport via pure `AppState.onboardingProfile(from:)` (streak 0, level 1, xp 0,
+  sport cleared). `OnboardingFlowView.advance()` calls it; `ProfileView` header omits an empty sport.
+- **Hygiene:** gated `persistUser`/`loadUser` on `isTestRun` so the profile store is hermetic in tests
+  (also fixes real non-determinism when the app is run then tested on the same simulator).
+- **Tests:** `OnboardingTests` (+5) — gamification reset with real inputs preserved; declared injuries
+  replace the demo knee; **no injuries → healthy (`injuryStatusScore 100`, no knee-PT directive)**; a
+  declared shoulder injury constrains the generated session (neutral-grip swap). iOS **269 tests, 2 skipped,
+  0 failures; Debug+Release 0 warnings.**
+
+## 12c. Product — real accounts see only their own training data (2026-07-20)
+
+**Highest-impact shipped-product fix.** `WorkoutService` seeded Sean's `history`/`personalRecords`/
+`muscleVolume`, and `rehydrate()` layered a real user's saved workouts *over* that demo baseline — so
+**every real account's** Train tab, PRs, weekly volume, plateaus, weak-points, and the coach signals built
+from them were contaminated with the demo athlete's sessions (not just new users; an active user saw their
+sessions mixed with Sean's). There was no demo-vs-real distinction.
+- **Fix:** persisted `AppState.isDemoAccount` (set on `completeAuth`, `commitOnboarding`; restored in
+  `init`; hermetic in tests). `WorkoutService.clearDemoSeed()`/`restoreDemoSeed()`. Real accounts clear the
+  seed and load **their own logged workouts only**; demo mode keeps Sean's world (and `restoreDemoSeed()`
+  brings it back if a real session cleared it — e.g. demo after logout). `TrainHomeView` gains empty states
+  for history/PRs/volume, and the hardcoded "quads under target — knee rehab" caption now shows **only if
+  the user actually has a knee injury**.
+- **Hygiene:** gated `finishOnboarding` + `isDemoAccount` persistence on `isTestRun`.
+- **Tests:** `DemoModeTests` (+5) — clear/restore seed; demo keeps Sean's training; real account +
+  onboarding start clean (empty history, `weeklyVolumeLb == 0`, no plateaus); demo-after-real restores the
+  demo world. iOS **274 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+
+## 12d. Product — the morning check-in now drives recovery + the Forge Score (2026-07-21)
+
+**Shipping functionality for every real user.** The daily check-in (sleep quality · soreness · energy ·
+stress) was collected and persisted but only triggered the directive's soreness override — it **did not
+touch the Forge Score or the recovery number.** So a user **without a wearable** (the launch majority)
+filled it out each morning while their flagship score stayed on the demo athlete's recovery.
+- **Fix:** new pure `Core/CheckInEngine.swift` maps the check-in into a subjective recovery (energy 30% ·
+  sleep 30% · soreness 25% · stress 15%), a sleep-component score, and a readiness band.
+  `RecoveryService.applyCheckIn(_:)` applies it to `today.recovery` / `sleep.score` / `readiness` **when
+  there's no live wearable data** (objective live HRV always wins), and flips provenance from `.demo` to
+  `.partial`. Wired via a `didSet` on `AppState.checkIn` (covers both the check-in flow and relaunch). The
+  recovery hero now reads *"From your morning check-in — connect Apple Health for HRV-based recovery."*
+  Because `today.recovery`/`sleep.score` feed the Forge Score breakdown (Recovery + Sleep = 36% of the
+  score) and the directive band, a real user's reported state now moves both.
+- **Tests:** `CheckInEngineTests` (+5) — bounds/direction, each dimension moves recovery correctly, sleep
+  score + readiness bands, an end-to-end proof a good vs bad check-in changes `today.recovery` **and**
+  `forgeScore` (no wearable), and live HRV overriding the check-in. iOS **279 tests, 2 skipped, 0 failures;
+  Debug+Release 0 warnings.**
+
+## 12e. Product — persisted weigh-ins → adaptive nutrition (2026-07-21)
+
+**Shipping functionality for every real user.** `AdaptiveNutritionEngine` adjusted a real user's calorie/
+protein targets from `MockData.weightTrend` (the demo athlete's weigh-ins), and the Body screen was 100%
+hardcoded demo with a "coming soon" log button — so fuel decisions were driven by *someone else's body*.
+- **Persistence:** new `WeightRecord` @Model (added to the SwiftData schema + `allModels` +
+  `deleteAllLocalData` + data export) with `PersistenceService.saveWeight`/`loadWeights`.
+- **Real trend, never demo:** `AppState.weightSamples` (loaded in `rehydrate` for real accounts, cleared on
+  onboarding/real-auth), `weightTrend` = **demo trend in demo mode, the user's own weigh-ins otherwise**,
+  `latestWeight`. `refreshFuelPlan` now feeds `weightTrend`. `logWeight(_:context:)` persists a weigh-in,
+  updates the profile weight (so **calorie/protein targets re-scale**), and re-runs the adaptive plan.
+- **Body screen rebuilt:** real weight chart + trend/min/max from the user's data, an **empty state** +
+  working **"Log weight"** sheet; body-fat/lean-mass show "—" (smart-scale) for real accounts; the
+  measurements/photos/comparison demo cards are shown in demo mode only.
+- **Honesty:** `nutritionBasis` now says "demo weight trend" in demo mode, or "N/10 weigh-ins to enable
+  weight-trend coaching" for a real user — never implying demo data is personal.
+- **Tests:** `WeighInTests` (+7) — `WeightRecord` round-trips in a fresh in-memory store (schema/migration
+  path); demo vs real trend never mix; `logWeight` persists + appends + rescales targets; non-positive
+  ignored; **12 flat weigh-ins fire the build-muscle nudge**; a new user gets **no** weight adjustment
+  (graceful); < 10 samples stays graceful. Demo-athlete nutrition coherence preserved. iOS **286 tests, 2
+  skipped, 0 failures; Debug+Release 0 warnings.**
+
+## 12f. Product — real nutrition & health, and a coach that only sees your data (2026-07-21)
+
+**Ended the last major demo-data leak into a real user's health picture — and the AI coach.** Supplements,
+micronutrients, deficiencies, bloodwork, the active injury, and its rehab plan were all hardcoded `MockData`
+(Sean's), shown identically to every real account; the AI coach's system prompt and its default offline
+replies also hardcoded Sean's knee, labs, and forecasts. A real user was being shown — and coached on —
+*someone else's body*.
+- **Persistence:** two new @Model types — `SupplementRecord` (name/dose/timing/benefit/streak/lastLogged) and
+  `BloodworkRecord` (marker + normal/optimal ranges + value/date) — added to the SwiftData schema,
+  `allModels`, `deleteAllLocalData`, and the data export. `PersistenceService` gains insert/load/delete/
+  update for supplements and insert/load for bloodwork.
+- **New pure engine:** `Core/DeficiencyEngine.swift` derives deficiency flags from the user's **real**
+  bloodwork (markers below `optimalLow`), high-severity below the normal range. Lower-is-better markers
+  (LDL, hs-CRP; `optimalLow ≈ 0`) are never mislabelled. No labs → no flags (honest empty state).
+- **Reference (not user) data:** `Models/BloodworkCatalog.swift` — 10 reference markers with their ranges the
+  user picks from when entering their own result.
+- **Demo/real separation (the pattern, extended):** `NutritionService` gains `clearDemoSeed`/`restoreDemoSeed`
+  (supplements/micros/deficiencies/bloodwork) and `InjuryService` gains the same (active injury, rehab
+  checklist, and a clean `cleanRisk` read instead of Sean's 22% moderate). Wired into `completeAuth`,
+  `commitOnboarding`, and `rehydrate` alongside the existing workout/weight gating. Real accounts load their
+  own stack + labs from persistence in `rehydrate`; demo keeps Sean's.
+- **AppState management:** `addSupplement`/`removeSupplement`/`toggleSupplement`/`addBloodwork` persist for
+  real accounts (adherence + streak survive relaunch) and mutate **in-memory only** for the demo athlete —
+  demo never touches the store, a real account's store is never seeded with demo rows.
+- **AI coach only sees your data:** `CoachContext` gained clinical fields (`injuryLine`, `deficiencyLine`,
+  `bloodworkLine`, `forecastLine`, `rehabLine`, injury name/phase/pain/risk) built by shared formatters.
+  `AIService.systemPrompt` no longer references `MockData` at all — a healthy real user's prompt simply omits
+  the injury/rehab/forecast sections. The default **offline** coach now routes real accounts to a new
+  `contextualReply` synthesized entirely from their own live numbers (honest empty states for un-logged
+  injury/labs), while the demo athlete keeps the rich canned script.
+- **Views:** `SupplementsView` (empty state + add sheet + persisted toggle + remove), `BloodworkView` (routes
+  to `app.nutrition.bloodwork`, empty state, catalog-driven add sheet), `DeficienciesView`/`Micronutrients
+  View` (empty states; the demo gap-callout is demo-only), `NutritionHomeView` (subtitle counts derive from
+  real data, not "Mg + D + Omega-3").
+- **Tests:** `NutritionHealthTests` (+20) — `DeficiencyEngine` severity/thresholds/lower-is-better/empty;
+  Supplement+Bloodwork record round-trip/update/delete (schema/migration path); demo vs real never mix
+  (stack, labs, deficiencies, injury, **risk**); real add/toggle/remove persists and demo stays in-memory;
+  bloodwork derives a deficiency; the real coach context + system prompt carry **no** Sean data and the
+  offline reply is honest not fabricated, while demo keeps its script; `forgeInsights` drops the knee chain
+  when healthy. iOS **306 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+
+## 12g. Product — offline-first cloud sync (2026-07-22)
+
+**Data now survives reinstall and syncs across devices.** Every user-generated
+record lived only in the device's local SwiftData store; a reinstall or a second
+device lost everything. This adds an offline-first sync engine over Supabase.
+- **Remote:** migration `0003_sync_engine.sql` — one owner-scoped generic document
+  table `public.sync_records (user_id, kind, record_id, payload, updated_at,
+  deleted, synced_at)` with RLS identical to every other user table. A trigger
+  enforces **server-side last-write-wins** (a stale `updated_at` never overwrites a
+  newer row) and stamps `synced_at` (the server-clock pull cursor). **Manual step:
+  `supabase db push` (blocked from auto-mode by the deploy classifier) — full
+  deploy + verification checklist in `supabase/SYNC_DEPLOY_VERIFICATION.md`
+  (schema/RLS/trigger-LWW smoke test + anon-probe denial + authed round-trip).**
+- **Local model:** each syncable `@Model` gained defaulted `syncID` / `syncUpdatedAt`
+  / `syncPending` columns (not in the initializers → clean lightweight migration;
+  existing rows default to *pending* so a pre-sync store uploads on first sign-in).
+  Deletions record a `SyncTombstone` so removals propagate.
+- **Engine (`Core/Sync/`):** a `Syncable` protocol + type-erased registry cover 11
+  record types (profile, goals, workouts, nutrition, recovery, sleep, score,
+  check-ins, weight, supplements, bloodwork). `SyncEngine` is pure — collect dirty
+  → push rows, apply pulled rows with **last-write-wins** (newer `updatedAt` wins;
+  tombstones delete unless the local edit is newer → resurrect). `SyncTransport` is
+  the one network seam (PostgREST upsert with `merge-duplicates` + a cursor'd GET),
+  swapped for a fake in tests.
+- **Offline-first + retry (`Services/SyncService.swift`):** SwiftData stays the
+  source of truth; sync is best-effort and never blocks the UI. A dropped
+  connection parks the work (dirty flags persist) and retries on an exponential
+  backoff ladder (5s→5m); edits coalesce via a debounce. Triggers: sign-in,
+  onboarding, app foreground, and after each mutating action. Demo mode and
+  signed-out never sync (credentials resolve to nil).
+- **Conflict strategy:** last-write-wins per `(user_id, kind, record_id)` on the
+  client's logical `updated_at`, enforced on **both** client and server, so the
+  outcome is identical no matter which device pushes last. Independent offline
+  inserts of the "same" real thing are kept as separate rows (documented; no natural
+  key).
+- **UI:** a Profile "Cloud Sync" card shows Backed up / Syncing / **Offline —
+  changes saved, will sync when you're back online** / error, plus a manual "Sync
+  now".
+- **Tests:** `SyncEngineTests` (+7, pure LWW/tombstone/collect/JWT/codec),
+  `SyncIntegrationTests` (+6, two devices over a fake server that mirrors server-side
+  LWW: cross-device propagation, **reinstall restores full history**, conflict →
+  latest wins even when pushed first, delete propagation, offline-queue-then-flush,
+  demo never syncs), `SyncMigrationTests` (+4, defaults/full-schema/registry/payload
+  round-trip). iOS **323 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+- **Scope/known gaps:** the mobile client uses the generic document store; the
+  normalized 0001 domain tables are untouched (a future web client / projection job
+  can back-fill from these rows). Profile + settings held in `UserDefaults` (vs the
+  SwiftData records) are not yet synced. End-to-end against live Supabase needs the
+  migration applied + a signed-in device (the engine itself is fully covered by the
+  fake-transport integration tests).
+
+## 12h. Product — profile + settings sync (2026-07-22)
+
+**The account's profile and app settings now sync too.** The generic document
+store (12g) covered the append-style records; the profile (name, body metrics,
+goals, sport, level/XP/streak, units) and notification settings lived only in
+`UserDefaults`, so a new device or reinstall started from defaults.
+- **Model:** profile + settings serialize into one `ProfileSnapshot` synced as a
+  per-user singleton (`kind = "profile"`, `record_id = "singleton"`) — so every
+  device converges on one row. Handled specially by `SyncService` (not the generic
+  registry; the never-written `UserRecord` was dropped from it to free the kind).
+- **Dirty detection by content diff:** no per-field mutation hooks — each cycle
+  compares the current snapshot JSON (deterministic sorted-keys) to the last one
+  synced; different ⇒ push. Simple and complete.
+- **Pull-then-push cycle:** the sync cycle now pulls before pushing, so a fresh
+  device **adopts the account's existing profile** instead of clobbering it with an
+  unchanged local baseline. (Also tightened record conflict handling — a device
+  incorporates remote edits before re-pushing.) Profile LWW is last-sync-wins on
+  the reconciled timestamp (documented; profiles are rarely edited concurrently).
+- **Wiring:** `AppState.profileSnapshotJSON()` / `applyProfileSnapshot(_:)` read and
+  apply live profile + `NotificationService` prefs; nil in demo mode (nothing
+  leaves the phone). Triggers ride the existing sign-in / foreground / post-edit
+  syncs.
+- **Tests:** `SyncIntegrationTests` (+4) — a profile edit on one device reaches the
+  other, an unchanged profile isn't re-pushed, demo profile never leaves the
+  device, and `AppState` snapshot↔apply round-trips (with demo returning nil).
+  Registry test updated (profile is special-cased). iOS **327 tests, 2 skipped, 0
+  failures; Debug+Release 0 warnings.**
+- **Gap:** still `UserDefaults`-scoped and not yet synced — per-day water totals and
+  the injuries blob (`forge.injuries.v1`); minor vs the profile/settings now covered.
+
+## 12i. Product — real HealthKit ingestion: personal baselines + persistence (2026-07-25)
+
+**A connected user's recovery is now computed against their OWN physiology, and
+real daily signals persist + sync.** The read layer already pulled real HRV/sleep/
+HR, but two anchors were still the demo athlete's: `hrvBaseline` (hardcoded 62 ms)
+and `sleepDebtHours` (3.1 h) — and `RecoveryEstimator.recovery()` divides real HRV
+by that baseline, so every connected user's recovery was measured against Sean's
+physiology. Separately, the `RecoveryRecord`/`SleepRecord` models were never
+written, so daily HealthKit signals evaporated on relaunch.
+- **New pure engine `Core/HealthBaselineEngine.swift`:** `hrvBaseline(fromDailyHRV:)`
+  (median over ≥14 real days, else nil — junk/zero samples filtered, robust to
+  spikes), `sleepDebt(recentNights:need:window:)` (sum of nightly shortfalls over
+  the last N nights, surplus never negative, clamped 0–40 h), `sleepNeed(fromNights:)`
+  (median night length, bounded 6–9 h so chronic deprivation isn't normalized).
+  Below the data threshold each returns nil → the caller keeps the demo-labeled
+  value rather than fabricating a baseline. Disclosed heuristic, not clinical.
+- **`HealthKitService` historical reads:** `dailyAverages(…)` via
+  `HKStatisticsCollectionQuery` (daily HRV buckets, 30 d) and per-night sleep over
+  10 nights; `refreshBaselines()` computes `hrvBaselineLive` / `sleepDebtLive` on
+  every refresh. Mirrors the existing query patterns.
+- **Ingestion wiring:** `ingestHealthKitSignals()` applies the personal baseline +
+  sleep debt **before** the recovery re-derivation, only when real history exists,
+  so a connected user's recovery estimate uses their own numbers and a data-poor
+  user still sees the honest demo-labeled value. Provenance stays `.partial` (strain
+  / readiness remain derived — no overclaiming `.live`).
+- **Persistence + sync:** `PersistenceService.upsertRecoveryRecord/upsertSleepRecord`
+  (one row per calendar day, `SyncStamp.touch` on update) write today's real snapshot
+  on ingestion (real accounts only) → survives relaunch and rides the 12g sync
+  engine to other devices.
+- **Tests:** `HealthIngestionTests` (+9) — median odd/even/empty; HRV baseline
+  min-days gating + median + junk-filtering; sleep-debt shortfall sum / surplus-floor
+  / window / clamp / empty-nil; sleep-need fallback + 6–9 h bounds; a real baseline
+  provably moves the recovery estimate off the demo anchor; recovery/sleep upserts
+  are one-row-per-day and re-mark sync-pending. iOS **336 tests, 2 skipped, 0
+  failures; Debug+Release 0 warnings.**
+- **Device-bound (untestable here, mirrors tested patterns):** the raw
+  `HKStatisticsCollectionQuery`/sleep queries and the auth-gated ingest path need a
+  real device — covered by the on-device verification checklist (next milestone).
+
+## 12j. Real-device E2E verification checklist (2026-07-25)
+
+Produced `appstore/DEVICE_VERIFICATION_E2E.md` — a precise, step-by-step on-device
+script grounded in the actual UI (WearablesView "Connect Apple Health", Profile
+"Cloud Sync" card, real usage strings + entitlement). Nine sections: HealthKit
+permissions & live HRV/sleep/recovery reads (incl. personal-baseline engagement and
+the <14-day no-fabrication case), Forge Score/Directive updates from live data,
+workout + weight write-back to Apple Health, denied/missing/offline/error states,
+two-device sync, reinstall/restore, last-write-wins conflict handling (online,
+offline, and delete-vs-edit), the sync-status UI states, and demo isolation/privacy.
+**Nothing is marked verified** — the checklist is the harness; the pass happens on
+the user's hardware and gets recorded here (§12a/§12i) only when complete. **Real-
+device verification remains an open blocker until then.**
+
+## 12k. Performance & launch polish (2026-07-25, in progress)
+
+Running alongside the user's on-device verification.
+- **Sync scalability (perf):** the sync engine fetched every row of every type then
+  filtered in memory (O(total history)) each cycle, and pull applied+saved one
+  record at a time (O(n) main-actor saves on reinstall restore). Now `collectPending`
+  / `markSynced` fetch only `#Predicate { syncPending }` (O(dirty)), `apply` looks up
+  the single record by id with `fetchLimit 1` (O(1) vs O(n·m) on pull), and handlers
+  mutate-only while `SyncEngine` saves once per batch (a full-history restore is one
+  write). Behaviour-preserving — all 21 sync tests pass; +2 scale tests.
+- **Version string (launch correctness):** `ProfileView` hardcoded "Forge v1.0"
+  (would lie on the next version bump). New `AppInfo` reads version/build from the
+  bundle as one source of truth; footer + export + feedback payload all use it
+  (deduped two helper copies). +1 test.
+- **Cold-start reviewed:** launch `rehydrate()` uses bounded/capped fetches
+  (workouts 60, weights 120, today-only entries) and async non-blocking sync — no
+  unbounded main-thread work at startup. No change needed.
+- Codebase scan: no TODO/FIXME/placeholder/debug-print left in shipping code.
+- iOS **339 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+
+## 12l. Launch bug-fix — demo-as-real leaks eliminated (2026-07-29)
+
+Closed-beta launch hardening, priority "eliminate bugs / never mix demo & real."
+An adversarial review (recorded below) plus a UI audit surfaced real demo-as-real
+leaks now fixed:
+- **Trend charts showed the demo athlete's history to real users.** `recovery.trends`
+  and `forgeScoreTrend` were hardcoded `MockData`, ungated — so a real user's Recover
+  screen, Dashboard sparkline, and Weekly Report displayed Sean's 30-day recovery/HRV/
+  sleep/Forge-Score history as their own. Now the trends are built from the account's
+  OWN persisted daily snapshots (`TrendBuilder` + `PersistenceService.loadRecovery/
+  Sleep/ScoreHistory` → `AppState.refreshTrends`), demo keeps the seed, and a real
+  account with thin history shows an honest "your trends are building" state. A sync
+  pull (reinstall/second device) now rebuilds the charts via a new
+  `SyncService.onDidApplyRemoteChanges` hook. (Also makes the previously write-only
+  RecoveryRecord/SleepRecord meaningful — they now feed the charts.)
+- **Hardcoded sleep-debt CoachNote** ("You're 3.1 h behind… bench plateau") on the
+  Recover screen was Sean's story shown to everyone; now derived from the user's own
+  sleep debt (demo keeps the narrative).
+- **DATA-LEAK: demo food logs + weigh-ins persisted and would sync to a real account.**
+  `NutritionService.add(food:)`/`addWater` and `AppState.logWeight` wrote
+  `syncPending` records with no demo gate (unlike supplements/bloodwork/health which
+  were gated) — so demo interactions entered the shared store and the real user's
+  cloud mirror. Now `NutritionService.isDemo` (kept in sync by `AppState`) and a
+  `logWeight` demo guard keep demo interactions in-memory only. Verified: demo
+  food/water/weigh-ins never persist and never enter `SyncEngine.collectPending`.
+- **Tests:** `TrendAndDemoLeakTests` (+9) — TrendBuilder mapping/empty/threshold;
+  demo vs real trends never mix; switching back to demo restores the seed; real
+  trends build from persisted records; demo food/water/weigh-ins don't persist while
+  real weigh-ins do; demo records never enter the sync push set. `completeAuth` is now
+  `@MainActor` (does persistence/trend work); three test classes marked `@MainActor`
+  to match. iOS **348 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+- **Remaining verified bugs from the review (next milestones):** (2) local edits made
+  during an in-flight push can be dropped by `markSynced` clearing the dirty flag
+  without a `syncUpdatedAt`-unchanged check — DATA-LOSS; (3) a profile edit can be lost
+  to an older concurrent remote profile on pull-before-push — DATA-LOSS (profile-only);
+  (4) HealthKit sleep hours double-count when multiple sleep sources write overlapping
+  samples — WRONG-RESULT. Plus follow-ups: server-side LWW is a blind upsert (client-
+  side only), and the pull cursor uses strict `gt.` on a Double-rounded timestamp.
 
 ## 12. Quality / architecture pass (post-loop)
 

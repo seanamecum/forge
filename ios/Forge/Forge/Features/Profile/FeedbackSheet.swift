@@ -90,7 +90,7 @@ enum FeedbackClient {
             email: cleanEmail,
             message: trimmed,
             context: [
-                "build": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev",
+                "build": AppInfo.versionWithBuild,
                 "os": UIDevice.current.systemVersion,
                 "device": UIDevice.current.model,
             ])

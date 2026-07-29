@@ -23,6 +23,32 @@ final class InjuryService {
         }
     }
 
+    /// A clean risk read for a healthy athlete with no logged injuries — never the
+    /// demo athlete's moderate-risk numbers.
+    static let cleanRisk = InjuryRisk(
+        percent: 0, band: "Low", drivers: [],
+        recommendation: "No active injuries logged. Keep load progressive and recovery on target.")
+
+    /// A real account manages its own injuries — the demo knee, its rehab
+    /// checklist, and the demo risk read belong to demo mode only. Reference
+    /// catalogs (PT library, protocols) stay: they're medical reference, not
+    /// user data. A persisted managed set still wins over an empty demo clear.
+    func clearDemoSeed() {
+        if let saved = Self.loadPersisted() {
+            active = saved
+        } else {
+            active = []
+        }
+        rtsChecklist = MockData.kneeRTSChecklist.map { var i = $0; i.done = false; return i }
+        risk = active.isEmpty ? Self.cleanRisk : MockData.injuryRisk
+    }
+
+    func restoreDemoSeed() {
+        active = [MockData.knee]
+        rtsChecklist = MockData.kneeRTSChecklist
+        risk = MockData.injuryRisk
+    }
+
     /// Feeds the Forge Score: 100 healthy, scaled down by active injury severity & pain.
     var injuryStatusScore: Int {
         guard let worst = active.max(by: { $0.severity < $1.severity }) else { return 100 }
@@ -41,6 +67,19 @@ final class InjuryService {
     /// Mark an injury resolved — it stops constraining training immediately.
     func resolve(_ injury: InjuryProfile) {
         active.removeAll { $0.id == injury.id }
+        persist()
+    }
+
+    /// Replace the active injuries with the athlete's onboarding declarations —
+    /// an empty set means "healthy", clearing the demo seed. Each starts at a
+    /// conservative sub-acute / mild default the user refines on the injury screen.
+    func setActive(from types: Set<InjuryType>) {
+        active = types.sorted { $0.rawValue < $1.rawValue }
+            .map { Self.makeInjury(type: $0, phase: .subacute, pain: 3) }
+        // Clear the demo athlete's risk read and rehab checklist so a newly
+        // onboarded user never inherits Sean's moderate-risk numbers.
+        rtsChecklist = MockData.kneeRTSChecklist.map { var i = $0; i.done = false; return i }
+        risk = active.isEmpty ? Self.cleanRisk : MockData.injuryRisk
         persist()
     }
 

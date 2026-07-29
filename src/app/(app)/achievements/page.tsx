@@ -35,7 +35,7 @@ export default function AchievementsPage() {
 
       {/* Daily missions */}
       <div className="card p-6">
-        <div className="display mb-3 text-xl text-cream-50">Today's missions</div>
+        <div className="display mb-3 text-xl text-cream-50">Today&apos;s missions</div>
         <div className="space-y-3">
           {missions.map((m, i) => (
             <div

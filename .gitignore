@@ -4,6 +4,9 @@ out
 .env
 .env.local
 .env*.local
+# Env backups/copies also hold real secrets — never commit them (e.g. .env.local.save, .env.local.bak)
+.env*.local*
+.env.local.*
 *.log
 .DS_Store
 .vercel

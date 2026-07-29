@@ -8,7 +8,8 @@ enum PersistenceService {
     static let allModels: [any PersistentModel.Type] = [
         UserRecord.self, GoalRecord.self, WorkoutRecord.self,
         NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
-        ScoreRecord.self, CheckInRecord.self,
+        ScoreRecord.self, CheckInRecord.self, WeightRecord.self,
+        SupplementRecord.self, BloodworkRecord.self,
     ]
 
     /// One container for the whole app — views get it via .modelContainer,
@@ -18,7 +19,8 @@ enum PersistenceService {
         let schema = Schema([
             UserRecord.self, GoalRecord.self, WorkoutRecord.self,
             NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
-            ScoreRecord.self, CheckInRecord.self,
+            ScoreRecord.self, CheckInRecord.self, WeightRecord.self,
+            SupplementRecord.self, BloodworkRecord.self, SyncTombstone.self,
         ])
         do {
             return try ModelContainer(for: schema)
@@ -49,6 +51,10 @@ enum PersistenceService {
         try? context.delete(model: SleepRecord.self)
         try? context.delete(model: ScoreRecord.self)
         try? context.delete(model: CheckInRecord.self)
+        try? context.delete(model: WeightRecord.self)
+        try? context.delete(model: SupplementRecord.self)
+        try? context.delete(model: BloodworkRecord.self)
+        try? context.delete(model: SyncTombstone.self)
         try? context.save()
         // Data keys only — the auth session (forge.auth.*) is cleared by the
         // separate cloud-account action, so a local wipe leaves you signed in.
@@ -75,6 +81,7 @@ enum PersistenceService {
         do {
             if let existing = try context.fetch(descriptor).first {
                 existing.score = score
+                SyncStamp.touch(existing)
             } else {
                 context.insert(ScoreRecord(date: .now, score: score))
             }
@@ -118,11 +125,7 @@ enum PersistenceService {
 
     static let exportSchemaVersion = 2
 
-    private static func appVersion() -> String {
-        let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        let b = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
-        return "\(v) (\(b))"
-    }
+    private static func appVersion() -> String { AppInfo.versionWithBuild }
 
     /// Everything the athlete owns and Forge stores locally, as one versioned JSON
     /// document with stable field names, units, timezone, and ISO-8601 timestamps.
@@ -185,6 +188,24 @@ enum PersistenceService {
                 ["date": iso($0.date), "meal": $0.meal, "food": $0.name, "calories": $0.calories,
                  "protein_g": $0.protein, "carbs_g": $0.carbs, "fat_g": $0.fat,
                  "servings": $0.servings] as [String: Any]
+            }
+        }
+
+        if let weighIns = try? context.fetch(FetchDescriptor<WeightRecord>(sortBy: [SortDescriptor(\.date)])) {
+            doc["weigh_ins"] = weighIns.map { ["date": iso($0.date), "weight_lb": $0.weightLb] as [String: Any] }
+        }
+
+        if let supps = try? context.fetch(FetchDescriptor<SupplementRecord>(sortBy: [SortDescriptor(\.createdAt)])) {
+            doc["supplements"] = supps.map {
+                ["name": $0.name, "dose": $0.dose, "timing": $0.timing, "benefit": $0.benefit,
+                 "streak": $0.streak, "last_logged": $0.lastLoggedDate.map(iso) ?? NSNull()] as [String: Any]
+            }
+        }
+        if let labs = try? context.fetch(FetchDescriptor<BloodworkRecord>(sortBy: [SortDescriptor(\.date)])) {
+            doc["bloodwork"] = labs.map {
+                ["name": $0.name, "category": $0.category, "value": $0.value, "unit": $0.unit,
+                 "normal_low": $0.normalLow, "normal_high": $0.normalHigh,
+                 "optimal_low": $0.optimalLow, "optimal_high": $0.optimalHigh, "date": iso($0.date)] as [String: Any]
             }
         }
 
@@ -289,6 +310,125 @@ enum PersistenceService {
         }
     }
 
+    // MARK: - Daily health snapshots (real HealthKit ingestion → persist + sync)
+
+    /// Upsert today's recovery snapshot (one row per calendar day). Marked
+    /// sync-pending on every change so the cloud mirror stays current.
+    @MainActor
+    static func upsertRecoveryRecord(recovery: Int, hrv: Int, restingHR: Int, strain: Double,
+                                     context: ModelContext) {
+        let startOfDay = startOfToday()
+        var d = FetchDescriptor<RecoveryRecord>(predicate: #Predicate { $0.date >= startOfDay })
+        d.fetchLimit = 1
+        if let existing = try? context.fetch(d).first {
+            existing.recovery = recovery; existing.hrv = hrv
+            existing.restingHR = restingHR; existing.strain = strain
+            SyncStamp.touch(existing)
+        } else {
+            context.insert(RecoveryRecord(date: .now, recovery: recovery, hrv: hrv,
+                                          restingHR: restingHR, strain: strain))
+        }
+        try? context.save()
+    }
+
+    /// Upsert today's sleep snapshot (one row per calendar day).
+    @MainActor
+    static func upsertSleepRecord(hours: Double, deepHours: Double, remHours: Double, score: Int,
+                                  context: ModelContext) {
+        let startOfDay = startOfToday()
+        var d = FetchDescriptor<SleepRecord>(predicate: #Predicate { $0.date >= startOfDay })
+        d.fetchLimit = 1
+        if let existing = try? context.fetch(d).first {
+            existing.hours = hours; existing.deepHours = deepHours
+            existing.remHours = remHours; existing.score = score
+            SyncStamp.touch(existing)
+        } else {
+            context.insert(SleepRecord(date: .now, hours: hours, deepHours: deepHours,
+                                       remHours: remHours, score: score))
+        }
+        try? context.save()
+    }
+
+    /// The athlete's real recovery history (oldest→newest), for their own trend
+    /// charts. Real accounts only; demo keeps MockData trends.
+    @MainActor
+    static func loadRecoveryHistory(days: Int = 30) -> [RecoveryRecord] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: startOfToday()) ?? .distantPast
+        let d = FetchDescriptor<RecoveryRecord>(
+            predicate: #Predicate { $0.date >= cutoff },
+            sortBy: [SortDescriptor(\.date)])
+        return (try? context.fetch(d)) ?? []
+    }
+
+    @MainActor
+    static func loadSleepHistory(days: Int = 30) -> [SleepRecord] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: startOfToday()) ?? .distantPast
+        let d = FetchDescriptor<SleepRecord>(
+            predicate: #Predicate { $0.date >= cutoff },
+            sortBy: [SortDescriptor(\.date)])
+        return (try? context.fetch(d)) ?? []
+    }
+
+    @MainActor
+    static func loadScoreHistory(days: Int = 30) -> [ScoreRecord] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: startOfToday()) ?? .distantPast
+        let d = FetchDescriptor<ScoreRecord>(
+            predicate: #Predicate { $0.date >= cutoff },
+            sortBy: [SortDescriptor(\.date)])
+        return (try? context.fetch(d)) ?? []
+    }
+
+    // MARK: - Body weight (real weigh-in history)
+
+    static func saveWeight(_ pounds: Double, date: Date = .now, context: ModelContext) {
+        context.insert(WeightRecord(date: date, weightLb: pounds))
+        try? context.save()
+    }
+
+    /// The athlete's logged weigh-ins, oldest → newest.
+    @MainActor
+    static func loadWeights(limit: Int = 120) -> [WeightRecord] {
+        var descriptor = FetchDescriptor<WeightRecord>(sortBy: [SortDescriptor(\.date)])
+        descriptor.fetchLimit = limit
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    // MARK: - Supplements (real stack + adherence)
+
+    static func insertSupplement(_ record: SupplementRecord, context: ModelContext) {
+        context.insert(record); try? context.save()
+    }
+    static func deleteSupplement(named name: String, context: ModelContext) {
+        let d = FetchDescriptor<SupplementRecord>(predicate: #Predicate { $0.name == name })
+        for r in (try? context.fetch(d)) ?? [] {
+            SyncEngine.recordDeletion(kind: SupplementRecord.syncKind, syncID: r.syncID, context: context)
+            context.delete(r)
+        }
+        try? context.save()
+    }
+    static func updateSupplement(named name: String, streak: Int, lastLogged: Date?, context: ModelContext) {
+        let d = FetchDescriptor<SupplementRecord>(predicate: #Predicate { $0.name == name })
+        if let r = (try? context.fetch(d))?.first {
+            r.streak = streak; r.lastLoggedDate = lastLogged
+            SyncStamp.touch(r)
+            try? context.save()
+        }
+    }
+    @MainActor
+    static func loadSupplements() -> [SupplementRecord] {
+        (try? context.fetch(FetchDescriptor<SupplementRecord>(sortBy: [SortDescriptor(\.createdAt)]))) ?? []
+    }
+
+    // MARK: - Bloodwork (real lab entries)
+
+    static func insertBloodwork(_ record: BloodworkRecord, context: ModelContext) {
+        context.insert(record); try? context.save()
+    }
+    @MainActor
+    static func loadBloodwork() -> [BloodworkRecord] {
+        (try? context.fetch(FetchDescriptor<BloodworkRecord>(sortBy: [SortDescriptor(\.date, order: .reverse)]))) ?? []
+    }
+
     // MARK: - Nutrition
 
     @MainActor
@@ -309,7 +449,10 @@ enum PersistenceService {
         let descriptor = FetchDescriptor<NutritionEntryRecord>(
             predicate: #Predicate { $0.entryID == key })
         guard let records = try? context.fetch(descriptor) else { return }
-        for record in records { context.delete(record) }
+        for record in records {
+            SyncEngine.recordDeletion(kind: NutritionEntryRecord.syncKind, syncID: record.syncID, context: context)
+            context.delete(record)
+        }
         try? context.save()
     }
 

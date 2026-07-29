@@ -182,6 +182,7 @@ struct WorkoutLoggerView: View {
                                    avgRPE: averageRPE, exerciseSummary: summary,
                                    exercisesJSON: PersistenceService.encodeExercises(completed))
         PersistenceService.saveWorkout(record, context: modelContext)
+        app.requestSync()
 
         // Close the loop: real training now moves strain → Forge Score → Directive.
         app.applyTrainingLoad()
