@@ -142,6 +142,63 @@ ranking/merge pipeline + a cache layer, so USDA/OFF/restaurant/AI/NLP are plugga
 sources behind one API. Ranking signals and the cache schema are designed in Phase 2
 to accommodate typo/NLP/AI/embedding layers added in Phase 7 without rework.
 
+### 3.5 Effortless, low-tap interaction model (a flagship differentiator)
+**Design principle:** users should think about *eating*, not "logging." Every
+interaction minimizes taps; the app predicts and pre-fills so the common case is one
+tap. This is a first-class product surface, not polish.
+
+**Direct-manipulation interactions**
+- **Swipe-right on a meal/day → duplicate** (e.g. re-add yesterday's breakfast); swipe
+  actions for edit/duplicate/delete on every diary row.
+- **Long-press a diary entry → quantity editor** (the fast unit sheet from §4.3).
+- **Tap the calories or a macro number → inline edit** (quick-add correction without
+  reopening search).
+- **One-tap "eat this again"** on any recent/favorite/frequent food or meal.
+- **Apple-quality motion:** fluid, interruptible spring animations; matched-geometry
+  transitions between diary row ↔ editor; haptic confirms. 60/120 fps target.
+
+**Prediction & personalization (the "it already knows" layer)**
+- **Time-of-day suggestions:** surface the foods/meals the user typically eats *now*
+  (breakfast items at 8 am, their usual post-workout shake, etc.).
+- **Next-food prediction:** given today's log + history, predict likely next items.
+- **Auto-pinned recents** and **favorite meals**; **frequently eaten** ranked by
+  frequency × recency × time-of-day fit.
+- **Habit-learning autocomplete:** completions ranked from the user's own history, not
+  just global popularity.
+- **Meal templates**, **copy entire days**, and **AI meal builder** (fill remaining
+  macros) as one-tap entry points.
+
+**Fast capture**
+- **Barcode scanner one tap** from the diary and search.
+- **Natural-language entry** ("3 eggs, 2 slices bacon, 1 glass milk") → parsed
+  multi-item log with quantities.
+- **Perceived <100 ms search** wherever possible: local-first index, prewarmed
+  recents/favorites, async provider fill.
+
+**Architecture implication (build now):** the data model must capture the signals
+prediction needs — precise `loggedAt` timestamps, stable food identity + source, meal
+context, and the exact quantity — so recents/frequency/time-of-day/next-food are
+derivable from the diary itself. A `SuggestionEngine` (pure, ranks candidates by
+frequency × recency × time-of-day × context) and an `EntryIntent` parser (NLP/AI
+behind an interface, offline fallback to search) are designed as separate, testable
+layers over the log. Phase 1's `DiaryEntry` (next milestone) captures exactly these
+signals so no backfill is needed later.
+
+### 3.6 Future AI capability surface (design hooks now, ship in Phases 7–9)
+Forge Nutrition's long-term goal is the **smartest** nutrition platform, not just the
+most accurate tracker. These are planned; the architecture leaves clean seams for each
+(a food/quantity intent pipeline, a nutrient-budget context object, and provider
+interfaces), and **none may fabricate nutrition values or medical claims**:
+- **Meal photo recognition** → candidate foods + portions (user confirms).
+- **Voice logging** → the same `EntryIntent` pipeline as NLP text.
+- **AI meal generation** from **remaining macros** (uses the day's nutrient budget).
+- **Restaurant recommendations** from today's remaining calories/protein + locale.
+- **Smart meal substitutions** ("swap for something with 20 g more protein").
+- **Recipe import from URLs** → parsed ingredients → `Recipe`.
+- **Grocery list generation** + **AI grocery shopping assistant** from planned meals/
+  recipes.
+Each ships behind a feature flag, is explainable, and degrades gracefully offline.
+
 ---
 
 ## 4. Serving-size & quantity architecture (core requirement)
@@ -213,10 +270,19 @@ Every screen has explicit **empty / incomplete / offline** states and never show
   to accept typo/NLP/AI layers without rework.)
 - **Phase 3 — Daily experience.** Consumed/remaining, fiber + priority micros from logs, meal timeline, weekly averages, nutrient detail + top sources, charts, states.
 - **Phase 4 — Recipes, meals, multi-add, copy day/meal, quick-add.**
+- **Phase 4.5 — Effortless interaction layer (§3.5).** Swipe-to-duplicate, long-press
+  quantity edit, tap-to-edit macros, one-tap "eat this again", auto-pinned recents +
+  favorite meals + meal templates, the pure `SuggestionEngine` (time-of-day /
+  frequency / next-food prediction), habit-learning autocomplete, and Apple-quality
+  motion. Built on the Phase 1 diary signals.
 - **Phase 5 — Adaptive coaching v2.** Trend-weight smoothing, expenditure estimation, goal modes + target rate, weekly explainable check-ins, program modes, algorithm status + versioning/audit, anti-overreaction + missing-day safety.
 - **Phase 6 — Forge intelligence integration.** Training-load/recovery/steps/sleep/planned-workout-aware fueling; protein/recovery protection in a deficit; explanations in Coach + Directive.
 - **Phase 7 — Search intelligence.** **Typo tolerance / fuzzy match**, **natural-language logging**, **AI/semantic search**, learned smart ranking — layered onto the Phase 2 pipeline.
 - **Phase 8 — Restaurant coverage (live Nutritionix/FatSecret), photo/AI food logging, community submissions + moderation.**
+- **Phase 9 — AI capability surface (§3.6).** Meal photo recognition, voice logging,
+  AI meal generation from remaining macros, restaurant recommendations, smart
+  substitutions, recipe-from-URL import, grocery list + shopping assistant — each
+  behind a feature flag, explainable, offline-graceful, never fabricating values.
 
 ---
 
