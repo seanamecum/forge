@@ -3,6 +3,7 @@ import XCTest
 
 /// A real account must see only its own training data; the demo athlete's seeded
 /// history/PRs/volume belong to demo mode only.
+@MainActor
 final class DemoModeTests: XCTestCase {
 
     func testClearAndRestoreDemoSeed() {

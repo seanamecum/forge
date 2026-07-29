@@ -71,19 +71,27 @@ final class NutritionService {
         entries.filter { $0.meal == meal }
     }
 
+    /// True while showing the demo athlete's world. Demo interactions update the
+    /// in-memory view but NEVER persist — otherwise demo food/water would land in
+    /// the shared store and sync into a real account (kept in sync by AppState).
+    var isDemo = false
+
     func add(food: Food, to meal: MealType, servings: Double = 1) {
         let entry = FoodEntry(meal: meal, food: food, servings: servings, time: "Now")
         entries.append(entry)
+        guard !isDemo else { return }
         Task { @MainActor in PersistenceService.saveEntry(entry) }
     }
 
     func remove(_ entry: FoodEntry) {
         entries.removeAll { $0.id == entry.id }
+        guard !isDemo else { return }
         Task { @MainActor in PersistenceService.deleteEntry(id: entry.id) }
     }
 
     func addWater(_ oz: Double) {
         waterOz = min(Double(waterTargetOz) * 1.5, waterOz + oz)
+        guard !isDemo else { return }
         PersistenceService.saveWater(waterOz)
     }
 

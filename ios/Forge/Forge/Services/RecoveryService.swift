@@ -12,14 +12,44 @@ final class RecoveryService {
         applyUnifiedSignals()
     }
 
-    let trends: [TrendSeries] = [
+    /// The demo athlete's seeded trends — used in demo mode and as the fallback
+    /// before a real account's own history loads.
+    static let demoTrends: [TrendSeries] = [
         TrendSeries(name: "Recovery", unit: "/100", values: MockData.recoveryTrend),
         TrendSeries(name: "HRV", unit: "ms", values: MockData.hrvTrend),
         TrendSeries(name: "Sleep", unit: "h", values: MockData.sleepTrend),
         TrendSeries(name: "Strain", unit: "/21", values: MockData.strainTrend),
     ]
 
-    var forgeScoreTrend: [Double] { MockData.forgeScoreTrend }
+    /// A real account's OWN trends (set by AppState from persisted history); nil in
+    /// demo mode or before load → the demo trends show.
+    private var liveTrends: [TrendSeries]?
+    private var liveForgeScoreTrend: [Double]?
+
+    var trends: [TrendSeries] { liveTrends ?? Self.demoTrends }
+    var forgeScoreTrend: [Double] { liveForgeScoreTrend ?? MockData.forgeScoreTrend }
+
+    /// True when the displayed trends are the athlete's own (not the demo seed) —
+    /// lets the UI show a "building" state while real history is still thin.
+    var trendsAreLive: Bool { liveTrends != nil }
+
+    /// Replace the demo trends with the athlete's real history. Empty arrays are
+    /// valid (a new user with no history yet) and stay empty — never demo.
+    func setLiveTrends(_ series: TrendBuilder.Series) {
+        liveTrends = [
+            TrendSeries(name: "Recovery", unit: "/100", values: series.recovery),
+            TrendSeries(name: "HRV", unit: "ms", values: series.hrv),
+            TrendSeries(name: "Sleep", unit: "h", values: series.sleep),
+            TrendSeries(name: "Strain", unit: "/21", values: series.strain),
+        ]
+        liveForgeScoreTrend = series.forgeScore
+    }
+
+    /// Return to the demo trends (demo mode / sign-out).
+    func clearLiveTrends() {
+        liveTrends = nil
+        liveForgeScoreTrend = nil
+    }
 
     /// Values of a named trend series (Recovery · Sleep · Strain · HRV), or empty.
     /// One accessor instead of `trends.first { $0.name == … }` scattered around.

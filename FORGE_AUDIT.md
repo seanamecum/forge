@@ -1071,6 +1071,45 @@ Running alongside the user's on-device verification.
 - Codebase scan: no TODO/FIXME/placeholder/debug-print left in shipping code.
 - iOS **339 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
 
+## 12l. Launch bug-fix — demo-as-real leaks eliminated (2026-07-29)
+
+Closed-beta launch hardening, priority "eliminate bugs / never mix demo & real."
+An adversarial review (recorded below) plus a UI audit surfaced real demo-as-real
+leaks now fixed:
+- **Trend charts showed the demo athlete's history to real users.** `recovery.trends`
+  and `forgeScoreTrend` were hardcoded `MockData`, ungated — so a real user's Recover
+  screen, Dashboard sparkline, and Weekly Report displayed Sean's 30-day recovery/HRV/
+  sleep/Forge-Score history as their own. Now the trends are built from the account's
+  OWN persisted daily snapshots (`TrendBuilder` + `PersistenceService.loadRecovery/
+  Sleep/ScoreHistory` → `AppState.refreshTrends`), demo keeps the seed, and a real
+  account with thin history shows an honest "your trends are building" state. A sync
+  pull (reinstall/second device) now rebuilds the charts via a new
+  `SyncService.onDidApplyRemoteChanges` hook. (Also makes the previously write-only
+  RecoveryRecord/SleepRecord meaningful — they now feed the charts.)
+- **Hardcoded sleep-debt CoachNote** ("You're 3.1 h behind… bench plateau") on the
+  Recover screen was Sean's story shown to everyone; now derived from the user's own
+  sleep debt (demo keeps the narrative).
+- **DATA-LEAK: demo food logs + weigh-ins persisted and would sync to a real account.**
+  `NutritionService.add(food:)`/`addWater` and `AppState.logWeight` wrote
+  `syncPending` records with no demo gate (unlike supplements/bloodwork/health which
+  were gated) — so demo interactions entered the shared store and the real user's
+  cloud mirror. Now `NutritionService.isDemo` (kept in sync by `AppState`) and a
+  `logWeight` demo guard keep demo interactions in-memory only. Verified: demo
+  food/water/weigh-ins never persist and never enter `SyncEngine.collectPending`.
+- **Tests:** `TrendAndDemoLeakTests` (+9) — TrendBuilder mapping/empty/threshold;
+  demo vs real trends never mix; switching back to demo restores the seed; real
+  trends build from persisted records; demo food/water/weigh-ins don't persist while
+  real weigh-ins do; demo records never enter the sync push set. `completeAuth` is now
+  `@MainActor` (does persistence/trend work); three test classes marked `@MainActor`
+  to match. iOS **348 tests, 2 skipped, 0 failures; Debug+Release 0 warnings.**
+- **Remaining verified bugs from the review (next milestones):** (2) local edits made
+  during an in-flight push can be dropped by `markSynced` clearing the dirty flag
+  without a `syncUpdatedAt`-unchanged check — DATA-LOSS; (3) a profile edit can be lost
+  to an older concurrent remote profile on pull-before-push — DATA-LOSS (profile-only);
+  (4) HealthKit sleep hours double-count when multiple sleep sources write overlapping
+  samples — WRONG-RESULT. Plus follow-ups: server-side LWW is a blind upsert (client-
+  side only), and the pull cursor uses strict `gt.` on a Double-rounded timestamp.
+
 ## 12. Quality / architecture pass (post-loop)
 
 Reducing technical debt and strengthening the flagship maths — quality over features. Guardrails: never

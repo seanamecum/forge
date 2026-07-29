@@ -6,6 +6,7 @@ import SwiftData
 /// and derived deficiencies; demo mode stays completely separate; and the AI coach
 /// only ever sees the current account's own clinical data — never Sean's mock knee,
 /// labs, or deficiencies.
+@MainActor
 final class NutritionHealthTests: XCTestCase {
 
     // MARK: Helpers

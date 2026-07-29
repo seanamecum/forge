@@ -46,6 +46,7 @@ final class AppState {
     /// restored in `init`. Hermetic in tests.
     var isDemoAccount = false {
         didSet {
+            nutrition.isDemo = isDemoAccount   // demo interactions must never persist
             guard !PersistenceService.isTestRun else { return }
             UserDefaults.standard.set(isDemoAccount, forKey: Self.demoKey)
         }
@@ -117,6 +118,13 @@ final class AppState {
         // Wire profile/settings sync to live app state (read + apply).
         sync.profileSnapshot = { [weak self] in self?.profileSnapshotJSON() }
         sync.applyProfileSnapshot = { [weak self] json in self?.applyProfileSnapshot(json) }
+        // After a pull restores records (reinstall / second device), rebuild the
+        // derived UI so the data shows without an app restart.
+        sync.onDidApplyRemoteChanges = { [weak self] in
+            guard let self, !self.isDemoAccount else { return }
+            self.loadHealthData()
+            self.refreshTrends()
+        }
 
         // Today's food + water: real log only. A fresh day starts honestly empty.
         nutrition.entries = PersistenceService.loadTodayEntries()
@@ -150,6 +158,7 @@ final class AppState {
         if !isDemoAccount {
             loadHealthData()
             injuries.clearDemoSeed()
+            refreshTrends()          // real trend charts from this account's own history
             // On launch, reconcile with the cloud (pull remote edits from other
             // devices, push anything logged offline). No-op without a live session.
             sync.syncNow()
@@ -158,6 +167,24 @@ final class AppState {
         refreshFuelPlan()
     }
     private var rehydrated = false
+
+    /// Rebuild the recovery/HRV/sleep/strain/Forge-Score trend charts from THIS
+    /// account's persisted daily history — so a real user never sees the demo
+    /// athlete's trends. Demo mode keeps the seeded trends. Empty history → empty
+    /// (honest "building" state), never fabricated.
+    @MainActor
+    func refreshTrends() {
+        guard !isDemoAccount else { recovery.clearLiveTrends(); return }
+        let recoveries = PersistenceService.loadRecoveryHistory()
+        let sleeps = PersistenceService.loadSleepHistory()
+        let scores = PersistenceService.loadScoreHistory()
+        recovery.setLiveTrends(TrendBuilder.make(
+            recovery: recoveries.map(\.recovery),
+            hrv: recoveries.map(\.hrv),
+            sleepHours: sleeps.map(\.hours),
+            strain: recoveries.map(\.strain),
+            scores: scores.map(\.score)))
+    }
 
     // MARK: - Training load → intelligence layer
 
@@ -206,12 +233,14 @@ final class AppState {
         return try? JSONDecoder().decode(UserProfile.self, from: data)
     }
 
+    @MainActor
     func completeAuth(demo: Bool) {
         isDemoAccount = demo
         if demo {
             workouts.restoreDemoSeed()   // in case a prior real session cleared it
             nutrition.restoreDemoSeed()
             injuries.restoreDemoSeed()
+            recovery.clearLiveTrends()   // demo shows the seeded trends
             user = MockData.sean
             sync.reset()                 // demo mode never syncs to the cloud
             finishOnboarding()
@@ -220,6 +249,7 @@ final class AppState {
             nutrition.clearDemoSeed()
             injuries.clearDemoSeed()
             weightSamples = []
+            refreshTrends()              // this account's own (initially empty) trends
             phase = .onboarding
             // Pull this account's cloud data (restores a reinstall / new device) and
             // push anything logged locally before sign-in.
@@ -538,6 +568,13 @@ final class AppState {
     @MainActor
     func logWeight(_ pounds: Double, context: ModelContext) {
         guard pounds > 0 else { return }
+        // Demo mode updates the in-memory profile only — never persists/syncs, so a
+        // demo weigh-in can't leak into a real account's cloud data.
+        guard !isDemoAccount else {
+            user.weightLb = pounds
+            refreshFuelPlan()
+            return
+        }
         PersistenceService.saveWeight(pounds, context: context)
         weightSamples.append(pounds)
         user.weightLb = pounds
@@ -685,6 +722,7 @@ final class AppState {
         PersistenceService.upsertSleepRecord(
             hours: d.sleep.hours, deepHours: d.sleep.deepHours, remHours: d.sleep.remHours,
             score: d.sleep.score, context: PersistenceService.context)
+        refreshTrends()          // today's new snapshot flows into the trend charts
         sync.requestSync()
     }
 

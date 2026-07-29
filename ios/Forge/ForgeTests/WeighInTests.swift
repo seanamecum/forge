@@ -4,6 +4,7 @@ import SwiftData
 
 /// Real users get their own persistent weight history, and adaptive nutrition uses
 /// it — never demo data. Demo mode is preserved separately.
+@MainActor
 final class WeighInTests: XCTestCase {
 
     /// A fresh in-memory store so the tests never touch the app's shared container

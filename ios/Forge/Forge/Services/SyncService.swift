@@ -49,6 +49,11 @@ final class SyncService {
     var profileSnapshot: () -> String? = { nil }
     var applyProfileSnapshot: (String) -> Void = { _ in }
 
+    /// Called after a pull applies remote changes (a reinstall/second device
+    /// restoring data), so AppState can rebuild derived state — trend charts,
+    /// in-memory health stack — that a raw store write wouldn't refresh.
+    var onDidApplyRemoteChanges: () -> Void = {}
+
     /// Test seams.
     var transportOverride: SyncTransport?
     var contextOverride: ModelContext?
@@ -123,13 +128,16 @@ final class SyncService {
             // clobbering it with an unchanged local baseline.
             let cursor = cursorStore.cursor(for: creds.userID)
             let pulled = try await transport.pull(since: cursor)
-            SyncEngine.applyPulled(pulled.filter { $0.kind != Self.profileKind }, context: ctx)
+            let records = pulled.filter { $0.kind != Self.profileKind }
+            SyncEngine.applyPulled(records, context: ctx)
             for row in pulled where row.kind == Self.profileKind {
                 applyPulledProfile(row, for: creds.userID)
             }
             if let newest = pulled.compactMap(\.syncedAt).max() {
                 cursorStore.setCursor(newest, for: creds.userID)
             }
+            // Rebuild derived UI state when a pull actually brought records in.
+            if !records.isEmpty { onDidApplyRemoteChanges() }
 
             // Push everything still dirty (records + a genuinely-changed profile).
             var pending = SyncEngine.collectPending(context: ctx)

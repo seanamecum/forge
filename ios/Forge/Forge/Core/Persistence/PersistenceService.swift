@@ -349,6 +349,35 @@ enum PersistenceService {
         try? context.save()
     }
 
+    /// The athlete's real recovery history (oldest→newest), for their own trend
+    /// charts. Real accounts only; demo keeps MockData trends.
+    @MainActor
+    static func loadRecoveryHistory(days: Int = 30) -> [RecoveryRecord] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: startOfToday()) ?? .distantPast
+        let d = FetchDescriptor<RecoveryRecord>(
+            predicate: #Predicate { $0.date >= cutoff },
+            sortBy: [SortDescriptor(\.date)])
+        return (try? context.fetch(d)) ?? []
+    }
+
+    @MainActor
+    static func loadSleepHistory(days: Int = 30) -> [SleepRecord] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: startOfToday()) ?? .distantPast
+        let d = FetchDescriptor<SleepRecord>(
+            predicate: #Predicate { $0.date >= cutoff },
+            sortBy: [SortDescriptor(\.date)])
+        return (try? context.fetch(d)) ?? []
+    }
+
+    @MainActor
+    static func loadScoreHistory(days: Int = 30) -> [ScoreRecord] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: startOfToday()) ?? .distantPast
+        let d = FetchDescriptor<ScoreRecord>(
+            predicate: #Predicate { $0.date >= cutoff },
+            sortBy: [SortDescriptor(\.date)])
+        return (try? context.fetch(d)) ?? []
+    }
+
     // MARK: - Body weight (real weigh-in history)
 
     static func saveWeight(_ pounds: Double, date: Date = .now, context: ModelContext) {
