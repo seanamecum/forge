@@ -41,7 +41,7 @@ enum SyncRegistry {
         make(GoalRecord.self), make(WorkoutRecord.self),
         make(NutritionEntryRecord.self), make(RecoveryRecord.self), make(SleepRecord.self),
         make(ScoreRecord.self), make(CheckInRecord.self), make(WeightRecord.self),
-        make(SupplementRecord.self), make(BloodworkRecord.self),
+        make(SupplementRecord.self), make(BloodworkRecord.self), make(DiaryEntry.self),
     ]
 
     static let byKind: [String: AnySyncHandler] =
@@ -253,6 +253,39 @@ extension SupplementRecord: Syncable {
     func applyPayload(_ payload: Data) throws {
         let p = try SyncCoder.decoder.decode(Payload.self, from: payload)
         name = p.name; dose = p.dose; timing = p.timing; benefit = p.benefit; streak = p.streak; lastLoggedDate = p.lastLoggedDate; createdAt = p.createdAt
+    }
+}
+
+extension DiaryEntry: Syncable {
+    static var syncKind: String { "diary" }
+    private struct Payload: Codable {
+        var entryID: String; var day: Date; var loggedAt: Date; var meal: String
+        var foodID: String; var foodName: String; var foodBrand: String?; var foodSource: String
+        var amount: Double; var unitID: String; var unitLabel: String
+        var grams: Double?; var gramSource: String
+        var consumedJSON: String; var per100gJSON: String
+    }
+    func syncPayload() throws -> Data {
+        try SyncCoder.encoder.encode(Payload(
+            entryID: entryID, day: day, loggedAt: loggedAt, meal: meal,
+            foodID: foodID, foodName: foodName, foodBrand: foodBrand, foodSource: foodSource,
+            amount: amount, unitID: unitID, unitLabel: unitLabel, grams: grams, gramSource: gramSource,
+            consumedJSON: consumedJSON, per100gJSON: per100gJSON))
+    }
+    static func instantiate(payload: Data) throws -> DiaryEntry {
+        let p = try SyncCoder.decoder.decode(Payload.self, from: payload)
+        return DiaryEntry(entryID: p.entryID, day: p.day, loggedAt: p.loggedAt, meal: p.meal,
+                          foodID: p.foodID, foodName: p.foodName, foodBrand: p.foodBrand, foodSource: p.foodSource,
+                          amount: p.amount, unitID: p.unitID, unitLabel: p.unitLabel,
+                          grams: p.grams, gramSource: p.gramSource,
+                          consumedJSON: p.consumedJSON, per100gJSON: p.per100gJSON)
+    }
+    func applyPayload(_ payload: Data) throws {
+        let p = try SyncCoder.decoder.decode(Payload.self, from: payload)
+        entryID = p.entryID; day = p.day; loggedAt = p.loggedAt; meal = p.meal
+        foodID = p.foodID; foodName = p.foodName; foodBrand = p.foodBrand; foodSource = p.foodSource
+        amount = p.amount; unitID = p.unitID; unitLabel = p.unitLabel; grams = p.grams; gramSource = p.gramSource
+        consumedJSON = p.consumedJSON; per100gJSON = p.per100gJSON
     }
 }
 

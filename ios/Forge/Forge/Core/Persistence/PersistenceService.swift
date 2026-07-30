@@ -9,7 +9,7 @@ enum PersistenceService {
         UserRecord.self, GoalRecord.self, WorkoutRecord.self,
         NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
         ScoreRecord.self, CheckInRecord.self, WeightRecord.self,
-        SupplementRecord.self, BloodworkRecord.self,
+        SupplementRecord.self, BloodworkRecord.self, DiaryEntry.self,
     ]
 
     /// One container for the whole app — views get it via .modelContainer,
@@ -20,7 +20,7 @@ enum PersistenceService {
             UserRecord.self, GoalRecord.self, WorkoutRecord.self,
             NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
             ScoreRecord.self, CheckInRecord.self, WeightRecord.self,
-            SupplementRecord.self, BloodworkRecord.self, SyncTombstone.self,
+            SupplementRecord.self, BloodworkRecord.self, DiaryEntry.self, SyncTombstone.self,
         ])
         do {
             return try ModelContainer(for: schema)
@@ -54,6 +54,7 @@ enum PersistenceService {
         try? context.delete(model: WeightRecord.self)
         try? context.delete(model: SupplementRecord.self)
         try? context.delete(model: BloodworkRecord.self)
+        try? context.delete(model: DiaryEntry.self)
         try? context.delete(model: SyncTombstone.self)
         try? context.save()
         // Data keys only — the auth session (forge.auth.*) is cleared by the
