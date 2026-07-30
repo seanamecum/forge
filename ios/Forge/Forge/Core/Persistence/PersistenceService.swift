@@ -430,17 +430,87 @@ enum PersistenceService {
         (try? context.fetch(FetchDescriptor<BloodworkRecord>(sortBy: [SortDescriptor(\.date, order: .reverse)]))) ?? []
     }
 
-    // MARK: - Nutrition
+    // MARK: - Diary (grams-aware; the current read/write path — Phase 1.3)
 
+    static func insertDiaryEntry(_ entry: DiaryEntry, context: ModelContext) {
+        context.insert(entry); try? context.save()
+    }
+
+    /// Today's diary, oldest→newest by log time (for the meal timeline).
     @MainActor
-    static func saveEntry(_ entry: FoodEntry) {
-        guard !isTestRun else { return }
-        context.insert(NutritionEntryRecord(
-            entryID: entry.id.uuidString, date: .now, meal: entry.meal.rawValue,
-            name: entry.food.name, calories: entry.calories,
-            protein: entry.protein, carbs: entry.carbs, fat: entry.fat,
-            servings: entry.servings))
+    static func loadTodayDiary() -> [DiaryEntry] {
+        let start = startOfToday()
+        let d = FetchDescriptor<DiaryEntry>(
+            predicate: #Predicate { $0.day >= start },
+            sortBy: [SortDescriptor(\.loggedAt)])
+        return (try? context.fetch(d)) ?? []
+    }
+
+    /// The diary for a specific calendar day (past/future logging).
+    @MainActor
+    static func loadDiary(day: Date) -> [DiaryEntry] {
+        let start = Calendar.current.startOfDay(for: day)
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
+        let d = FetchDescriptor<DiaryEntry>(
+            predicate: #Predicate { $0.day >= start && $0.day < end },
+            sortBy: [SortDescriptor(\.loggedAt)])
+        return (try? context.fetch(d)) ?? []
+    }
+
+    static func deleteDiaryEntry(entryID: String, context: ModelContext) {
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == entryID })
+        for r in (try? context.fetch(d)) ?? [] {
+            SyncEngine.recordDeletion(kind: DiaryEntry.syncKind, syncID: r.syncID, context: context)
+            context.delete(r)
+        }
         try? context.save()
+    }
+
+    /// Edit a logged amount in place, re-scaling nutrition (grams-accurate when a
+    /// basis exists, else by ratio). Powers inline quantity editing from the diary.
+    static func updateDiaryQuantity(entryID: String, newAmount: Double, context: ModelContext) {
+        guard newAmount > 0 else { return }
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == entryID })
+        guard let e = (try? context.fetch(d))?.first else { return }
+        e.rescale(toAmount: newAmount)
+        SyncStamp.touch(e)
+        try? context.save()
+    }
+
+    // MARK: - Legacy nutrition migration → diary
+
+    private static let diaryMigrationKey = "forge.diaryMigrated.v1"
+
+    /// One-time (per device) migration of legacy `NutritionEntryRecord`s to the
+    /// grams-aware diary. Idempotent + cross-device-safe via deterministic ids.
+    @MainActor
+    static func migrateLegacyNutritionIfNeeded(context: ModelContext) {
+        guard !isTestRun,
+              !UserDefaults.standard.bool(forKey: diaryMigrationKey) else { return }
+        migrateLegacyNutrition(context: context)
+        UserDefaults.standard.set(true, forKey: diaryMigrationKey)
+    }
+
+    /// Convert every legacy entry to a `DiaryEntry` (deterministic id, skipping any
+    /// already migrated) and remove the legacy row so it can't double-count or
+    /// re-sync. The deletion tombstones propagate; the new diary rows sync forward.
+    @MainActor
+    @discardableResult
+    static func migrateLegacyNutrition(context: ModelContext) -> Int {
+        let legacy = (try? context.fetch(FetchDescriptor<NutritionEntryRecord>())) ?? []
+        guard !legacy.isEmpty else { return 0 }
+        let existing = Set(((try? context.fetch(FetchDescriptor<DiaryEntry>())) ?? []).map(\.entryID))
+        var migrated = 0
+        for rec in legacy {
+            let entry = DiaryMigration.entry(from: rec)   // deterministic "legacy-…" id
+            if !existing.contains(entry.entryID) {
+                context.insert(entry); migrated += 1
+            }
+            SyncEngine.recordDeletion(kind: NutritionEntryRecord.syncKind, syncID: rec.syncID, context: context)
+            context.delete(rec)
+        }
+        try? context.save()
+        return migrated
     }
 
     @MainActor

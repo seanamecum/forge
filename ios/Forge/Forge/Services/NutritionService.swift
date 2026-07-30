@@ -21,6 +21,7 @@ final class NutritionService {
         nutrientGroups = []
         deficiencies = []
         bloodwork = []
+        entries = []            // a real account's diary loads from its own store
     }
 
     func restoreDemoSeed() {
@@ -28,6 +29,7 @@ final class NutritionService {
         nutrientGroups = MockData.nutrientGroups
         deficiencies = MockData.deficiencies
         bloodwork = MockData.bloodwork
+        entries = MockData.todaysEntries   // demo shows the demo athlete's day
     }
 
     /// Today's coached plan (set by AppState from live cross-module signals).
@@ -78,15 +80,31 @@ final class NutritionService {
 
     func add(food: Food, to meal: MealType, servings: Double = 1) {
         let entry = FoodEntry(meal: meal, food: food, servings: servings, time: "Now")
-        entries.append(entry)
-        guard !isDemo else { return }
-        Task { @MainActor in PersistenceService.saveEntry(entry) }
+        entries.append(entry)                       // optimistic — instant UI
+        guard !isDemo else { return }               // demo never persists
+        let diary = DiaryBridge.diaryEntry(from: entry)
+        Task { @MainActor in
+            PersistenceService.insertDiaryEntry(diary, context: PersistenceService.context)
+            reloadDiary()                           // canonical rows (stable ids for edit/delete)
+        }
     }
 
     func remove(_ entry: FoodEntry) {
-        entries.removeAll { $0.id == entry.id }
+        entries.removeAll { $0.id == entry.id }      // optimistic
         guard !isDemo else { return }
-        Task { @MainActor in PersistenceService.deleteEntry(id: entry.id) }
+        let id = DiaryBridge.diaryID(for: entry)
+        Task { @MainActor in
+            PersistenceService.deleteDiaryEntry(entryID: id, context: PersistenceService.context)
+            reloadDiary()
+        }
+    }
+
+    /// Rebuild the in-memory diary from the persisted (grams-aware) store — the
+    /// single source of truth for a real account. Demo keeps its seeded entries.
+    @MainActor
+    func reloadDiary() {
+        guard !isDemo else { return }
+        entries = PersistenceService.loadTodayDiary().compactMap(DiaryBridge.foodEntry)
     }
 
     func addWater(_ oz: Double) {

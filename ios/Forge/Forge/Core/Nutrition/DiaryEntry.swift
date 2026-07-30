@@ -78,6 +78,24 @@ final class DiaryEntry {
 
     /// A conversion is "estimated" when its source says so — drives the UI flag.
     var isEstimatedConversion: Bool { ConversionSource(rawValue: gramSource)?.isEstimated ?? false }
+
+    /// Change the logged amount, recomputing consumed nutrition. Uses the per-100 g
+    /// basis + grams when available (accurate re-scale); otherwise scales the stored
+    /// consumed totals by the amount ratio (quick-add / legacy). Never fabricates a
+    /// gram weight. No-op for a non-positive amount.
+    func rescale(toAmount newAmount: Double) {
+        guard newAmount > 0, amount > 0 else { return }
+        if let per = per100g, let g = grams {
+            let newGrams = g / amount * newAmount
+            consumedJSON = DiaryEntry.encode(ServingConversion.nutrients(per100g: per, grams: newGrams))
+            grams = newGrams
+        } else {
+            let ratio = newAmount / amount
+            consumedJSON = DiaryEntry.encode(consumed.scaled(by: ratio))
+            grams = grams.map { $0 / amount * newAmount }
+        }
+        amount = newAmount
+    }
 }
 
 // MARK: - Construction from the canonical model (the real logging path, used in 1.3)
@@ -121,13 +139,19 @@ enum DiaryMigration {
         let consumed = NutrientVector([
             .calories: Double(totalCalories), .protein: protein, .carbs: carbs, .fat: fat,
         ])
-        let id = entryID.isEmpty ? UUID().uuidString : entryID
-        return DiaryEntry(
+        // Deterministic id ("legacy-<entryID>") so re-running the migration — or two
+        // devices migrating the same synced legacy row — produces the SAME diary
+        // record and dedups under last-write-wins instead of duplicating.
+        let base = entryID.isEmpty ? UUID().uuidString : entryID
+        let id = "legacy-\(base)"
+        let entry = DiaryEntry(
             entryID: id, day: calendar.startOfDay(for: date), loggedAt: date, meal: meal,
-            foodID: "legacy-\(id)", foodName: name, foodBrand: nil, foodSource: legacySource,
+            foodID: id, foodName: name, foodBrand: nil, foodSource: legacySource,
             amount: servings <= 0 ? 1 : servings, unitID: "serving", unitLabel: "serving",
             grams: nil, gramSource: legacySource,
             consumedJSON: DiaryEntry.encode(consumed), per100gJSON: "")
+        entry.syncID = id     // deterministic sync id → cross-device dedup
+        return entry
     }
 
     static func entry(from legacy: NutritionEntryRecord) -> DiaryEntry {

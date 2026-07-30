@@ -127,8 +127,13 @@ final class AppState {
         }
 
         // Today's food + water: real log only. A fresh day starts honestly empty.
-        nutrition.entries = PersistenceService.loadTodayEntries()
+        // Migrate any legacy per-serving entries to the grams-aware diary first, then
+        // load from it. Demo keeps its seeded entries (never persisted).
         nutrition.waterOz = PersistenceService.loadTodayWater()
+        if !isDemoAccount {
+            PersistenceService.migrateLegacyNutritionIfNeeded(context: PersistenceService.context)
+            nutrition.reloadDiary()
+        }
 
         // Workout history: a real account sees only its own logged sessions; demo
         // mode keeps the demo athlete's baseline (with any saved layered on top).
