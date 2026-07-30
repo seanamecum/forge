@@ -383,22 +383,32 @@ final class AppState {
     var forgeScoreBasis: RecommendationBasis {
         let used = forgeScoreBreakdown.map { "\($0.label) \($0.value)" }
         var missing: [String] = []
+        // Forge works fully without a wearable — the morning check-in is the primary
+        // way to personalize the score, so it leads; a wearable is an optional
+        // enhancement that adds automatic HRV/sleep/activity.
+        if checkIn == nil { missing.append("Your morning check-in (no wearable needed)") }
         switch recovery.provenance {
         case .demo:
-            missing.append("Live Apple Health signals (sleep, HRV, activity)")
+            missing.append("Automatic HRV, sleep & activity from a wearable (optional)")
         case .partial:
-            if !recovery.recoveryFromLiveSignals { missing.append("Live recovery (currently estimated)") }
-            missing.append("Live strain & readiness (currently estimated)")
+            if !recovery.recoveryFromLiveSignals { missing.append("Automatic HRV recovery from a wearable (optional)") }
         case .live:
             break
         }
-        if checkIn == nil { missing.append("Today's morning check-in") }
         if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
             missing.append("A fresh HRV reading (last sample ~\(Int(hrvAge))h old)")
         }
 
-        let fallback = recovery.provenance == .live ? nil
-            : "Using demo/estimated values where live data isn't connected — connect Apple Health to personalize."
+        let fallback: String?
+        switch recovery.provenance {
+        case .live:
+            fallback = nil
+        case .partial:
+            fallback = recovery.recoveryFromLiveSignals ? nil
+                : "Running on your morning check-in and logged training, nutrition, and weight. Add a wearable for automatic HRV & sleep."
+        case .demo:
+            fallback = "Do your morning check-in to personalize your score — no wearable needed. A wearable later adds automatic HRV, sleep, and activity."
+        }
         return RecommendationBasis(
             summary: forgeScoreNarrative, inputsUsed: used, inputsMissing: missing,
             confidence: RecommendationBasis.confidence(provenance: recovery.provenance, hasCheckIn: checkIn != nil),
@@ -420,18 +430,16 @@ final class AppState {
 
         var missing: [String] = []
         if checkIn == nil { missing.append("Morning check-in (soreness, energy, stress)") }
-        if recovery.provenance == .demo { missing.append("Live recovery & sleep from Apple Health") }
+        if recovery.provenance == .demo { missing.append("Automatic recovery & sleep from a wearable (optional)") }
         if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
             missing.append("A fresh HRV reading (last sample ~\(Int(hrvAge))h old)")
         }
 
         let fallback: String?
         if checkIn == nil {
-            fallback = "No check-in yet — log soreness and energy to sharpen today's call."
-        } else if recovery.provenance == .demo {
-            fallback = "Recovery is demo data until Apple Health is connected."
+            fallback = "Do your morning check-in — log soreness and energy to sharpen today's call. No wearable needed."
         } else {
-            fallback = nil
+            fallback = nil   // a check-in personalizes the directive; a wearable only adds automation
         }
         return RecommendationBasis(
             summary: dailyDirective.rationale, inputsUsed: used, inputsMissing: missing,
@@ -450,18 +458,28 @@ final class AppState {
         ]
         var missing: [String] = []
         if recovery.provenance == .demo {
-            missing.append("Live HRV, resting HR & sleep from Apple Health")
+            missing.append("Your morning check-in (no wearable needed)")
+            missing.append("Automatic HRV, resting HR & sleep from a wearable (optional)")
         } else if !recovery.recoveryFromLiveSignals {
-            missing.append("A fresh HRV reading to derive recovery from your own data")
+            missing.append("Automatic HRV recovery from a wearable (optional)")
         }
         if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
             missing.append("A current HRV sample (last one ~\(Int(hrvAge))h old)")
         }
-        let fallback = recovery.recoveryFromLiveSignals ? nil
-            : "Recovery is a demo/estimated value until fresh Apple Health signals are connected."
-        let summary = recovery.recoveryFromLiveSignals
-            ? "Recovery \(d.recovery), derived from your HRV vs baseline, resting HR, and sleep."
-            : "Recovery \(d.recovery) (estimate) — connect Apple Health to base it on your own signals."
+        // Two paths: HRV from a wearable, OR the morning check-in. Only the truly
+        // no-input state is unpersonalized — and even then the fix is the check-in.
+        let summary: String
+        let fallback: String?
+        if recovery.recoveryFromLiveSignals {
+            summary = "Recovery \(d.recovery), derived from your HRV vs baseline, resting HR, and sleep."
+            fallback = nil
+        } else if recovery.recoveryFromCheckIn {
+            summary = "Recovery \(d.recovery), from your morning check-in. Add a wearable for automatic HRV-based recovery."
+            fallback = nil
+        } else {
+            summary = "Recovery \(d.recovery) is a starting estimate — do your morning check-in to personalize it. No wearable needed."
+            fallback = "Recovery isn't personalized yet. Your morning check-in sets it from your own sleep, soreness, energy, and stress; a wearable later makes it automatic."
+        }
         return RecommendationBasis(
             summary: summary, inputsUsed: used, inputsMissing: missing,
             confidence: RecommendationBasis.confidence(provenance: recovery.provenance, hasCheckIn: checkIn != nil),

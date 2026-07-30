@@ -332,7 +332,7 @@ struct WearableStatusStrip: View {
                             .foregroundStyle(Theme.cream)
                         Text(app.healthKit.authState == .authorized
                              ? "Sleep, HRV, activity, and workouts flowing"
-                             : "Connect to replace demo data with yours")
+                             : "Optional — adds automatic HRV, sleep & activity")
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.muted)
                     }

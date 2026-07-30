@@ -156,8 +156,9 @@ struct DashboardView: View {
         }
     }
 
-    /// The 1.0 data story is Apple Health. Until it's connected the recovery
-    /// numbers are demo values — say so, and make connecting one tap.
+    /// A wearable is an *enhancement*, not a requirement — Forge is fully driven by
+    /// the morning check-in, workouts, nutrition, and weight without one. This banner
+    /// offers optional automation; it never implies the experience is incomplete.
     @ViewBuilder
     private var connectHealthBanner: some View {
         if app.healthKit.authState == .notDetermined {
@@ -166,9 +167,9 @@ struct DashboardView: View {
                     Image(systemName: "heart.fill")
                         .font(.system(size: 18)).foregroundStyle(Theme.rubyBright)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Connect Apple Health")
+                        Text("Add automatic tracking (optional)")
                             .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.cream)
-                        Text("Your score runs on demo data until Forge can read your sleep, HRV, and activity.")
+                        Text("Forge already runs on your check-ins and logs. Connect Apple Health to add automatic HRV, sleep, and activity.")
                             .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }

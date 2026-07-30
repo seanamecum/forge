@@ -27,7 +27,12 @@ final class RecommendationBasisTests: XCTestCase {
         XCTAssertFalse(basis.inputsMissing.isEmpty)             // demo → missing live signals
         XCTAssertNotNil(basis.safeFallback)                     // never silent about the fallback
         XCTAssertFalse(basis.summary.isEmpty)
-        XCTAssertTrue(basis.inputsMissing.contains { $0.contains("Apple Health") })
+        // No-wearable principle: the check-in leads; a wearable is framed as optional,
+        // never as required. The fallback must not imply a wearable is needed.
+        XCTAssertTrue(basis.inputsMissing.contains { $0.contains("check-in") })
+        XCTAssertTrue(basis.inputsMissing.contains { $0.lowercased().contains("wearable") && $0.lowercased().contains("optional") })
+        XCTAssertTrue(basis.safeFallback!.lowercased().contains("check-in"))
+        XCTAssertTrue(basis.safeFallback!.lowercased().contains("no wearable needed"))
     }
 
     func testForgeScoreBasisNamesTheMissingCheckIn() {
@@ -62,8 +67,29 @@ final class RecommendationBasisTests: XCTestCase {
         let basis = app.recoveryBasis
         XCTAssertEqual(basis.confidence, .low)                      // demo, no check-in
         XCTAssertTrue(basis.inputsUsed.contains { $0.hasPrefix("HRV") })
-        XCTAssertTrue(basis.inputsMissing.contains { $0.contains("Apple Health") })
+        // Two paths, wearable optional: missing leads with the check-in.
+        XCTAssertTrue(basis.inputsMissing.contains { $0.contains("check-in") })
+        XCTAssertTrue(basis.inputsMissing.contains { $0.lowercased().contains("wearable") })
         XCTAssertNotNil(basis.safeFallback)
+        XCTAssertTrue(basis.safeFallback!.lowercased().contains("check-in"))
+        XCTAssertFalse(basis.safeFallback!.contains("Apple Health"), "must not imply a wearable is required")
+    }
+
+    /// A no-wearable user who logs a morning check-in gets a personalized (non-demo)
+    /// recovery + Forge Score with no wearable-required messaging.
+    func testCheckInPersonalizesWithoutAWearable() {
+        let app = AppState()
+        app.checkIn = CheckInSnapshot(sleepQuality: 4, soreness: 2, energy: 4, stress: 2)
+        app.recovery.applyCheckIn(app.checkIn!)
+        XCTAssertTrue(app.recovery.recoveryFromCheckIn)
+        XCTAssertNotEqual(app.recovery.provenance, .demo)          // real input, not demo
+        // Recovery basis reads from the check-in and frames a wearable as an add-on.
+        let rb = app.recoveryBasis
+        XCTAssertNil(rb.safeFallback)
+        XCTAssertTrue(rb.summary.lowercased().contains("check-in"))
+        XCTAssertFalse(rb.summary.contains("Apple Health"))
+        // Directive no longer flags a missing check-in and isn't wearable-gated.
+        XCTAssertNil(app.directiveBasis.safeFallback)
     }
 
     func testRecoveryBasisLiftsWithFreshLiveHRVAndCheckIn() {
