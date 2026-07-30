@@ -5,8 +5,46 @@ off `audit/launch-hardening`.
 **Goal:** make Forge Nutrition a **flagship** feature — a complete **adaptive
 nutrition coach** that **exceeds MacroFactor in usability** while remaining
 completely original (no copied branding, wording, layouts, implementation, or
-visual identity — only studied product principles). Long-term: the **best
-nutrition platform available, not just a macro tracker.**
+visual identity — only studied product principles).
+
+**North star: the best nutrition *operating system*, not the best tracker.** The
+long-term goal is a system that understands *everything* about a person's nutrition
+and feeds it into **one adaptive nutrition intelligence layer** that produces
+**explainable recommendations grounded only in that user's real data** (never
+fabricated, never demo). Tracking is table stakes; intelligence is the product. See
+§0.1.
+
+### 0.1 The Nutrition Operating System — one intelligence layer over every domain
+Forge should eventually ingest and connect all of these signals:
+`food logging · calories · macros · micronutrients · hydration · supplements ·
+bloodwork · deficiencies · allergies · intolerances · digestion · grocery shopping ·
+pantry inventory · meal planning · recipes · restaurants · eating habits · body
+composition · training demands · recovery · sleep · health goals`.
+
+They feed **one** engine that emits explainable insights and actions, e.g.:
+- "You're consistently low in magnesium." *(from logged intake + bloodwork + trend)*
+- "Your recovery is poor after low-carb days." *(intake × recovery correlation)*
+- "You perform better with 40 g protein at breakfast." *(meal timing × performance)*
+- "Based on your pantry, here's tonight's dinner." *(pantry + targets + preferences)*
+- "Order this at Chipotle to hit today's targets." *(remaining macros + menu data)*
+- "You're traveling tomorrow — here's your nutrition plan." *(calendar + goals)*
+- "Your iron intake has been low for three weeks." *(longitudinal intake trend)*
+- "This grocery trip covers your meal plan for 6 days." *(meal plan → grocery math)*
+
+**Non-negotiable contracts (enforced by architecture):**
+- **Explainable:** every insight carries its inputs, the rule/model that produced it,
+  and a plain-language "why" — reuses Forge's existing `RecommendationBasis` +
+  `DataProvenance` patterns, extended with `algoVersion` for audit.
+- **Real data only:** insights are computed strictly from the current user's logged/
+  connected data. No fabricated values, no demo data, no unsupported medical claims;
+  when data is insufficient the engine says so (confidence/■learning states) rather
+  than guessing.
+- **One engine, many domains:** a `NutritionIntelligence` layer consumes a normalized
+  **signal set** (each domain publishes typed signals) and emits `NutritionInsight`s.
+  Domains plug in incrementally — the layer and its contracts exist from Phase 5 and
+  every later domain (pantry, restaurants, travel, digestion…) adds a signal source +
+  insight rules without reshaping the core. This mirrors Forge's existing cross-module
+  `InsightEngine` for training/recovery, unified for nutrition.
 
 ### North-star capabilities (build the architecture to scale to all of these)
 - **Near-universal food coverage** via a federated data platform (USDA + self-hosted
@@ -283,6 +321,14 @@ Every screen has explicit **empty / incomplete / offline** states and never show
   AI meal generation from remaining macros, restaurant recommendations, smart
   substitutions, recipe-from-URL import, grocery list + shopping assistant — each
   behind a feature flag, explainable, offline-graceful, never fabricating values.
+- **Phase 10 — Nutrition Operating System (§0.1).** The unified `NutritionIntelligence`
+  layer + normalized signal set + `NutritionInsight` (explainable, real-data-only,
+  `algoVersion`-audited). Domains onboard incrementally as signal sources: 10a intake
+  ×recovery/sleep/training correlations & meal-timing insights; 10b micronutrient +
+  bloodwork longitudinal deficiency trends; 10c pantry inventory → dinner suggestions;
+  10d meal planning → grocery generation; 10e restaurants/travel context; 10f
+  allergies/intolerances/digestion constraints + correlations. Each domain = a signal
+  source + insight rules, no core reshape.
 
 ---
 
