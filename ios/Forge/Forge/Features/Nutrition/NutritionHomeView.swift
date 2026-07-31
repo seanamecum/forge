@@ -214,6 +214,7 @@ struct MealSection: View {
     @Environment(AppState.self) private var app
     let meal: MealType
     let onAdd: () -> Void
+    @State private var editing: FoodEntry?
 
     var body: some View {
         let entries = app.nutrition.entries(for: meal)
@@ -237,20 +238,35 @@ struct MealSection: View {
                     Text("Nothing logged").font(.system(size: 11.5)).foregroundStyle(Theme.faint)
                 } else {
                     ForEach(entries) { entry in
-                        HStack {
-                            Text(entry.food.name).font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
-                            if entry.servings != 1 {
-                                Text("×\(String(format: "%g", entry.servings))")
-                                    .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                        Button { editing = entry } label: {
+                            HStack {
+                                Text(entry.food.name).font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
+                                if entry.food.serving != "serving" && !entry.food.serving.isEmpty {
+                                    Text(entry.food.serving)
+                                        .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                                }
+                                Spacer()
+                                Text("\(entry.calories) · \(Int(entry.protein))P")
+                                    .font(.system(size: 11)).foregroundStyle(Theme.muted)
                             }
-                            Spacer()
-                            Text("\(entry.calories) · \(Int(entry.protein))P")
-                                .font(.system(size: 11)).foregroundStyle(Theme.muted)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button { editing = entry } label: { Label("Edit quantity", systemImage: "slider.horizontal.3") }
+                            Button { app.duplicateDiaryEntry(entry) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+                            Menu {
+                                ForEach(MealType.allCases.filter { $0 != meal }) { m in
+                                    Button(m.rawValue) { app.moveDiaryEntry(entry, toMeal: m) }
+                                }
+                            } label: { Label("Move to", systemImage: "arrow.right.arrow.left") }
+                            Button(role: .destructive) { app.nutrition.remove(entry) } label: { Label("Delete", systemImage: "trash") }
                         }
                     }
                 }
             }
         }
+        .sheet(item: $editing) { QuantityEditorSheet(entry: $0) }
     }
 }
 

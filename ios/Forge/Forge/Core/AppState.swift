@@ -686,6 +686,71 @@ final class AppState {
         sync.requestSync()
     }
 
+    // MARK: - Diary editing (Phase 1.4 — edit / duplicate / move / delete)
+
+    /// The persisted diary entry backing a displayed row (nil for demo/optimistic).
+    @MainActor
+    func diaryEntry(for fe: FoodEntry) -> DiaryEntry? {
+        let id = DiaryBridge.diaryID(for: fe)
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == id })
+        return try? PersistenceService.context.fetch(d).first
+    }
+
+    /// Build the editor engine for a row: rich (units + grams) when the entry has a
+    /// gram basis, else nil so the caller uses honest multiplier editing.
+    @MainActor
+    func quantityEditor(for fe: FoodEntry) -> QuantityEditorEngine? {
+        guard let d = diaryEntry(for: fe), let food = CanonicalFood(editableFrom: d) else { return nil }
+        return QuantityEditorEngine(food: food, amount: d.amount, unitID: d.unitID)
+    }
+
+    /// Write an editor's quantity back to the diary (real accounts). Remembers the
+    /// amount+unit for that food so it pre-fills next time.
+    @MainActor
+    func applyQuantityEdit(_ fe: FoodEntry, engine: QuantityEditorEngine) {
+        guard !isDemoAccount, let consumed = engine.nutrients else { return }
+        PersistenceService.updateDiaryQuantity(
+            entryID: DiaryBridge.diaryID(for: fe), amount: engine.amount, unitID: engine.unitID,
+            unitLabel: engine.unit.label, grams: engine.grams, gramSource: engine.unit.source.rawValue,
+            consumed: consumed, context: PersistenceService.context)
+        FoodQuantityMemory().remember(foodID: engine.food.id, amount: engine.amount, unitID: engine.unitID)
+        nutrition.reloadDiary(); sync.requestSync()
+    }
+
+    /// Multiplier edit for a basis-less entry (no gram data): scale by a new amount.
+    @MainActor
+    func applyMultiplierEdit(_ fe: FoodEntry, newAmount: Double) {
+        guard !isDemoAccount, newAmount > 0 else { return }
+        PersistenceService.updateDiaryQuantity(entryID: DiaryBridge.diaryID(for: fe),
+                                               newAmount: newAmount, context: PersistenceService.context)
+        nutrition.reloadDiary(); sync.requestSync()
+    }
+
+    @MainActor
+    func duplicateDiaryEntry(_ fe: FoodEntry, toMeal meal: MealType? = nil) {
+        guard !isDemoAccount else {
+            let copy = FoodEntry(meal: meal ?? fe.meal, food: fe.food, servings: fe.servings, time: "Now")
+            nutrition.entries.append(copy); return
+        }
+        PersistenceService.duplicateDiaryEntry(entryID: DiaryBridge.diaryID(for: fe),
+                                               toMeal: meal?.rawValue, context: PersistenceService.context)
+        nutrition.reloadDiary(); sync.requestSync()
+    }
+
+    @MainActor
+    func moveDiaryEntry(_ fe: FoodEntry, toMeal meal: MealType) {
+        guard fe.meal != meal else { return }
+        guard !isDemoAccount else {
+            if let i = nutrition.entries.firstIndex(where: { $0.id == fe.id }) {
+                nutrition.entries[i] = FoodEntry(meal: meal, food: fe.food, servings: fe.servings, time: fe.time)
+            }
+            return
+        }
+        PersistenceService.moveDiaryEntry(entryID: DiaryBridge.diaryID(for: fe), toMeal: meal.rawValue,
+                                          context: PersistenceService.context)
+        nutrition.reloadDiary(); sync.requestSync()
+    }
+
     /// Publish today's directive to the home-screen widget's shared container
     /// and push it to the paired Apple Watch.
     func publishWidgetSnapshot() {
