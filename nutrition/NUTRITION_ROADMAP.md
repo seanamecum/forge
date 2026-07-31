@@ -290,6 +290,44 @@ recents/favorites/frequently-eaten + unified search UI over the current provider
 (USDA/OFF/barcode) → 2.3 server-side Forge Food Index + bulk imports + one search
 endpoint → 2.4 typo/semantic/AI ranking layer (Phase 7 tie-in).
 
+### 3.9 Smart Meal Memory & prediction — "it already knows what I'll eat"
+The goal is that after a few weeks, Forge predicts most of what a user is about to
+log — logging should feel almost effortless, not just "findable." This is a
+first-class, pure, testable **prediction layer over the diary** (which already
+captures the needed signals from Phase 1.2: precise `loggedAt`, meal, food identity,
+exact quantity — no backfill).
+
+- **Smart Meal Memory (the headline):** Forge remembers **complete meals**, not just
+  foods. It groups diary entries into meal occurrences (same day + meal + close in
+  time), finds **recurring meal-sets** across days (e.g. "3 eggs + sourdough + coffee"
+  every weekday morning), and proactively offers **"Log your usual breakfast?"** —
+  **one tap** to log the whole set. Works for post-workout meals, restaurant orders,
+  shakes, and anything repeated. Partial-match aware: if you've logged 1 of the 3, it
+  offers the rest.
+- **Prediction / habit learning:** ranks likely next foods + meals from the user's own
+  history by **frequency × recency × time-of-day × weekday/weekend × meal context**
+  (and later location / workout timing when available). Surfaces before you type.
+- **One-tap logging** of frequent foods and remembered meals; **recents / favorites /
+  frequently-eaten** derived from the diary.
+- **Per-food serving memory** (already built — `FoodQuantityMemory`): remembers your
+  preferred amount+unit for every food, so a one-tap re-log uses *your* usual serving.
+- **Editing faster than logging:** editing an existing meal (Phase 1.4) is already
+  tap→adjust; remembered-meal one-tap makes new logging just as fast.
+- **One engine, many inputs:** natural-language ("3 eggs and toast", "Chipotle chicken
+  bowl", "large Starbucks latte"), **voice**, and **meal-photo** all resolve through
+  the *same* `FoodSearchProvider` + `EntryIntent` pipeline (§3.6) — they produce food/
+  quantity candidates that flow into the identical dedupe/rank/log path. Custom
+  modifications ("extra chicken", "no cheese") adjust a base food/recipe's nutrients.
+- **Global + scale:** every country/language, major grocery + restaurant chains, local
+  brands, community foods — served by the §3.8 server-side index; the prediction layer
+  is per-user and local (instant, offline), independent of catalog size.
+
+**Architecture (build now, 2.2a):** pure `MealMemory` (recurring-meal detection →
+`RememberedMeal` with occurrences/recency/time-of-day/weekday bias) + `MealSuggester`
+(context → ranked meal + food suggestions with confidence, partial-match). Modular,
+additive, fully tested over synthetic diary histories. One-tap logging + proactive UI
+follow in 2.2b/2.2c.
+
 ---
 
 ## 4. Serving-size & quantity architecture (core requirement)
