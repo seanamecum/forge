@@ -237,6 +237,59 @@ interfaces), and **none may fabricate nutrition values or medical claims**:
   recipes.
 Each ships behind a feature flag, is explainable, and degrades gracefully offline.
 
+### 3.7 The bar, food identity, confidence & dedup/merge (Phase 2's make-or-break)
+**Bar:** the best food logging on any platform — beating MacroFactor, Cronometer,
+MyFitnessPal, and Lose It on **speed, accuracy, and UX**, not matching them. Users
+should **almost never fail to find a food**, and the **correct food is usually the
+first result**.
+
+**Every food carries identity + trust (first-class fields, stored + synced):**
+- `source`: `usda` · `openFoodFacts` · `verifiedBrand`/manufacturer · `restaurant` ·
+  `community` · `user`.
+- `confidence` (0–1): computed from source reliability × data completeness (macros +
+  micros present) × verification × corroboration across sources × freshness. Shown as
+  a badge; drives ranking and the "incomplete/suspicious" flag.
+- `attribution` + `sourceID` + `upc?` + `updatedAt` + `verifiedAt?`.
+- Never fabricated values; low-confidence/incomplete entries are visibly flagged.
+
+**Dedup → intelligent MERGE (never ten near-identical rows):** results are grouped
+by `upc`, else by a normalized signature (lowercased name + brand + rounded per-100 g
+macro fingerprint). Within a group Forge **merges** into one canonical result —
+preferring the most authoritative/complete source for each field, filling missing
+micros from corroborating sources, and keeping the union of portions — with the
+merge provenance retained. The user sees **one** trustworthy entry, expandable to
+"other sources," not a wall of duplicates.
+
+**Ranking (correct food first):** a scored blend of query relevance (exact/prefix/
+fuzzy) × **personal history** (recents, favorites, frequently-eaten for THIS user) ×
+confidence × data completeness × popularity × locale match. The ranker learns from
+what the user actually picks. Personal shortcuts win ties.
+
+### 3.8 Scale architecture (hundreds of millions of foods, continuous updates)
+On-device search over hundreds of millions of foods is infeasible, so:
+- **Server-side Forge Food Index** (Postgres + a search index, e.g. trigram/FTS →
+  vector for semantic later) owns the merged, deduped, confidence-scored catalog,
+  fed by periodic **USDA + Open Food Facts bulk imports** and live provider
+  back-fill. The client calls **one Forge search endpoint** — never raw provider
+  APIs — so ranking/dedup/merge/licensing all live server-side and evolve without an
+  app update.
+- **Client cache (offline-first):** recents, favorites, frequently-eaten, and a
+  bounded LRU of recently-seen foods are cached locally for instant + offline
+  logging. The `FoodSearchProvider` protocol lets the client swap "local cache" and
+  "Forge search API" behind one interface.
+- **Continuous updates:** the index refreshes from providers on a schedule; each food
+  row keeps `updatedAt`, and corrections (community/user) are versioned with audit
+  history. Confidence recomputes as sources corroborate.
+- **Client stays thin + testable:** the dedup/merge/ranking/confidence logic is
+  authored as **pure Swift engines** (tested now, Phase 2.1) and mirrored server-side,
+  so behavior is verifiable and identical whether results come from cache or the API.
+
+**Phase 2 sub-milestones:** 2.1 pure search core (food identity + `confidence` +
+ranker + dedup/merge + `FoodSearchProvider` protocol, all tested) → 2.2 local cache +
+recents/favorites/frequently-eaten + unified search UI over the current providers
+(USDA/OFF/barcode) → 2.3 server-side Forge Food Index + bulk imports + one search
+endpoint → 2.4 typo/semantic/AI ranking layer (Phase 7 tie-in).
+
 ---
 
 ## 4. Serving-size & quantity architecture (core requirement)
@@ -301,11 +354,14 @@ Every screen has explicit **empty / incomplete / offline** states and never show
 
 - **Phase 0 — this audit.** ✅
 - **Phase 1 — Serving-size & quantity engine + real diary log model.** *(recommended first)* Grams-canonical `FoodItem`/`FoodPortion`, pure **conversion + scaling engine**, `DiaryEntry` (unit/grams/snapshot), quantity editor UX, diary CRUD (edit/duplicate/delete inline), **log to any date**. Migrate `NutritionEntryRecord`. Fully unit-testable; de-risks the data model before external providers.
-- **Phase 2 — Federated food data + unified search core.** `FoodSearchProvider`
-  protocol + ranking/merge/cache pipeline; USDA FDC import, OFF bulk cache,
-  dedup/labeling/attribution, **recents/favorites/frequently-eaten**, custom foods,
-  create-in-30 s, global barcode + offline caching. (Ranking + cache schema designed
-  to accept typo/NLP/AI layers without rework.)
+- **Phase 2 — Federated food data + unified search (the make-or-break; see §3.7–3.8).**
+  - **2.1** Pure search core: food identity (`source` + `confidence`), the ranker,
+    the dedup/merge engine, and the `FoodSearchProvider` protocol — all tested.
+  - **2.2** Local cache + recents/favorites/frequently-eaten + the unified search UI
+    over today's providers (USDA/OFF/barcode), create-in-30 s.
+  - **2.3** Server-side Forge Food Index + USDA/OFF bulk imports + one search endpoint
+    (scales to hundreds of millions; ranking/dedup/merge server-side).
+  - **2.4** Typo/semantic/AI ranking layer (Phase 7 tie-in). Correct food usually first.
 - **Phase 3 — Daily experience.** Consumed/remaining, fiber + priority micros from logs, meal timeline, weekly averages, nutrient detail + top sources, charts, states.
 - **Phase 4 — Recipes, meals, multi-add, copy day/meal, quick-add.**
 - **Phase 4.5 — Effortless interaction layer (§3.5).** Swipe-to-duplicate, long-press
