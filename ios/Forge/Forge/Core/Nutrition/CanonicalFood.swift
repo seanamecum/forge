@@ -19,15 +19,35 @@ struct CanonicalFood: Codable, Equatable, Identifiable, Sendable {
     /// The unit id the editor should default to (usually a natural portion).
     var defaultUnitID: String
 
+    // Identity + trust (first-class; drive the badge, ranking, and dedup/merge).
+    var source: FoodSource
+    var verified: Bool
+    var upc: String?
+    var updatedAt: Date?
+    /// Trust score (0–1). Defaults to the base score from source × completeness ×
+    /// verification; the search pipeline may raise it when sources corroborate.
+    var confidence: Double
+
     init(id: String, name: String, brand: String? = nil, per100g: NutrientVector,
-         portions: [ServingUnit] = [], defaultUnitID: String? = nil) {
+         portions: [ServingUnit] = [], defaultUnitID: String? = nil,
+         source: FoodSource = .user, verified: Bool = false, upc: String? = nil,
+         updatedAt: Date? = nil, confidence: Double? = nil) {
         self.id = id
         self.name = name
         self.brand = brand
         self.per100g = per100g
         self.portions = portions
         self.defaultUnitID = defaultUnitID ?? portions.first?.id ?? ServingUnit.gram.id
+        self.source = source
+        self.verified = verified
+        self.upc = upc
+        self.updatedAt = updatedAt
+        self.confidence = confidence
+            ?? FoodConfidence.score(source: source, completeness: per100g.completenessScore(), verified: verified)
     }
+
+    /// Below-threshold confidence → the UI flags the entry as low/incomplete.
+    var isLowConfidence: Bool { confidence < FoodConfidence.lowThreshold }
 
     /// Every unit this food can be logged in: its own portions first (natural), then
     /// the always-available mass units. Deduplicated by id.
@@ -41,13 +61,8 @@ struct CanonicalFood: Codable, Equatable, Identifiable, Sendable {
     var defaultUnit: ServingUnit { unit(id: defaultUnitID) ?? .gram }
 
     /// Data-completeness (0–1) over the priority nutrient set — drives the
-    /// "incomplete entry" flag. Macros are weighted heavily.
-    var completeness: Double {
-        let macroKnown = Double(per100g.knownMacros.count) / Double(Nutrient.macros.count)
-        let microSet: [Nutrient] = [.fiber, .sugar, .sodium, .potassium, .calcium, .iron]
-        let microKnown = Double(microSet.filter { per100g.has($0) }.count) / Double(microSet.count)
-        return macroKnown * 0.8 + microKnown * 0.2
-    }
+    /// "incomplete entry" flag and confidence. Macros are weighted heavily.
+    var completeness: Double { per100g.completenessScore() }
 }
 
 /// A user's chosen amount + unit for a food. The canonical grams and the resolution
