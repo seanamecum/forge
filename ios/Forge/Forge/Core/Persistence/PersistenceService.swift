@@ -477,6 +477,49 @@ enum PersistenceService {
         try? context.save()
     }
 
+    /// Replace a logged entry's quantity wholesale (amount + unit + recomputed
+    /// nutrition) from the editor. Grams-accurate when the entry has a basis.
+    static func updateDiaryQuantity(entryID: String, amount: Double, unitID: String,
+                                    unitLabel: String, grams: Double?, gramSource: String,
+                                    consumed: NutrientVector, context: ModelContext) {
+        guard amount > 0 else { return }
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == entryID })
+        guard let e = (try? context.fetch(d))?.first else { return }
+        e.amount = amount; e.unitID = unitID; e.unitLabel = unitLabel
+        e.grams = grams; e.gramSource = gramSource
+        e.consumedJSON = DiaryEntry.encode(consumed)
+        SyncStamp.touch(e)
+        try? context.save()
+    }
+
+    /// Move an entry to another meal (drag between meals). Sync-safe (re-marks dirty).
+    static func moveDiaryEntry(entryID: String, toMeal meal: String, context: ModelContext) {
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == entryID })
+        guard let e = (try? context.fetch(d))?.first, e.meal != meal else { return }
+        e.meal = meal
+        SyncStamp.touch(e)
+        try? context.save()
+    }
+
+    /// Duplicate a logged entry (a fresh id + "now" timestamp) — "eat this again" /
+    /// copy. Returns the new entry's id. The copy is its own syncable record.
+    @discardableResult
+    static func duplicateDiaryEntry(entryID: String, toMeal meal: String? = nil,
+                                    at: Date = .now, context: ModelContext) -> String? {
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == entryID })
+        guard let src = (try? context.fetch(d))?.first else { return nil }
+        let newID = UUID().uuidString
+        let copy = DiaryEntry(
+            entryID: newID, day: Calendar.current.startOfDay(for: at), loggedAt: at,
+            meal: meal ?? src.meal, foodID: src.foodID, foodName: src.foodName,
+            foodBrand: src.foodBrand, foodSource: src.foodSource,
+            amount: src.amount, unitID: src.unitID, unitLabel: src.unitLabel,
+            grams: src.grams, gramSource: src.gramSource,
+            consumedJSON: src.consumedJSON, per100gJSON: src.per100gJSON)
+        context.insert(copy); try? context.save()
+        return newID
+    }
+
     // MARK: - Legacy nutrition migration → diary
 
     private static let diaryMigrationKey = "forge.diaryMigrated.v1"
