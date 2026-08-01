@@ -23,7 +23,7 @@ struct MealItem: Equatable, Hashable, Codable, Sendable {
     var unitLabel: String
 }
 
-enum WeekdayBias: String, Codable, Sendable { case weekday, weekend, any }
+// `WeekdayBias` now lives in the unified personalization core (domain-agnostic).
 
 /// A meal Forge has learned the user eats repeatedly — "3 eggs + sourdough + coffee",
 /// the post-workout shake, the usual Chipotle order. Carries how often + when it
@@ -81,18 +81,9 @@ enum MealMemory {
         let cutoff = calendar.date(byAdding: .day, value: -freshnessDays, to: now) ?? .distantPast
         var out: [RememberedMeal] = []
         for (sigKey, occs) in groups where occs.count >= minOccurrences {
-            let last = occs.map(\.loggedAt).max() ?? now
-            guard last >= cutoff else { continue }
-            let first = occs.map(\.loggedAt).min() ?? last
-            let hours = occs.map { calendar.component(.hour, from: $0.loggedAt) }.sorted()
-            let typicalHour = hours[hours.count / 2]
-            let weekendCount = occs.filter { calendar.isDateInWeekend($0.day) }.count
-            let bias: WeekdayBias = {
-                let frac = Double(weekendCount) / Double(occs.count)
-                if frac >= 0.75 { return .weekend }
-                if frac <= 0.25 { return .weekday }
-                return .any
-            }()
+            // Learn the "when/how-often" via the unified habit learner.
+            guard let habit = HabitScore.profile(occurrenceTimes: occs.map(\.loggedAt), now: now, calendar: calendar),
+                  habit.lastSeen >= cutoff else { continue }
             // For each food in the meal, the amount+unit the user logs most often.
             let allItems = occs.flatMap(\.items)
             var byFood: [String: [MealItem]] = [:]
@@ -106,8 +97,8 @@ enum MealMemory {
 
             out.append(RememberedMeal(
                 id: sigKey, meal: occs[0].meal, items: items,
-                occurrences: occs.count, firstSeen: first, lastSeen: last,
-                weekdayBias: bias, typicalHour: typicalHour))
+                occurrences: habit.occurrences, firstSeen: habit.firstSeen, lastSeen: habit.lastSeen,
+                weekdayBias: habit.weekdayBias, typicalHour: habit.typicalHour))
         }
         // Most-established first.
         return out.sorted { ($0.occurrences, $0.lastSeen) > ($1.occurrences, $1.lastSeen) }

@@ -48,43 +48,18 @@ enum MealSuggester {
             let missing = meal.items.filter { !context.alreadyLoggedFoodIDs.contains($0.foodID) }
             if missing.isEmpty { return nil }                 // already fully logged → suppress
 
-            var score = 0.35 + 0.4 * frequencyScore(meal.occurrences)   // base from how established it is
-            score *= recencyScore(lastSeen: meal.lastSeen, now: context.now, calendar: cal)
-            score *= timeOfDayScore(typicalHour: meal.typicalHour, nowHour: hour, mealMatched: context.meal != nil)
-            score *= weekdayScore(bias: meal.weekdayBias, isWeekend: isWeekend)
+            // Nutrition is one consumer of the unified habit-scoring engine.
+            var score = 0.35 + 0.4 * HabitScore.frequency(meal.occurrences)   // base from how established it is
+            score *= HabitScore.recency(lastSeen: meal.lastSeen, now: context.now,
+                                        calendar: cal, freshnessDays: MealMemory.freshnessDays)
+            score *= HabitScore.timeOfDay(typicalHour: meal.typicalHour, nowHour: hour,
+                                          strongContext: context.meal != nil)
+            score *= HabitScore.weekday(bias: meal.weekdayBias, isWeekend: isWeekend)
 
             guard score >= minScore else { return nil }
             return MealSuggestion(meal: meal, score: min(1, score), missingItems: missing)
         }
         .sorted { $0.score > $1.score }
-    }
-
-    // MARK: - Signals (each 0–1)
-
-    static func frequencyScore(_ occurrences: Int) -> Double {
-        min(1, log(Double(occurrences) + 1) / log(20))    // ~1.0 near 19 occurrences
-    }
-
-    static func recencyScore(lastSeen: Date, now: Date, calendar: Calendar) -> Double {
-        let days = calendar.dateComponents([.day], from: lastSeen, to: now).day ?? 0
-        if days <= 2 { return 1 }
-        return max(0.3, 1 - Double(days) / Double(MealMemory.freshnessDays))
-    }
-
-    /// Gaussian-ish proximity to the meal's usual hour. When the user is already in a
-    /// specific meal section, time matters less (the section is the strong signal).
-    static func timeOfDayScore(typicalHour: Int, nowHour: Int, mealMatched: Bool) -> Double {
-        let diff = min(abs(typicalHour - nowHour), 24 - abs(typicalHour - nowHour))   // wrap around midnight
-        let base = max(0, 1 - Double(diff) / 6.0)          // full within the hour, ~0 by 6 h off
-        return mealMatched ? (0.6 + 0.4 * base) : base     // section context floors it at 0.6
-    }
-
-    static func weekdayScore(bias: WeekdayBias, isWeekend: Bool) -> Double {
-        switch bias {
-        case .any: return 1
-        case .weekday: return isWeekend ? 0.5 : 1
-        case .weekend: return isWeekend ? 1 : 0.5
-        }
     }
 }
 
