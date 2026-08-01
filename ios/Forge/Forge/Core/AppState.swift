@@ -751,6 +751,60 @@ final class AppState {
         nutrition.reloadDiary(); sync.requestSync()
     }
 
+    // MARK: - Smart Meal Memory & personalization (Phase 2.2)
+
+    /// This account's recent diary as personalization signals (real accounts only —
+    /// demo never learns real personalization).
+    @MainActor
+    func diaryHistoryLogs() -> [LoggedFood] {
+        guard !isDemoAccount else { return [] }
+        return PersistenceService.loadDiaryHistory().map(LoggedFood.init(entry:))
+    }
+
+    /// Complete meals Forge has learned this account eats repeatedly.
+    @MainActor
+    func rememberedMeals(now: Date = .now) -> [RememberedMeal] {
+        MealMemory.rememberedMeals(from: diaryHistoryLogs(), now: now)
+    }
+
+    /// Proactive "Log your usual …" suggestions for the current moment / meal section,
+    /// partial-match aware and suppressing anything already fully logged today.
+    @MainActor
+    func mealSuggestions(for meal: MealType? = nil, now: Date = .now) -> [MealSuggestion] {
+        guard !isDemoAccount else { return [] }
+        let today = PersistenceService.loadTodayDiary()
+        let logged = Set(today.filter { meal == nil || $0.meal == meal!.rawValue }.map(\.foodID))
+        let ctx = SuggestionContext(now: now, meal: meal, alreadyLoggedFoodIDs: logged)
+        return MealSuggester.suggestions(remembered: rememberedMeals(now: now), context: ctx)
+    }
+
+    /// One tap logs a remembered meal — re-logs each food from the user's most recent
+    /// version of it (its nutrition, their usual serving), into today's meal.
+    @MainActor
+    func logRememberedMeal(_ suggestion: MealSuggestion, into meal: MealType) {
+        guard !isDemoAccount else { return }
+        for item in suggestion.itemsToLog {
+            guard let latest = PersistenceService.latestDiaryEntry(foodID: item.foodID) else { continue }
+            PersistenceService.duplicateDiaryEntry(entryID: latest.entryID, toMeal: meal.rawValue,
+                                                   context: PersistenceService.context)
+        }
+        nutrition.reloadDiary()
+        sync.requestSync()
+    }
+
+    /// Personalization signals that bias food-search ranking toward the user's own
+    /// foods (frequency + recents now; favorites when that entity lands).
+    @MainActor
+    func foodPersonalSignals(now: Date = .now) -> PersonalSignals {
+        guard !isDemoAccount else { return .none }
+        let logs = diaryHistoryLogs()
+        var signals = PersonalSignals()
+        signals.frequency = Dictionary(uniqueKeysWithValues:
+            MealMemory.frequentFoods(from: logs, now: now).map { ($0.foodID, $0.count) })
+        signals.recentFoodIDs = MealMemory.recentFoods(from: logs).map(\.foodID)
+        return signals
+    }
+
     /// Publish today's directive to the home-screen widget's shared container
     /// and push it to the paired Apple Watch.
     func publishWidgetSnapshot() {

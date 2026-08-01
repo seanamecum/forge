@@ -446,6 +446,28 @@ enum PersistenceService {
         return (try? context.fetch(d)) ?? []
     }
 
+    /// Recent diary history (default 60 days) — the signal source for Smart Meal
+    /// Memory + personalization. Oldest→newest.
+    @MainActor
+    static func loadDiaryHistory(days: Int = 60) -> [DiaryEntry] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: startOfToday()) ?? .distantPast
+        let d = FetchDescriptor<DiaryEntry>(
+            predicate: #Predicate { $0.day >= cutoff },
+            sortBy: [SortDescriptor(\.loggedAt)])
+        return (try? context.fetch(d)) ?? []
+    }
+
+    /// The user's most recent log of a given food — the template a one-tap
+    /// "log your usual" clones (re-logs exactly what they normally eat).
+    @MainActor
+    static func latestDiaryEntry(foodID: String) -> DiaryEntry? {
+        var d = FetchDescriptor<DiaryEntry>(
+            predicate: #Predicate { $0.foodID == foodID },
+            sortBy: [SortDescriptor(\.loggedAt, order: .reverse)])
+        d.fetchLimit = 1
+        return try? context.fetch(d).first
+    }
+
     /// The diary for a specific calendar day (past/future logging).
     @MainActor
     static func loadDiary(day: Date) -> [DiaryEntry] {
