@@ -2,12 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap");
-
+/* Fonts are loaded via next/font in app/layout.tsx (self-hosted, non-blocking).
+   These vars are fallbacks; next/font overrides them with the self-hosted faces. */
 :root {
   color-scheme: dark;
   --font-display: "Cormorant Garamond", "ui-serif", Georgia, serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Offset in-page anchor targets so section headings clear the sticky nav. */
+section[id] {
+  scroll-margin-top: 6rem;
+}
+
+/* Never let content hide under a landscape notch; 0 on non-notched/portrait. */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* On touch devices, guarantee comfortable ~44px tap targets without changing
+   the desktop (mouse/trackpad) sizing. */
+@media (pointer: coarse) {
+  .btn-gold,
+  .btn-ghost,
+  .input,
+  .btn-quiet {
+    min-height: 44px;
+  }
+  .btn-quiet {
+    min-width: 44px;
+    justify-content: center;
+  }
 }
 
 html,

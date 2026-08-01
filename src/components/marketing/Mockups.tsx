@@ -19,7 +19,14 @@ function sparkPath(data: number[], w: number, h: number): { line: string; area: 
 function Spark({ id, data, w = 120, h = 34, color = "#d4af37" }: { id: string; data: number[]; w?: number; h?: number; color?: string }) {
   const { line, area } = sparkPath(data, w, h);
   return (
-    <svg width={w} height={h} aria-hidden className="overflow-visible">
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      width="100%"
+      height={h}
+      preserveAspectRatio="none"
+      aria-hidden
+      className="block w-full overflow-visible"
+    >
       <defs>
         <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.28" />
@@ -132,7 +139,7 @@ function MetricTile({ id, label, value, delta, tone, data }: { id: string; label
 /** Phone mockup for the "mobile app" section. */
 export function PhoneMockup() {
   return (
-    <div className="relative mx-auto w-[264px]">
+    <div className="relative mx-auto w-full max-w-[264px]">
       <div className="rounded-[2.6rem] border border-gold-400/20 bg-obsidian-900 p-3 shadow-gold-strong">
         <div className="relative overflow-hidden rounded-[2rem] border border-white/6 bg-obsidian-950">
           {/* notch */}
