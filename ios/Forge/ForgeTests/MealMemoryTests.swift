@@ -143,6 +143,36 @@ final class MealMemoryTests: XCTestCase {
         XCTAssertTrue(MealSuggester.suggestions(remembered: remembered, context: ctx).isEmpty)
     }
 
+    // MARK: - Explainability (never an unexplained recommendation)
+
+    func testEverySuggestionCarriesAConcreteReason() {
+        var logs: [LoggedFood] = []
+        // Weekday breakfasts (Mon–Fri near the ref week) at 8 am.
+        for d in [1, 2, 5, 6, 7] { logs += log(d, hour: 8, meal: .breakfast, foods: breakfast, from: ref) }
+        let remembered = MealMemory.rememberedMeals(from: logs, now: ref, calendar: cal)
+        let morning = cal.date(bySettingHour: 8, minute: 0, second: 0, of: ref)!
+        let s = MealSuggester.suggestions(remembered: remembered,
+                                          context: SuggestionContext(now: morning, meal: .breakfast, calendar: cal)).first!
+        XCTAssertFalse(s.reason.isEmpty)                       // never unexplained
+        XCTAssertTrue(s.reason.contains("\(s.meal.occurrences)×"))   // concrete count
+        XCTAssertTrue(s.reason.contains("weekday mornings"))         // learned timing
+    }
+
+    func testReasonReflectsWeekendAndTimeOfDay() {
+        // A weekend evening dinner.
+        func at(_ y: Int, _ m: Int, _ d: Int, _ h: Int) -> Date { cal.date(from: DateComponents(year: y, month: m, day: d, hour: h))! }
+        let weekend = [(2026,2,21,19), (2026,2,22,19), (2026,2,28,19)]   // Sat/Sun/Sat
+        let logs = weekend.flatMap { w in
+            [("steak","Steak"), ("potato","Potato")].map {
+                LoggedFood(day: cal.startOfDay(for: at(w.0,w.1,w.2,w.3)), loggedAt: at(w.0,w.1,w.2,w.3),
+                           meal: MealType.dinner.rawValue, foodID: $0.0, foodName: $0.1, amount: 1, unitID: "serving", unitLabel: "serving")
+            }
+        }
+        let m = MealMemory.rememberedMeals(from: logs, now: ref, calendar: cal).first!
+        let reason = MealSuggester.reason(for: m, now: ref, calendar: cal)
+        XCTAssertTrue(reason.contains("weekend evenings"))
+    }
+
     func testTimeOfDayRanksTheRightMealFirst() {
         var logs: [LoggedFood] = []
         for d in [1, 2, 3, 4, 5] { logs += log(d, hour: 8, meal: .breakfast, foods: breakfast, from: ref) }
