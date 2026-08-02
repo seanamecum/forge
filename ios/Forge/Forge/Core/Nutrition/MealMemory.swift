@@ -37,6 +37,8 @@ struct RememberedMeal: Identifiable, Equatable, Sendable {
     var lastSeen: Date
     var weekdayBias: WeekdayBias
     var typicalHour: Int
+    /// Recency-weighted occurrence mass — drives ranking (adaptive, not sticky).
+    var recencyWeight: Double = 0
 
     /// "your usual breakfast", "your usual post-workout shake", etc.
     var label: String { "your usual \(meal.lowercased())" }
@@ -98,10 +100,11 @@ enum MealMemory {
             out.append(RememberedMeal(
                 id: sigKey, meal: occs[0].meal, items: items,
                 occurrences: habit.occurrences, firstSeen: habit.firstSeen, lastSeen: habit.lastSeen,
-                weekdayBias: habit.weekdayBias, typicalHour: habit.typicalHour))
+                weekdayBias: habit.weekdayBias, typicalHour: habit.typicalHour,
+                recencyWeight: habit.recencyWeightedCount))
         }
-        // Most-established first.
-        return out.sorted { ($0.occurrences, $0.lastSeen) > ($1.occurrences, $1.lastSeen) }
+        // Most-established first (by recency-weighted mass, then last seen).
+        return out.sorted { ($0.recencyWeight, $0.lastSeen) > ($1.recencyWeight, $1.lastSeen) }
     }
 
     // MARK: - Frequent / recent foods

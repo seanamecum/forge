@@ -50,8 +50,9 @@ enum MealSuggester {
             let missing = meal.items.filter { !context.alreadyLoggedFoodIDs.contains($0.foodID) }
             if missing.isEmpty { return nil }                 // already fully logged → suppress
 
-            // Nutrition is one consumer of the unified habit-scoring engine.
-            var score = 0.35 + 0.4 * HabitScore.frequency(meal.occurrences)   // base from how established it is
+            // Nutrition is one consumer of the unified habit-scoring engine. Ranking
+            // uses the recency-weighted mass so a changed routine adapts (not sticky).
+            var score = 0.35 + 0.4 * HabitScore.weightedFrequency(meal.recencyWeight)
             score *= HabitScore.recency(lastSeen: meal.lastSeen, now: context.now,
                                         calendar: cal, freshnessDays: MealMemory.freshnessDays)
             score *= HabitScore.timeOfDay(typicalHour: meal.typicalHour, nowHour: hour,

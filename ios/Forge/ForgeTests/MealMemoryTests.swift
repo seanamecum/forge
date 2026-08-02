@@ -143,6 +143,25 @@ final class MealMemoryTests: XCTestCase {
         XCTAssertTrue(MealSuggester.suggestions(remembered: remembered, context: ctx).isEmpty)
     }
 
+    // MARK: - Adaptivity (habits change; recent wins)
+
+    func testNewHabitOutranksAFadingOldOne() {
+        var logs: [LoggedFood] = []
+        // Old breakfast (eggs+coffee) logged ~3 weeks ago; still within freshness.
+        for d in [17, 18, 19, 20] { logs += log(d, hour: 8, meal: .breakfast, foods: breakfast, from: ref) }
+        // New breakfast (oats+banana) started this week.
+        let newBreakfast = [("oats", "Oats"), ("banana", "Banana")]
+        for d in [1, 2, 3, 4] { logs += log(d, hour: 8, meal: .breakfast, foods: newBreakfast, from: ref) }
+
+        let remembered = MealMemory.rememberedMeals(from: logs, now: ref, calendar: cal)
+        XCTAssertEqual(remembered.count, 2)
+        let morning = cal.date(bySettingHour: 8, minute: 0, second: 0, of: ref)!
+        let sug = MealSuggester.suggestions(remembered: remembered,
+                                            context: SuggestionContext(now: morning, meal: .breakfast, calendar: cal))
+        // The recently-adopted breakfast is suggested first — Forge adapted.
+        XCTAssertEqual(Set(sug.first?.meal.items.map(\.foodID) ?? []), ["oats", "banana"])
+    }
+
     // MARK: - Explainability (never an unexplained recommendation)
 
     func testEverySuggestionCarriesAConcreteReason() {

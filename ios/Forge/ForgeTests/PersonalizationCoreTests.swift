@@ -63,6 +63,19 @@ final class PersonalizationCoreTests: XCTestCase {
         XCTAssertEqual(HabitScore.weekday(bias: .weekend, isWeekend: true), 1)
     }
 
+    // MARK: - Adaptivity (recency-weighted)
+
+    func testRecencyWeightingFavorsRecentBehavior() {
+        // Same count (4), but one cluster is recent and one is ~3 weeks old.
+        func days(_ ds: [Int]) -> [Date] { ds.map { cal.date(byAdding: .day, value: -$0, to: now)! } }
+        let recent = HabitScore.profile(occurrenceTimes: days([1, 2, 3, 4]), now: now, calendar: cal)!
+        let old = HabitScore.profile(occurrenceTimes: days([18, 19, 20, 21]), now: now, calendar: cal)!
+        XCTAssertEqual(recent.occurrences, old.occurrences)                       // same raw count
+        XCTAssertGreaterThan(recent.recencyWeightedCount, old.recencyWeightedCount)  // recent weighs more
+        XCTAssertGreaterThan(HabitScore.weightedFrequency(recent.recencyWeightedCount),
+                             HabitScore.weightedFrequency(old.recencyWeightedCount))
+    }
+
     // MARK: - Settings (user control)
 
     func testSettingsControlPerDomain() {
