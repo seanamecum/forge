@@ -751,6 +751,51 @@ final class AppState {
         nutrition.reloadDiary(); sync.requestSync()
     }
 
+    // MARK: - Federated food search (Phase 2.2c)
+
+    /// Local-first federated search: the curated common foods (instant/offline) +
+    /// Open Food Facts (global). Merged/deduped/ranked by the pipeline, biased toward
+    /// the user's own foods via personal signals.
+    private var foodProviders: [any FoodSearchProvider] { [LocalFoodProvider(), OpenFoodFactsProvider()] }
+
+    /// Search foods for the unified search UI. Local results stream instantly; OFF
+    /// fills gaps. Ranked so the right food is usually first.
+    @MainActor
+    func searchFoods(_ query: String, limit: Int = 25) async -> [CanonicalFood] {
+        let service = FoodSearchService(providers: foodProviders, personal: foodPersonalSignals())
+        return await service.search(query, limit: limit)
+    }
+
+    /// Instant local-only results (no await on the network) — for the first keystrokes.
+    @MainActor
+    func localFoodResults(_ query: String, limit: Int = 25) -> [CanonicalFood] {
+        let candidates = CommonFoods.all.filter {
+            FoodRelevance.norm(query).isEmpty || FoodRelevance.score(query: query, name: $0.name, brand: $0.brand) > 0
+        }
+        return FoodSearchPipeline.process(candidates, query: query, personal: foodPersonalSignals(), limit: limit)
+    }
+
+    /// Barcode → canonical food (global). nil when not found.
+    func lookupBarcode(_ barcode: String) async -> CanonicalFood? {
+        await FoodSearchService(providers: foodProviders).lookup(barcode: barcode)
+    }
+
+    /// Log a searched food at a chosen quantity into a meal (the production logging
+    /// path — grams-canonical, rich re-editing). Real accounts persist + sync; demo
+    /// appends in-memory only.
+    @MainActor
+    func logFood(_ food: CanonicalFood, quantity: FoodQuantity, meal: MealType) {
+        guard let entry = DiaryEntry.log(food: food, quantity: quantity, meal: meal, at: .now) else { return }
+        if isDemoAccount {
+            if let fe = DiaryBridge.foodEntry(from: entry) { nutrition.entries.append(fe) }
+            return
+        }
+        PersistenceService.insertDiaryEntry(entry, context: PersistenceService.context)
+        FoodQuantityMemory().remember(foodID: food.id, amount: quantity.amount, unitID: quantity.unitID)
+        nutrition.reloadDiary()
+        sync.requestSync()
+    }
+
     // MARK: - Smart Meal Memory & personalization (Phase 2.2)
 
     /// This account's recent diary as personalization signals (real accounts only —
