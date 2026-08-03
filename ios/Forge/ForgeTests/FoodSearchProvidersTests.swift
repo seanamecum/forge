@@ -110,6 +110,38 @@ final class FoodSearchProvidersTests: XCTestCase {
     }
 
     @MainActor
+    func testDefaultQuantityPrefersRememberedThenPortion() {
+        UserDefaults.standard.removeObject(forKey: "forge.qty.forge-egg")   // isolate from other tests' memory
+        let app = AppState(); app.completeAuth(demo: false)
+        let egg = CommonFoods.all.first { $0.id == "forge-egg" }!
+        // No memory yet → the natural portion (1 egg).
+        var q = app.defaultQuantity(for: egg)
+        XCTAssertEqual(q.unitID, "egg"); XCTAssertEqual(q.amount, 1)
+        // After remembering 3 eggs, it pre-fills that.
+        FoodQuantityMemory().remember(foodID: "forge-egg", amount: 3, unitID: "egg")
+        q = app.defaultQuantity(for: egg)
+        XCTAssertEqual(q.amount, 3)
+        // A per-100g-only food defaults to 100 g.
+        let bare = CanonicalFood(id: "bare", name: "Mystery", per100g: NutrientVector([.calories: 200]), source: .openFoodFacts)
+        XCTAssertEqual(app.defaultQuantity(for: bare).unitID, "g")
+        XCTAssertEqual(app.defaultQuantity(for: bare).amount, 100)
+    }
+
+    @MainActor
+    func testQuickAddThenUndo() throws {
+        let ctx = PersistenceService.context
+        try? ctx.delete(model: DiaryEntry.self); try? ctx.save()
+        let app = AppState(); app.completeAuth(demo: false)
+        let egg = CommonFoods.all.first { $0.id == "forge-egg" }!
+
+        let id = app.logFood(egg, quantity: app.defaultQuantity(for: egg), meal: .breakfast)!
+        XCTAssertEqual(PersistenceService.loadTodayDiary().count, 1)
+        // One-tap undo removes it.
+        app.undoFoodLog(entryID: id)
+        XCTAssertTrue(PersistenceService.loadTodayDiary().isEmpty)
+    }
+
+    @MainActor
     func testDemoLogFoodStaysInMemory() throws {
         let ctx = PersistenceService.context
         try? ctx.delete(model: DiaryEntry.self); try? ctx.save()

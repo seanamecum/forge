@@ -94,16 +94,7 @@ struct BarcodeScanSheet: View {
         }
     }
 
-    /// A sensible default quantity — the user's remembered serving for this food, else
-    /// one natural portion (or 100 g for a bare per-100 g product).
-    private func defaultQuantity(for food: CanonicalFood) -> FoodQuantity {
-        if let last = FoodQuantityMemory().last(foodID: food.id), food.unit(id: last.unitID) != nil {
-            return FoodQuantity(amount: last.amount, unitID: last.unitID)
-        }
-        let unit = food.defaultUnit
-        return unit.kind == .mass ? FoodQuantity(amount: 100, unitID: "g")
-                                  : FoodQuantity(amount: 1, unitID: unit.id)
-    }
+    private func defaultQuantity(for food: CanonicalFood) -> FoodQuantity { app.defaultQuantity(for: food) }
 
     @ViewBuilder
     private func manualEntry(reason: String?) -> some View {

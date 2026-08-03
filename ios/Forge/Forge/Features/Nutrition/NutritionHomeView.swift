@@ -310,6 +310,8 @@ struct FoodSearchSheet: View {
     @State private var searching = false
     @State private var searchTask: Task<Void, Never>?
     @State private var picking: CanonicalFood?
+    @State private var addedCount = 0
+    @State private var lastAddedID: String?
 
     private var isIdle: Bool { query.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -324,9 +326,40 @@ struct FoodSearchSheet: View {
             .navigationTitle("Add to \(meal.rawValue)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.foregroundStyle(Theme.gold) } }
+            .safeAreaInset(edge: .bottom) { addedBar }
             .sheet(item: $picking) { food in
-                LogFoodSheet(food: food, meal: meal, onLogged: { dismiss() })
+                // Customizing keeps the search open so multi-add flow continues.
+                LogFoodSheet(food: food, meal: meal, onLogged: { addedCount += 1 })
             }
+        }
+    }
+
+    /// Tap a food → it's logged at your usual serving instantly; the sheet stays open
+    /// so a whole meal is tap-tap-tap. No screen to open, no waiting.
+    private func quickAdd(_ food: CanonicalFood) {
+        Haptics.success()
+        lastAddedID = app.logFood(food, quantity: app.defaultQuantity(for: food), meal: meal)
+        withAnimation(.snappy(duration: 0.2)) { addedCount += 1 }
+    }
+
+    /// A running count + one-tap Undo of the last add, so nothing feels risky.
+    @ViewBuilder private var addedBar: some View {
+        if addedCount > 0 {
+            HStack(spacing: 12) {
+                Text("\(addedCount) added").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.cream)
+                if let id = lastAddedID {
+                    Button {
+                        Haptics.tap(); app.undoFoodLog(entryID: id); lastAddedID = nil
+                        withAnimation { addedCount = max(0, addedCount - 1) }
+                    } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
+                        .font(.system(size: 13)).foregroundStyle(Theme.gold)
+                }
+                Spacer()
+                Button("Done") { dismiss() }.buttonStyle(GoldButtonStyle(compact: true))
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+            .overlay(Rectangle().frame(height: 0.5).foregroundStyle(Theme.faint.opacity(0.3)), alignment: .top)
         }
     }
 
@@ -335,14 +368,19 @@ struct FoodSearchSheet: View {
     private var idleSuggestions: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                // Prediction first — search is the fallback.
                 ForEach(app.mealSuggestions(for: meal)) { s in usualMealCard(s) }
 
-                let recents = app.recentLoggedFoods()
+                let frequent = app.frequentLoggedFoods(limit: 8)
+                if !frequent.isEmpty {
+                    EyebrowLabel(text: "Frequently eaten").padding(.top, 4)
+                    ForEach(frequent, id: \.foodID) { quickRecentRow($0) }
+                }
+
+                let recents = app.recentLoggedFoods(limit: 8)
                 if !recents.isEmpty {
-                    EyebrowLabel(text: "Recents").padding(.top, 4)
-                    ForEach(recents, id: \.foodID) { r in
-                        oneTapRow(name: r.foodName) { app.logRecentFood(foodID: r.foodID, into: meal); dismiss() }
-                    }
+                    EyebrowLabel(text: "Recent").padding(.top, 4)
+                    ForEach(recents, id: \.foodID) { quickRecentRow($0) }
                 }
 
                 EyebrowLabel(text: "Common foods").padding(.top, 4)
@@ -390,36 +428,49 @@ struct FoodSearchSheet: View {
     }
 
     private func resultRow(_ food: CanonicalFood) -> some View {
-        Button { picking = food } label: {
-            Card {
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(food.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.cream)
-                            .lineLimit(1)
-                        HStack(spacing: 6) {
-                            if let b = food.brand { Text(b).font(.system(size: 10.5)).foregroundStyle(Theme.muted).lineLimit(1) }
-                            SourceBadge(food: food)
+        let q = app.defaultQuantity(for: food)
+        let kcal = Int((food.nutrients(for: q).nutrients?[.calories] ?? food.per100g[.calories] ?? 0).rounded())
+        return Card {
+            HStack(spacing: 8) {
+                Button { quickAdd(food) } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(food.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.cream).lineLimit(1)
+                            HStack(spacing: 6) {
+                                if let b = food.brand { Text(b).font(.system(size: 10.5)).foregroundStyle(Theme.muted).lineLimit(1) }
+                                SourceBadge(food: food)
+                            }
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text("\(kcal)").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.gold)
+                            Text("kcal").font(.system(size: 8.5)).foregroundStyle(Theme.faint)
                         }
                     }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text("\(Int((food.per100g[.calories] ?? 0).rounded()))")
-                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.gold)
-                        Text("kcal/100g").font(.system(size: 8.5)).foregroundStyle(Theme.faint)
-                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                // Customize quantity without leaving the flow.
+                Button { picking = food } label: {
+                    Image(systemName: "slider.horizontal.3").font(.system(size: 15)).foregroundStyle(Theme.muted)
+                }
+                .buttonStyle(.plain)
             }
         }
-        .buttonStyle(.plain)
     }
 
-    private func oneTapRow(name: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: { Haptics.tap(); action() }) {
+    /// A one-tap re-log of a recent/frequent food (your usual version) — keeps the
+    /// sheet open for rapid multi-add.
+    private func quickRecentRow(_ f: MealMemory.FoodFrequency) -> some View {
+        Button {
+            Haptics.success(); app.logRecentFood(foodID: f.foodID, into: meal)
+            withAnimation(.snappy(duration: 0.2)) { addedCount += 1 }
+        } label: {
             Card {
                 HStack {
-                    Text(name).font(.system(size: 13.5)).foregroundStyle(Theme.creamDim)
+                    Text(f.foodName).font(.system(size: 13.5)).foregroundStyle(Theme.creamDim)
                     Spacer()
-                    Image(systemName: "arrow.uturn.left.circle").font(.system(size: 15)).foregroundStyle(Theme.gold)
+                    Image(systemName: "plus.circle.fill").font(.system(size: 16)).foregroundStyle(Theme.gold)
                 }
             }
         }

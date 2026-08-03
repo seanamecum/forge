@@ -780,18 +780,44 @@ final class AppState {
         await FoodSearchService(providers: foodProviders).lookup(barcode: barcode)
     }
 
+    /// A sensible default quantity for one-tap logging — the user's remembered serving
+    /// for this food (so it "already knows"), else one natural portion, else 100 g.
+    func defaultQuantity(for food: CanonicalFood) -> FoodQuantity {
+        if let last = FoodQuantityMemory().last(foodID: food.id), food.unit(id: last.unitID) != nil {
+            return FoodQuantity(amount: last.amount, unitID: last.unitID)
+        }
+        let unit = food.defaultUnit
+        return unit.kind == .mass ? FoodQuantity(amount: 100, unitID: "g")
+                                  : FoodQuantity(amount: 1, unitID: unit.id)
+    }
+
     /// Log a searched food at a chosen quantity into a meal (the production logging
     /// path — grams-canonical, rich re-editing). Real accounts persist + sync; demo
-    /// appends in-memory only.
+    /// appends in-memory only. Returns the entry id so a single tap can be undone.
+    @discardableResult
     @MainActor
-    func logFood(_ food: CanonicalFood, quantity: FoodQuantity, meal: MealType) {
-        guard let entry = DiaryEntry.log(food: food, quantity: quantity, meal: meal, at: .now) else { return }
+    func logFood(_ food: CanonicalFood, quantity: FoodQuantity, meal: MealType) -> String? {
+        guard let entry = DiaryEntry.log(food: food, quantity: quantity, meal: meal, at: .now) else { return nil }
         if isDemoAccount {
             if let fe = DiaryBridge.foodEntry(from: entry) { nutrition.entries.append(fe) }
-            return
+            return entry.entryID
         }
         PersistenceService.insertDiaryEntry(entry, context: PersistenceService.context)
         FoodQuantityMemory().remember(foodID: food.id, amount: quantity.amount, unitID: quantity.unitID)
+        nutrition.reloadDiary()
+        sync.requestSync()
+        return entry.entryID
+    }
+
+    /// Undo a just-logged food (delete the entry). Real accounts remove + sync; demo
+    /// removes the in-memory row.
+    @MainActor
+    func undoFoodLog(entryID: String) {
+        guard !isDemoAccount else {
+            nutrition.entries.removeAll { DiaryBridge.diaryID(for: $0) == entryID }
+            return
+        }
+        PersistenceService.deleteDiaryEntry(entryID: entryID, context: PersistenceService.context)
         nutrition.reloadDiary()
         sync.requestSync()
     }
