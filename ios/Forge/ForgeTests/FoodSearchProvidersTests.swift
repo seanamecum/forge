@@ -90,6 +90,26 @@ final class FoodSearchProvidersTests: XCTestCase {
     }
 
     @MainActor
+    func testRecentFoodsAndOneTapReLog() throws {
+        let ctx = PersistenceService.context
+        try? ctx.delete(model: DiaryEntry.self); try? ctx.save()
+        let app = AppState(); app.completeAuth(demo: false)
+
+        let egg = CommonFoods.all.first { $0.id == "forge-egg" }!
+        // Log it yesterday so it's a "recent".
+        let y = Calendar.current.date(byAdding: .day, value: -1, to: .now)!
+        ctx.insert(DiaryEntry.log(food: egg, quantity: FoodQuantity(amount: 3, unitID: "egg"), meal: .breakfast, at: y)!)
+        try ctx.save()
+
+        XCTAssertTrue(app.recentLoggedFoods().contains { $0.foodID == "forge-egg" })
+        // One-tap re-log clones the usual serving into today.
+        app.logRecentFood(foodID: "forge-egg", into: .breakfast)
+        let today = PersistenceService.loadTodayDiary()
+        XCTAssertEqual(today.count, 1)
+        XCTAssertEqual(today.first?.consumed[.calories], 155 * 1.5)
+    }
+
+    @MainActor
     func testDemoLogFoodStaysInMemory() throws {
         let ctx = PersistenceService.context
         try? ctx.delete(model: DiaryEntry.self); try? ctx.save()

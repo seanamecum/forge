@@ -297,48 +297,149 @@ struct NavRow<Destination: View>: View {
 
 // MARK: - Sheets
 
+/// The unified, real food search — local-first instant results + Open Food Facts,
+/// merged/deduped/ranked with the user's own history, with source badges and a
+/// quantity picker. When idle it shows the proactive "usual meal" + recents.
 struct FoodSearchSheet: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
     let meal: MealType
+
     @State private var query = ""
+    @State private var results: [CanonicalFood] = []
+    @State private var searching = false
+    @State private var searchTask: Task<Void, Never>?
+    @State private var picking: CanonicalFood?
+
+    private var isIdle: Bool { query.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         NavigationStack {
-            List(app.nutrition.search(query)) { food in
-                Button {
-                    app.nutrition.add(food: food, to: meal)
-                    dismiss()
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(food.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.cream)
-                            Text("\(food.brand.map { "\($0) · " } ?? "")\(food.serving)")
-                                .font(.system(size: 11)).foregroundStyle(Theme.muted)
-                        }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(food.calories)").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.gold)
-                            Text("\(Int(food.protein))P \(Int(food.carbs))C \(Int(food.fat))F")
-                                .font(.system(size: 10)).foregroundStyle(Theme.faint)
-                        }
-                    }
-                }
-                .listRowBackground(Theme.card)
+            ZStack {
+                Theme.bg.ignoresSafeArea()
+                if isIdle { idleSuggestions } else { resultsList }
             }
-            .scrollContentBackground(.hidden)
-            .background(Theme.bg)
             .searchable(text: $query, prompt: "Search foods")
-            .overlay {
-                if !query.isEmpty && app.nutrition.search(query).isEmpty {
-                    EmptyStateView(
-                        icon: "magnifyingglass",
-                        title: "No foods match \"\(query)\"",
-                        message: "Try the barcode scanner to look up supported packaged foods, or add a food manually.")
-                }
-            }
+            .onChange(of: query) { _, q in runSearch(q) }
             .navigationTitle("Add to \(meal.rawValue)")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.foregroundStyle(Theme.gold) } }
+            .sheet(item: $picking) { food in
+                LogFoodSheet(food: food, meal: meal, onLogged: { dismiss() })
+            }
+        }
+    }
+
+    // MARK: Idle — proactive suggestions + recents
+
+    private var idleSuggestions: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(app.mealSuggestions(for: meal)) { s in usualMealCard(s) }
+
+                let recents = app.recentLoggedFoods()
+                if !recents.isEmpty {
+                    EyebrowLabel(text: "Recents").padding(.top, 4)
+                    ForEach(recents, id: \.foodID) { r in
+                        oneTapRow(name: r.foodName) { app.logRecentFood(foodID: r.foodID, into: meal); dismiss() }
+                    }
+                }
+
+                EyebrowLabel(text: "Common foods").padding(.top, 4)
+                ForEach(CommonFoods.all.prefix(12)) { food in resultRow(food) }
+            }
+            .padding(16)
+        }
+    }
+
+    private func usualMealCard(_ s: MealSuggestion) -> some View {
+        Card(gold: true) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(Theme.gold)
+                    Text(s.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.cream)
+                }
+                Text(s.reason).font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    app.logRememberedMeal(s, into: meal); Haptics.success(); dismiss()
+                } label: { Label("Log it", systemImage: "plus.circle.fill") }
+                    .buttonStyle(GoldButtonStyle(compact: true))
+            }
+        }
+    }
+
+    // MARK: Results
+
+    private var resultsList: some View {
+        ScrollView {
+            LazyVStack(spacing: 8) {
+                ForEach(results) { food in resultRow(food) }
+                if searching {
+                    HStack(spacing: 8) { ProgressView().controlSize(.small).tint(Theme.gold)
+                        Text("Searching…").font(.system(size: 11.5)).foregroundStyle(Theme.muted) }
+                        .padding(.top, 6)
+                } else if results.isEmpty {
+                    EmptyStateView(icon: "magnifyingglass", title: "No matches for \"\(query)\"",
+                                   message: "Scan a barcode, or create the food in a few seconds.")
+                        .padding(.top, 24)
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private func resultRow(_ food: CanonicalFood) -> some View {
+        Button { picking = food } label: {
+            Card {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(food.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.cream)
+                            .lineLimit(1)
+                        HStack(spacing: 6) {
+                            if let b = food.brand { Text(b).font(.system(size: 10.5)).foregroundStyle(Theme.muted).lineLimit(1) }
+                            SourceBadge(food: food)
+                        }
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("\(Int((food.per100g[.calories] ?? 0).rounded()))")
+                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.gold)
+                        Text("kcal/100g").font(.system(size: 8.5)).foregroundStyle(Theme.faint)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func oneTapRow(name: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: { Haptics.tap(); action() }) {
+            Card {
+                HStack {
+                    Text(name).font(.system(size: 13.5)).foregroundStyle(Theme.creamDim)
+                    Spacer()
+                    Image(systemName: "arrow.uturn.left.circle").font(.system(size: 15)).foregroundStyle(Theme.gold)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Search
+
+    private func runSearch(_ q: String) {
+        searchTask?.cancel()
+        guard !q.trimmingCharacters(in: .whitespaces).isEmpty else { results = []; searching = false; return }
+        results = app.localFoodResults(q)          // instant local-first
+        searching = true
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(250))   // debounce network
+            guard !Task.isCancelled else { return }
+            let full = await app.searchFoods(q)
+            guard !Task.isCancelled else { return }
+            results = full
+            searching = false
         }
     }
 }

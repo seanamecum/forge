@@ -837,6 +837,31 @@ final class AppState {
         sync.requestSync()
     }
 
+    /// Most-recently logged distinct foods (for the search "Recents" row).
+    @MainActor
+    func recentLoggedFoods(limit: Int = 12) -> [MealMemory.FoodFrequency] {
+        guard !isDemoAccount else { return [] }
+        return MealMemory.recentFoods(from: diaryHistoryLogs(), limit: limit)
+    }
+
+    /// Most-frequently logged foods (the "Frequently eaten" row).
+    @MainActor
+    func frequentLoggedFoods(limit: Int = 12) -> [MealMemory.FoodFrequency] {
+        guard !isDemoAccount else { return [] }
+        return Array(MealMemory.frequentFoods(from: diaryHistoryLogs(), now: .now).prefix(limit))
+    }
+
+    /// One-tap re-log of a recent/frequent food — clones the user's most recent
+    /// version (their usual serving + nutrition) into the meal.
+    @MainActor
+    func logRecentFood(foodID: String, into meal: MealType) {
+        guard !isDemoAccount, let latest = PersistenceService.latestDiaryEntry(foodID: foodID) else { return }
+        PersistenceService.duplicateDiaryEntry(entryID: latest.entryID, toMeal: meal.rawValue,
+                                               context: PersistenceService.context)
+        nutrition.reloadDiary()
+        sync.requestSync()
+    }
+
     /// Personalization signals that bias food-search ranking toward the user's own
     /// foods (frequency + recents now; favorites when that entity lands).
     @MainActor
