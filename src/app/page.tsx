@@ -92,9 +92,10 @@ function Integrations() {
     <section id="integrations" className="border-t border-gold-400/10 py-16">
       <div className="mx-auto max-w-6xl px-6 text-center">
         <Reveal>
-          <div className="text-[11px] uppercase tracking-[0.22em] text-gold-300">Works with what you already wear</div>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-gold-300">Built to work with what you already wear</div>
           <p className="mx-auto mt-3 max-w-2xl text-lg text-obsidian-100">
-            Forge unifies the signals from every device and app you use — no switching, no silos.
+            At launch, Forge will bring the signals from the devices and apps you already use into one
+            place — no switching, no silos.
           </p>
         </Reveal>
         <Reveal delay={80}>
@@ -331,6 +332,9 @@ function Marketplace() {
                     <div className="stat-num text-lg text-gold-300">{p.p}</div>
                   </div>
                 ))}
+                <p className="mt-1 text-center text-[11px] text-obsidian-200">
+                  Illustrative examples — the marketplace isn&apos;t live yet.
+                </p>
               </div>
             </Reveal>
           </div>

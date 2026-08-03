@@ -41,6 +41,7 @@ export function WaitlistForm({ compact = false }: { compact?: boolean }) {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (status === "loading") return; // guard against double-submit / rapid taps
     setServerError("");
     if (!validate()) return;
     setStatus("loading");
@@ -142,7 +143,7 @@ function WaitlistSuccess({ name }: { name: string }) {
         <p className="mt-1 text-sm text-obsidian-100">
           Every friend who joins with your link moves you closer to the front. Share this:
         </p>
-        <div className="mt-3 rounded-xl border border-gold-400/15 bg-obsidian-900/60 p-4 text-sm text-cream-200">
+        <div className="mt-3 break-words rounded-xl border border-gold-400/15 bg-obsidian-900/60 p-4 text-sm text-cream-200">
           {message}
         </div>
         <button type="button" onClick={copy} className="btn-gold mt-3 w-full">

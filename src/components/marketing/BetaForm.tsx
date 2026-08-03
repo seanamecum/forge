@@ -72,6 +72,7 @@ export function BetaForm() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (status === "loading") return; // guard against double-submit / rapid taps
     setServerError("");
     if (!validate()) return;
     setStatus("loading");
