@@ -863,6 +863,20 @@ final class AppState {
                                      policy: .standard(for: surface))
     }
 
+    /// Recompute the Micronutrients screen from the last 7 days of real logged
+    /// intake (7-day-average coverage vs. reference Daily Values). Real accounts
+    /// only — demo keeps its seeded groups. Honest: only nutrients the logged foods
+    /// actually carry are shown.
+    @MainActor
+    func refreshMicronutrients() {
+        guard !isDemoAccount else { return }
+        let history = PersistenceService.loadDiaryHistory(days: 7)
+        let cal = Calendar.current
+        let daysLogged = Set(history.map { cal.startOfDay(for: $0.day) }).count
+        let total = NutrientVector.total(history.map(\.consumed))
+        nutrition.nutrientGroups = MicronutrientEngine.groups(totalConsumed: total, daysLogged: daysLogged)
+    }
+
     /// Total training volume (lb) for the trailing 7 days and the 7 days before that —
     /// the input to cross-domain load-vs-recovery insights. Real logged workouts only.
     @MainActor
