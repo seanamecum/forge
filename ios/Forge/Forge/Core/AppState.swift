@@ -842,12 +842,40 @@ final class AppState {
             candidates.append(i)
         }
         // Recovery below the user's own usual (real accounts with enough history).
-        if !isDemoAccount, let i = InsightGenerators.recoveryVsNormal(today: recovery.today.recovery, usual: usualRecovery()) {
-            candidates.append(i)
+        // Prefer the cross-domain *causal* explanation (the brain connecting sleep +
+        // training + recovery); fall back to the single-domain note when no real
+        // driver is present.
+        if !isDemoAccount {
+            let usual = usualRecovery()
+            let today = recovery.today.recovery
+            let sleep = PersistenceService.loadSleepHistory(days: 10).map(\.hours)
+            let (thisWeek, priorWeek) = weeklyTrainingVolumes()
+            if let i = CrossDomainInsights.recoveryDriver(recoveryToday: today, usual: usual,
+                                                          sleepHours: sleep,
+                                                          volumeThisWeek: thisWeek, volumePriorWeek: priorWeek) {
+                candidates.append(i)
+            } else if let i = InsightGenerators.recoveryVsNormal(today: today, usual: usual) {
+                candidates.append(i)
+            }
         }
 
         return InsightCurator.curate(candidates, now: now, dismissed: dismissalStore.load(),
                                      policy: .standard(for: surface))
+    }
+
+    /// Total training volume (lb) for the trailing 7 days and the 7 days before that —
+    /// the input to cross-domain load-vs-recovery insights. Real logged workouts only.
+    @MainActor
+    private func weeklyTrainingVolumes(now: Date = .now) -> (thisWeek: Double, priorWeek: Double) {
+        let cal = Calendar.current
+        let weekAgo = cal.date(byAdding: .day, value: -7, to: now) ?? now
+        let twoWeeksAgo = cal.date(byAdding: .day, value: -14, to: now) ?? now
+        var thisWeek = 0.0, priorWeek = 0.0
+        for w in workouts.history {
+            if w.date >= weekAgo { thisWeek += w.totalVolumeLb }
+            else if w.date >= twoWeeksAgo { priorWeek += w.totalVolumeLb }
+        }
+        return (thisWeek, priorWeek)
     }
 
     /// Dismiss an ambient insight — it goes quiet (persisted, so it stays quiet).
