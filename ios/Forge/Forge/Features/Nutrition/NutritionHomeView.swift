@@ -83,23 +83,11 @@ struct NutritionHomeView: View {
     private var macroCard: some View {
         let n = app.nutrition
         return Card(gold: true) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("\(n.calories)")
-                        .font(Theme.display(40))
-                        .foregroundStyle(Theme.goldGradient)
-                    Text("/ \(n.calorieTarget) kcal")
-                        .font(.system(size: 13)).foregroundStyle(Theme.muted)
-                    Spacer()
-                    Chip(text: "\(n.caloriesRemaining) left", tone: .gold)
-                }
-                LabeledBar(label: "Protein", valueText: "\(n.protein) / \(n.proteinTarget) g",
-                           value: Double(n.protein), target: Double(n.proteinTarget), tone: .green)
-                LabeledBar(label: "Carbs", valueText: "\(n.carbs) / \(n.carbTarget) g",
-                           value: Double(n.carbs), target: Double(n.carbTarget), tone: .gold)
-                LabeledBar(label: "Fat", valueText: "\(n.fat) / \(n.fatTarget) g",
-                           value: Double(n.fat), target: Double(n.fatTarget), tone: .amber)
-            }
+            MacroRings(calories: n.calories, calorieTarget: n.calorieTarget,
+                       protein: n.protein, proteinTarget: n.proteinTarget,
+                       carbs: n.carbs, carbTarget: n.carbTarget,
+                       fat: n.fat, fatTarget: n.fatTarget)
+                .padding(.vertical, 6)
         }
     }
 
