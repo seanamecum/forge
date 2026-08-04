@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TrainHomeView: View {
     @Environment(AppState.self) private var app
+    @State private var draftRefresh = 0
 
     var body: some View {
         NavigationStack {
@@ -9,6 +10,7 @@ struct TrainHomeView: View {
                 SectionHeader(eyebrow: "Train", title: "Workouts",
                               subtitle: "Tuned daily for recovery \(app.recovery.today.recovery) and the knee.")
 
+                resumeCard
                 quickActions
                 repeatLastCard
                 todayCard
@@ -64,6 +66,35 @@ struct TrainHomeView: View {
                                 .foregroundStyle(Theme.creamDim)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    /// An in-progress session that wasn't finished — Forge kept every set you
+    /// logged, so you pick up exactly where you left off. Nothing is ever lost.
+    @ViewBuilder
+    private var resumeCard: some View {
+        // draftRefresh is read here so a Discard tap re-evaluates this card.
+        let _ = draftRefresh
+        if !app.isDemoAccount, let draft = WorkoutDraftStore.resumable() {
+            Card(gold: true) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        EyebrowLabel(text: "Resume Workout")
+                        Text(draft.name).font(Typography.headline).foregroundStyle(Theme.cream)
+                        Text("\(draft.completedSets) set\(draft.completedSets == 1 ? "" : "s") · \(Int(draft.totalVolumeLb).formatted()) lb in progress")
+                            .font(Typography.caption).foregroundStyle(Theme.muted)
+                    }
+                    Spacer()
+                    VStack(spacing: 6) {
+                        NavigationLink { WorkoutLoggerView(plan: draft.asPlan()) } label: { Text("Resume") }
+                            .buttonStyle(GoldButtonStyle(compact: true))
+                        Button("Discard") {
+                            Haptics.soft(); WorkoutDraftStore.clear(); draftRefresh += 1
+                        }
+                        .font(Typography.caption).foregroundStyle(Theme.muted)
                     }
                 }
             }

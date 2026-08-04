@@ -9,6 +9,7 @@ struct WorkoutLoggerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.requestReview) private var requestReview
+    @Environment(\.scenePhase) private var scenePhase
 
     let plan: GeneratedWorkout
     @State private var logged: [LoggedExercise] = []
@@ -17,6 +18,7 @@ struct WorkoutLoggerView: View {
     @State private var restTotal = 0
     @State private var showExercisePicker = false
     @State private var finished = false
+    @State private var secondsSinceSave = 0
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -41,17 +43,27 @@ struct WorkoutLoggerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.bgElevated, for: .navigationBar)
         .onAppear {
-            seed()
+            restoreOrSeed()
             WorkoutLiveActivityController.start(
                 workoutName: plan.name, startedAt: startedAt, totalSets: totalSets)
         }
         .onDisappear {
+            // Abandoning mid-session keeps the draft so it can be resumed; a
+            // finished session already cleared it.
+            if !finished { autosave() }
             // Leaving the logger ends the lock-screen session either way —
             // a finished workout already ended it; an abandoned one must too.
             WorkoutLiveActivityController.end()
         }
+        .onChange(of: scenePhase) { _, phase in
+            // The critical vector: iOS can kill a backgrounded app. Save the moment
+            // we lose focus so nothing entered is ever lost.
+            if phase != .active { autosave() }
+        }
         .onReceive(timer) { _ in
             if restRemaining > 0 { restRemaining -= 1 }
+            secondsSinceSave += 1
+            if secondsSinceSave >= 3 { secondsSinceSave = 0; autosave() }
         }
         .sheet(isPresented: $showExercisePicker) {
             ExercisePickerSheet { exercise in
@@ -104,6 +116,27 @@ struct WorkoutLoggerView: View {
     }
 
     // MARK: - Logic
+
+    /// Resume a matching in-progress session if one was autosaved; otherwise seed
+    /// fresh. Restoring nothing when there's no draft is the normal path.
+    private func restoreOrSeed() {
+        guard logged.isEmpty else { return }
+        if !app.isDemoAccount, let draft = WorkoutDraftStore.load(),
+           draft.name == plan.name, !draft.exercises.isEmpty {
+            logged = draft.restore { MockData.exercise($0) }
+            startedAt = draft.startedAt
+        } else {
+            seed()
+        }
+    }
+
+    /// Persist the live session so nothing is lost before "Finish" (LC-1). Real
+    /// accounts only — demo never persists a draft.
+    private func autosave() {
+        guard !app.isDemoAccount, !finished, !logged.isEmpty else { return }
+        WorkoutDraftStore.save(.from(name: plan.name, startedAt: startedAt,
+                                     exercises: logged, savedAt: .now))
+    }
 
     private func seed() {
         guard logged.isEmpty else { return }
@@ -182,6 +215,7 @@ struct WorkoutLoggerView: View {
                                    avgRPE: averageRPE, exerciseSummary: summary,
                                    exercisesJSON: PersistenceService.encodeExercises(completed))
         PersistenceService.saveWorkout(record, context: modelContext)
+        WorkoutDraftStore.clear()   // it's a real record now — nothing left to resume
         app.requestSync()
 
         // Close the loop: real training now moves strain → Forge Score → Directive.
