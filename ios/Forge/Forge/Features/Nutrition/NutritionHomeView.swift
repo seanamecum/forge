@@ -325,9 +325,9 @@ struct FoodSearchSheet: View {
     /// Tap a food → it's logged at your usual serving instantly; the sheet stays open
     /// so a whole meal is tap-tap-tap. No screen to open, no waiting.
     private func quickAdd(_ food: CanonicalFood) {
-        Haptics.success()
+        Haptics.logged()
         lastAddedID = app.logFood(food, quantity: app.defaultQuantity(for: food), meal: meal)
-        withAnimation(.snappy(duration: 0.2)) { addedCount += 1 }
+        withAnimation(Motion.snappy) { addedCount += 1 }
     }
 
     /// A running count + one-tap Undo of the last add, so nothing feels risky.
@@ -337,16 +337,16 @@ struct FoodSearchSheet: View {
                 Text("\(addedCount) added").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.cream)
                 if let id = lastAddedID {
                     Button {
-                        Haptics.tap(); app.undoFoodLog(entryID: id); lastAddedID = nil
-                        withAnimation { addedCount = max(0, addedCount - 1) }
+                        Haptics.soft(); app.undoFoodLog(entryID: id); lastAddedID = nil
+                        withAnimation(Motion.snappy) { addedCount = max(0, addedCount - 1) }
                     } label: { Label("Undo", systemImage: "arrow.uturn.backward") }
                         .font(.system(size: 13)).foregroundStyle(Theme.gold)
                 }
                 Spacer()
                 Button("Done") { dismiss() }.buttonStyle(GoldButtonStyle(compact: true))
             }
-            .padding(.horizontal, 16).padding(.vertical, 10)
-            .background(.ultraThinMaterial)
+            .padding(.horizontal, Space.lg).padding(.vertical, Space.sm)
+            .background(Materials.bar)
             .overlay(Rectangle().frame(height: 0.5).foregroundStyle(Theme.faint.opacity(0.3)), alignment: .top)
         }
     }
@@ -388,7 +388,7 @@ struct FoodSearchSheet: View {
                 Text(s.reason).font(.system(size: 11.5)).foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 Button {
-                    app.logRememberedMeal(s, into: meal); Haptics.success(); dismiss()
+                    app.logRememberedMeal(s, into: meal); Haptics.logged(); dismiss()
                 } label: { Label("Log it", systemImage: "plus.circle.fill") }
                     .buttonStyle(GoldButtonStyle(compact: true))
             }
@@ -451,8 +451,8 @@ struct FoodSearchSheet: View {
     /// sheet open for rapid multi-add.
     private func quickRecentRow(_ f: MealMemory.FoodFrequency) -> some View {
         Button {
-            Haptics.success(); app.logRecentFood(foodID: f.foodID, into: meal)
-            withAnimation(.snappy(duration: 0.2)) { addedCount += 1 }
+            Haptics.logged(); app.logRecentFood(foodID: f.foodID, into: meal)
+            withAnimation(Motion.snappy) { addedCount += 1 }
         } label: {
             Card {
                 HStack {

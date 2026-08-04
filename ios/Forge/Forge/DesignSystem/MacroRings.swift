@@ -99,7 +99,7 @@ struct CalorieRing: View {
     private func reveal() {
         let number = Double(abs(remaining))
         guard !reduceMotion else { shownProgress = progress; shownNumber = number; return }
-        withAnimation(.easeOut(duration: 0.95).delay(delay)) {
+        withAnimation(Motion.reveal.delay(delay)) {
             shownProgress = progress
             shownNumber = number
         }
@@ -163,7 +163,7 @@ struct MacroDial: View {
 
     private func reveal() {
         guard !reduceMotion else { shown = progress; return }
-        withAnimation(.easeOut(duration: 0.85).delay(delay)) { shown = progress }
+        withAnimation(Motion.reveal.delay(delay)) { shown = progress }
     }
 }
 

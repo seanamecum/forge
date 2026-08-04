@@ -126,7 +126,7 @@ struct WaitlistButton: View {
             Button("Join the waitlist") {
                 Haptics.success()
                 Waitlist.join(feature)
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { joined = true }
+                withAnimation(Motion.spring) { joined = true }
             }
             .buttonStyle(GoldButtonStyle(compact: true))
             .accessibilityHint("Registers your interest in \(feature)")
@@ -156,8 +156,8 @@ struct ErrorBanner: View {
                 }
             }
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 11).fill(Theme.ruby.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 11).stroke(Theme.ruby.opacity(0.35), lineWidth: 1))
+        .padding(Space.md)
+        .background(RoundedRectangle(cornerRadius: Radius.sm).fill(Theme.ruby.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: Radius.sm).stroke(Theme.ruby.opacity(0.35), lineWidth: 1))
     }
 }

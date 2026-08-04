@@ -8,17 +8,17 @@ struct Card<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
-            .padding(20)
+            .padding(Space.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
                     .fill(Theme.card)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
                     .stroke(gold ? Theme.gold.opacity(0.22) : Theme.hairline, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+            .elevation(.card)
     }
 }
 
@@ -126,7 +126,7 @@ struct GoldButtonStyle: ButtonStyle {
             .shadow(color: Theme.gold.opacity(0.18), radius: 8, y: 2)
             .opacity(configuration.isPressed ? 0.8 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(Motion.press, value: configuration.isPressed)
     }
 }
 
@@ -142,6 +142,8 @@ struct GhostButtonStyle: ButtonStyle {
             .frame(maxWidth: compact ? nil : .infinity)
             .background(Capsule().fill(Color.white.opacity(configuration.isPressed ? 0.10 : 0.05)))
             .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1))
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(Motion.press, value: configuration.isPressed)
     }
 }
 
@@ -234,10 +236,10 @@ struct CoachNote: View {
                 .foregroundStyle(Theme.creamDim)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
+        .padding(Space.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.gold.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.gold.opacity(0.18), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: Radius.sm).fill(Theme.gold.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: Radius.sm).stroke(Theme.gold.opacity(0.18), lineWidth: 1))
     }
 }
 
@@ -262,10 +264,10 @@ struct ScreenScaffold<Content: View>: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) { content }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 110) // clear the floating tab bar
+            VStack(alignment: .leading, spacing: Space.lg) { content }
+                .padding(.horizontal, Space.lg)
+                .padding(.top, Space.sm)
+                .padding(.bottom, Space.tabInset) // clear the floating tab bar
         }
         .background(Theme.bg)
         .scrollContentBackground(.hidden)

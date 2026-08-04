@@ -29,9 +29,9 @@ struct AmbientInsightCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     Button {
-                        Haptics.tap()
+                        Haptics.soft()
                         app.dismissInsight(id: insight.id)
-                        withAnimation(.snappy(duration: 0.25)) { _ = dismissedIDs.insert(insight.id) }
+                        withAnimation(Motion.snappy) { _ = dismissedIDs.insert(insight.id) }
                     } label: {
                         Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.muted)
                     }
@@ -45,7 +45,7 @@ struct AmbientInsightCard: View {
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture { withAnimation(.snappy(duration: 0.22)) { expanded.toggle() } }
+            .onTapGesture { withAnimation(Motion.snappy) { expanded.toggle() } }
         }
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
