@@ -39,6 +39,17 @@ struct LogFoodSheet: View {
                                 .font(.system(size: 11.5)).foregroundStyle(Theme.amber)
                         }
                         macroReadout
+                        NavigationLink {
+                            FoodDetailView(food: food, quantity: engine.quantity)
+                        } label: {
+                            HStack {
+                                Label("Full nutrition facts", systemImage: "list.bullet.rectangle")
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(Theme.faint)
+                            }
+                            .font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.gold)
+                            .padding(.vertical, 2)
+                        }
                         Spacer(minLength: 8)
                     }
                     .padding(20)
