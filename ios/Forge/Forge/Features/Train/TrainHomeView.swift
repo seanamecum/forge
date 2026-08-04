@@ -21,6 +21,7 @@ struct TrainHomeView: View {
                 historyList
             }
             .navigationBarHidden(true)
+            .onAppear { app.refreshTrainingBoards() }
         }
     }
 

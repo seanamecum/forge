@@ -145,6 +145,7 @@ final class AppState {
         } else {
             workouts.clearDemoSeed()
             workouts.history = saved.sorted { $0.date > $1.date }
+            refreshTrainingBoards()   // PRs + weekly muscle volume from the real log
         }
 
         // Real training load from logged sessions → strain → Forge Score + Directive.
@@ -861,6 +862,16 @@ final class AppState {
 
         return InsightCurator.curate(candidates, now: now, dismissed: dismissalStore.load(),
                                      policy: .standard(for: surface))
+    }
+
+    /// Recompute the PR board and weekly muscle-volume board from real logged
+    /// sessions. Real accounts only — demo keeps its seeded boards. Without this a
+    /// real user's PR/volume cards sit permanently empty (they were demo-seeded).
+    @MainActor
+    func refreshTrainingBoards() {
+        guard !isDemoAccount else { return }
+        workouts.personalRecords = TrainingAnalyticsEngine.personalRecords(from: workouts.history)
+        workouts.muscleVolume = TrainingAnalyticsEngine.muscleVolume(from: workouts.history)
     }
 
     /// Recompute the Micronutrients screen from the last 7 days of real logged

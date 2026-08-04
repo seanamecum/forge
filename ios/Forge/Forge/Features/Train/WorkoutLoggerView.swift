@@ -245,8 +245,10 @@ struct WorkoutLoggerView: View {
         WorkoutDraftStore.clear()   // it's a real record now — nothing left to resume
         app.requestSync()
 
-        // Close the loop: real training now moves strain → Forge Score → Directive.
+        // Close the loop: real training now moves strain → Forge Score → Directive,
+        // and updates the PR + weekly-volume boards from the new session.
         app.applyTrainingLoad()
+        app.refreshTrainingBoards()
 
         // Mirror to Apple Health when connected (best-effort, never blocks the UI).
         if app.healthKit.authState == .authorized {
@@ -519,13 +521,21 @@ struct OptionalIntField: View {
 // MARK: - Exercise picker
 
 struct ExercisePickerSheet: View {
+    @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
     let onPick: (Exercise) -> Void
     @State private var query = ""
 
+    /// Search the real catalog by name, muscle, or category — so "chest", "legs",
+    /// or "back" all work, not just exact exercise names.
     private var results: [Exercise] {
-        query.isEmpty ? MockData.exercises
-                      : MockData.exercises.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        let all = app.workouts.exercises
+        guard !query.isEmpty else { return all }
+        return all.filter { ex in
+            ex.name.localizedCaseInsensitiveContains(query)
+            || ex.primaryMuscles.contains { $0.localizedCaseInsensitiveContains(query) }
+            || ex.category.rawValue.localizedCaseInsensitiveContains(query)
+        }
     }
 
     var body: some View {
