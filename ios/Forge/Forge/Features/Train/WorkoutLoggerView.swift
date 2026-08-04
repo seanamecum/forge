@@ -27,7 +27,10 @@ struct WorkoutLoggerView: View {
             header
             if restRemaining > 0 { restBanner }
             ForEach($logged) { $exercise in
-                ExerciseLogCard(logged: $exercise, onSetCompleted: startRest)
+                ExerciseLogCard(logged: $exercise, onSetCompleted: startRest,
+                                onRemove: { removeExercise(id: exercise.id) },
+                                onMoveUp: { moveExercise(id: exercise.id, by: -1) },
+                                onMoveDown: { moveExercise(id: exercise.id, by: 1) })
             }
             Button {
                 showExercisePicker = true
@@ -109,7 +112,9 @@ struct WorkoutLoggerView: View {
                     Text("Next set when the ring closes").font(.system(size: 11.5)).foregroundStyle(Theme.muted)
                 }
                 Spacer()
-                Button("Skip") { restRemaining = 0 }
+                restAdjust("−15") { restRemaining = max(0, restRemaining - 15) }
+                restAdjust("+15") { restRemaining += 15; restTotal = max(restTotal, restRemaining) }
+                Button("Skip") { Haptics.tap(); restRemaining = 0 }
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted)
             }
         }
@@ -128,6 +133,18 @@ struct WorkoutLoggerView: View {
         } else {
             seed()
         }
+    }
+
+    // MARK: - In-session editing (fewer taps than Hevy: one long-press menu)
+
+    private func removeExercise(id: UUID) {
+        withAnimation(Motion.snappy) { logged = WorkoutEditing.removingExercise(logged, id: id) }
+        Haptics.soft(); autosave()
+    }
+
+    private func moveExercise(id: UUID, by offset: Int) {
+        withAnimation(Motion.snappy) { logged = WorkoutEditing.movingExercise(logged, id: id, by: offset) }
+        Haptics.rigid(); autosave()
     }
 
     /// Persist the live session so nothing is lost before "Finish" (LC-1). Real
@@ -177,6 +194,16 @@ struct WorkoutLoggerView: View {
             setsDone: completedSets, totalSets: totalSets, volumeLb: totalVolume,
             restEndsAt: Date.now.addingTimeInterval(TimeInterval(seconds)),
             isPR: prCount > 0)
+    }
+
+    private func restAdjust(_ label: String, _ action: @escaping () -> Void) -> some View {
+        Button { Haptics.rigid(); action() } label: {
+            Text(label)
+                .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.gold)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Capsule().fill(Theme.gold.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
     }
 
     private var restLabel: String {
@@ -255,6 +282,9 @@ struct ExerciseLogCard: View {
     @Environment(AppState.self) private var app
     @Binding var logged: LoggedExercise
     let onSetCompleted: (Int) -> Void
+    var onRemove: () -> Void = {}
+    var onMoveUp: () -> Void = {}
+    var onMoveDown: () -> Void = {}
 
     var body: some View {
         Card {
@@ -266,6 +296,18 @@ struct ExerciseLogCard: View {
                     Spacer()
                     Text(logged.exercise.primaryMuscles.joined(separator: " · "))
                         .font(.system(size: 10)).foregroundStyle(Theme.faint)
+                    Menu {
+                        Button { onMoveUp() } label: { Label("Move up", systemImage: "arrow.up") }
+                        Button { onMoveDown() } label: { Label("Move down", systemImage: "arrow.down") }
+                        Button(role: .destructive) { onRemove() } label: { Label("Remove exercise", systemImage: "trash") }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.muted)
+                            .frame(width: 32, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Edit \(logged.exercise.name)")
                 }
 
                 // Hevy-style ghost: where you left off, and the bar to beat.
@@ -300,6 +342,14 @@ struct ExerciseLogCard: View {
                     SetRow(set: $set, index: indexOf(set: set),
                            exerciseName: logged.exercise.name) {
                         onSetCompleted(logged.restSeconds)
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            withAnimation(Motion.snappy) {
+                                logged = WorkoutEditing.removingSet(logged, setID: set.id)
+                            }
+                            Haptics.soft()
+                        } label: { Label("Delete set", systemImage: "trash") }
                     }
                 }
 
