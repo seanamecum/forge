@@ -822,6 +822,45 @@ final class AppState {
         sync.requestSync()
     }
 
+    // MARK: - Ambient intelligence (surface the right thing, calmly)
+
+    private let dismissalStore = DismissalStore()
+
+    /// The one or two calm, explainable insights worth surfacing right now — the
+    /// visible face of the unified model. Assembled from real current state across
+    /// domains, then curated (top-N, confidence-gated, dismissed ones suppressed).
+    @MainActor
+    func ambientInsights(surface: InsightSurface = .home, now: Date = .now) -> [AmbientInsight] {
+        var candidates: [AmbientInsight] = []
+
+        // "Log your usual …" (real accounts only; nutrition's meal memory).
+        for s in mealSuggestions(for: nil, now: now).prefix(1) {
+            var i = s.asAmbientInsight(); i.surface = surface; candidates.append(i)
+        }
+        // Protein still to go today (from live targets).
+        if let i = InsightGenerators.proteinShort(remaining: nutrition.proteinRemaining, target: nutrition.proteinTarget) {
+            candidates.append(i)
+        }
+        // Recovery below the user's own usual (real accounts with enough history).
+        if !isDemoAccount, let i = InsightGenerators.recoveryVsNormal(today: recovery.today.recovery, usual: usualRecovery()) {
+            candidates.append(i)
+        }
+
+        return InsightCurator.curate(candidates, now: now, dismissed: dismissalStore.load(),
+                                     policy: .standard(for: surface))
+    }
+
+    /// Dismiss an ambient insight — it goes quiet (persisted, so it stays quiet).
+    func dismissInsight(id: String) { dismissalStore.recordDismissal(id) }
+
+    /// The account's usual recovery (average of recent history), or 0 when too new.
+    @MainActor
+    private func usualRecovery() -> Int {
+        let recs = PersistenceService.loadRecoveryHistory().map(\.recovery)
+        guard recs.count >= 5 else { return 0 }
+        return Int((Double(recs.reduce(0, +)) / Double(recs.count)).rounded())
+    }
+
     // MARK: - Smart Meal Memory & personalization (Phase 2.2)
 
     /// This account's recent diary as personalization signals (real accounts only —

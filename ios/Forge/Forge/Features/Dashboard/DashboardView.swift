@@ -13,6 +13,7 @@ struct DashboardView: View {
             ScreenScaffold {
                 header
                 headline
+                AmbientInsightCard()
                 goalCard
                 QuickActionsRow()
                 connectHealthBanner
