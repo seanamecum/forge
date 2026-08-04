@@ -29,7 +29,6 @@ struct ProfileView: View {
             unitsCard
             devicesCard
             notificationPrefs
-            subscriptionCard
             privacyCard
             accountCard
             cloudSyncCard
@@ -322,44 +321,11 @@ struct ProfileView: View {
         Text(text).font(.system(size: 13.5)).foregroundStyle(Theme.cream)
     }
 
-    private var subscriptionCard: some View {
-        Card(gold: true) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    EyebrowLabel(text: "Membership")
-                    Spacer()
-                    Chip(text: "Pro trial · 9 days left", tone: .gold)
-                }
-                tierRow("Free", "Logging · exercise library · basic dashboard", current: false)
-                tierRow("Pro · $11.99/mo", "AI Coach · Forge Score · Digital Twin · Form Analysis", current: true)
-                tierRow("Elite · $29.99/mo", "1:1 coach marketplace credit · bloodwork reads · team tools", current: false)
-                Text("College athlete and team plans available — StoreKit wiring is the production step.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
-            }
-        }
-    }
-
-    private func tierRow(_ name: String, _ detail: String, current: Bool) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: current ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 16))
-                .foregroundStyle(current ? Theme.gold : Theme.faint)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(name).font(.system(size: 13, weight: current ? .semibold : .regular)).foregroundStyle(Theme.cream)
-                Text(detail).font(.system(size: 10.5)).foregroundStyle(Theme.muted)
-            }
-            Spacer()
-        }
-        .padding(8)
-        .background(RoundedRectangle(cornerRadius: 10).fill(current ? Theme.gold.opacity(0.07) : Theme.bgElevated))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(current ? Theme.gold.opacity(0.35) : Theme.hairline, lineWidth: 1))
-    }
-
     private var privacyCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 EyebrowLabel(text: "Privacy")
-                Text("Health data stays on device in the prototype. Backend sync will be opt-in, end-to-end encrypted, and never sold. HealthKit data is never used for advertising — App Store rules and ours.")
+                Text("Your health data stays on your device and, when you enable Cloud Sync, is backed up to your private account — opt-in and never sold. HealthKit data is never used for advertising — App Store rules and ours.")
                     .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
             }
         }
