@@ -20,7 +20,7 @@ feel believable?"*
 
 ## Tokens
 
-- **Typography** — `Theme.display / .text / .eyebrow` (Dynamic-Type aware). Cream/creamDim/muted/faint hierarchy.
+- **Typography** — named scale `Typography.largeTitle/title/title3/headline/body/callout/subheadline/footnote/caption/eyebrow` (sizes in `Typography.Size`, monotonic + testable), Dynamic-Type aware via `Theme.display/.text/.eyebrow`. Color hierarchy: cream/creamDim/muted/faint.
 - **Color** — `Theme` obsidian/gold/cream palette; status green/amber/ruby/royal; `Tone` enum for semantic accents.
 - **Spacing** — `Space.xxs…xxxl` (8-pt rhythm) + `Space.tabInset`.
 - **Corner radii** — `Radius.sm/md/lg/xl/pill` (cards = `xl`, notes/banners = `sm`).

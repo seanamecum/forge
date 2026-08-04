@@ -6,6 +6,14 @@ import SwiftUI
 /// tokens exist, so the "one product, one system" promise can't silently drift.
 final class DesignTokensTests: XCTestCase {
 
+    func testTypeScaleStrictlyDecreasesFromTitleToEyebrow() {
+        typealias S = Typography.Size
+        let scale = [S.largeTitle, S.title, S.title3, S.headline, S.body,
+                     S.callout, S.subheadline, S.footnote, S.caption, S.eyebrow]
+        XCTAssertEqual(scale, scale.sorted(by: >), "type steps must descend by size")
+        XCTAssertEqual(Set(scale).count, scale.count, "type sizes must be distinct")
+    }
+
     func testSpacingScaleStrictlyIncreases() {
         let scale = [Space.xxs, Space.xs, Space.sm, Space.md, Space.lg, Space.xl, Space.xxl, Space.xxxl]
         XCTAssertEqual(scale, scale.sorted())

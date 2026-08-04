@@ -32,11 +32,11 @@ struct SectionHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(Theme.display(28))
+                .font(Typography.largeTitle)
                 .foregroundStyle(Theme.cream)
             if let subtitle {
                 Text(subtitle)
-                    .font(.system(size: 13.5))
+                    .font(Typography.callout)
                     .foregroundStyle(Theme.muted)
                     .lineSpacing(2)
             }
@@ -89,7 +89,7 @@ struct StatTile: View {
                 .foregroundStyle(Theme.muted)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
-                    .font(Theme.display(24))
+                    .font(Typography.title)
                     .foregroundStyle(tone == .neutral ? Theme.cream : tone.color)
                     .lineLimit(1)
                     .minimumScaleFactor(0.55)

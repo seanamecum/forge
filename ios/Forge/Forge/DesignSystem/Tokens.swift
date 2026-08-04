@@ -8,6 +8,38 @@ import UIKit
 /// The principle: Forge should feel like Apple designed it — calm, content-first,
 /// physics-based, restrained. One system so every feature belongs to one product.
 
+// MARK: - Typography scale
+
+/// The named type scale — every screen picks a step by intent instead of a raw
+/// point size, so type stays consistent across features. Sizes live once in
+/// `Size` (testable, monotonic) and stay Dynamic-Type-aware via `Theme`.
+enum Typography {
+    /// The raw point sizes behind the scale — the single place type sizes live.
+    enum Size {
+        static let largeTitle:  CGFloat = 28   // screen titles
+        static let title:       CGFloat = 24   // prominent metric values
+        static let title3:      CGFloat = 20   // card / empty-state titles
+        static let headline:    CGFloat = 16   // emphasis line in a card
+        static let body:        CGFloat = 14   // default copy / primary rows
+        static let callout:     CGFloat = 13   // supporting copy
+        static let subheadline: CGFloat = 12   // secondary labels
+        static let footnote:    CGFloat = 11   // captions
+        static let caption:     CGFloat = 10   // small captions
+        static let eyebrow:     CGFloat = 9    // tracked-out uppercase labels
+    }
+
+    static var largeTitle:  Font { Theme.display(Size.largeTitle) }
+    static var title:       Font { Theme.display(Size.title) }
+    static var title3:      Font { Theme.display(Size.title3) }
+    static var headline:    Font { Theme.text(Size.headline, .semibold) }
+    static var body:        Font { Theme.text(Size.body) }
+    static var callout:     Font { Theme.text(Size.callout) }
+    static var subheadline: Font { Theme.text(Size.subheadline) }
+    static var footnote:    Font { Theme.text(Size.footnote) }
+    static var caption:     Font { Theme.text(Size.caption) }
+    static var eyebrow:     Font { Theme.eyebrow(Size.eyebrow) }
+}
+
 // MARK: - Spacing scale (8-pt rhythm)
 
 enum Space {
