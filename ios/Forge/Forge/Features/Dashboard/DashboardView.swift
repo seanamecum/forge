@@ -8,6 +8,7 @@ import SwiftData
 struct DashboardView: View {
     @Environment(AppState.self) private var app
     @Environment(\.modelContext) private var modelContext
+    @State private var todayExpanded = false
 
     var body: some View {
         NavigationStack {
@@ -172,30 +173,53 @@ struct DashboardView: View {
         let directive = app.dailyDirective
         return Card {
             VStack(alignment: .leading, spacing: Space.md) {
-                Text("Today").font(Typography.footnote).foregroundStyle(Theme.muted)
-                ForEach(directive.actions.prefix(3)) { action in
-                    HStack(spacing: Space.md) {
-                        Image(systemName: action.icon)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.creamDim)
-                            .frame(width: 22)
-                        Text(action.value)
-                            .font(Typography.body)
-                            .foregroundStyle(Theme.cream)
+                // Collapsed by default: the header + the single next best action.
+                // Tap to reveal the supporting plan and the "why".
+                Button {
+                    Haptics.tap()
+                    withAnimation(Motion.spring) { todayExpanded.toggle() }
+                } label: {
+                    HStack {
+                        Text("Today").font(Typography.footnote).foregroundStyle(Theme.muted)
                         Spacer()
+                        Image(systemName: todayExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.faint)
                     }
+                    .contentShape(Rectangle())
                 }
-                Divider().overlay(Theme.hairline)
+                .buttonStyle(.plain)
+                .accessibilityLabel(todayExpanded ? "Today, hide details" : "Today, show details")
+
                 Text(directive.priorityAction)
                     .font(Typography.callout.weight(.medium))
                     .foregroundStyle(Theme.gold)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if todayExpanded {
+                    VStack(alignment: .leading, spacing: Space.md) {
+                        Divider().overlay(Theme.hairline)
+                        ForEach(directive.actions.prefix(3)) { action in
+                            HStack(spacing: Space.md) {
+                                Image(systemName: action.icon)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.creamDim)
+                                    .frame(width: 22)
+                                Text(action.value)
+                                    .font(Typography.body)
+                                    .foregroundStyle(Theme.cream)
+                                Spacer()
+                            }
+                        }
+                        RecommendationBasisView(basis: app.directiveBasis)
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
                 HStack {
                     Button("Ask Coach") { Haptics.tap(); app.selectedTab = .coach }
                         .buttonStyle(GoldButtonStyle(compact: true))
                     Spacer()
                 }
-                RecommendationBasisView(basis: app.directiveBasis)
             }
         }
     }
