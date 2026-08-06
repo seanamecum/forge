@@ -30,7 +30,15 @@ struct SectionHeader: View {
     var subtitle: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            // The context eyebrow — the premium "where am I" label above the title.
+            // Rendered (it used to be silently dropped); hidden only when empty.
+            if !eyebrow.isEmpty {
+                Text(eyebrow.uppercased())
+                    .font(Typography.eyebrow)
+                    .kerning(1.6)
+                    .foregroundStyle(Theme.gold)
+            }
             Text(title)
                 .font(Typography.largeTitle)
                 .foregroundStyle(Theme.cream)
@@ -41,8 +49,10 @@ struct SectionHeader: View {
                     .lineSpacing(2)
             }
         }
-        .padding(.top, 6)
+        .padding(.top, Space.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(eyebrow.isEmpty ? title : "\(eyebrow). \(title)")
     }
 }
 
