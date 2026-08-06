@@ -9,23 +9,25 @@ struct DashboardView: View {
     @Environment(AppState.self) private var app
     @Environment(\.modelContext) private var modelContext
     @State private var todayExpanded = false
+    @State private var appeared = false
 
     var body: some View {
         NavigationStack {
             ScreenScaffold {
-                header
-                headline
-
-                heroCard                 // How am I doing?
-                AmbientInsightCard()     // What matters most right now? (self-hides when nothing)
-                MorningCheckInCard()     // conditional — only when the day needs it
-                todayCard                // What's the next best action?
-                todaysGoals              // one ring row: fuel · steps · energy
-
-                QuickActionsRow()
-                connectHealthBanner      // conditional
-                ModulesGrid()
-                DisclaimerNote()
+                entrance(0) { header }
+                entrance(1) { headline }
+                if isFreshAccount {
+                    entrance(2) { firstStepsCard }   // inspire the first action
+                }
+                entrance(3) { heroCard }                 // How am I doing?
+                entrance(4) { AmbientInsightCard() }     // What matters most right now?
+                entrance(5) { MorningCheckInCard() }     // conditional
+                entrance(6) { todayCard }                // What's the next best action?
+                entrance(7) { todaysGoals }              // fuel · steps · energy
+                entrance(8) { QuickActionsRow() }
+                entrance(9) { connectHealthBanner }      // conditional
+                entrance(10) { ModulesGrid() }
+                entrance(11) { DisclaimerNote() }
             }
             .navigationBarHidden(true)
             .refreshable { await refresh() }
@@ -34,8 +36,63 @@ struct DashboardView: View {
                 app.publishWidgetSnapshot()
                 // Snapshot today's Forge Score so trends build from real history.
                 PersistenceService.recordTodayScore(app.forgeScore, context: modelContext)
+                if !appeared { appeared = true }   // fire the one-time entrance choreography
             }
         }
+    }
+
+    /// One-time staggered entrance — each section eases up + in with a spring,
+    /// delayed by its position, then never replays on tab switches.
+    private func entrance<V: View>(_ index: Int, @ViewBuilder _ content: () -> V) -> some View {
+        content()
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 16)
+            .animation(Motion.entrance.delay(Double(index) * 0.05), value: appeared)
+    }
+
+    // MARK: - First-run empty state (inspire action, never look unfinished)
+
+    private var isFreshAccount: Bool {
+        !app.isDemoAccount && app.workouts.history.isEmpty && app.nutrition.entries.isEmpty
+    }
+
+    private var firstStepsCard: some View {
+        let first = app.user.name.split(separator: " ").first.map(String.init)
+        return Card(gold: true) {
+            VStack(alignment: .leading, spacing: Space.md) {
+                Text(first.map { "Welcome, \($0)." } ?? "Welcome to Forge.")
+                    .font(Typography.title3).foregroundStyle(Theme.cream)
+                Text("Do one thing and Forge starts learning you — no wearable required.")
+                    .font(Typography.footnote).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                firstStep("fork.knife", "Log your first meal", "Targets adapt as you eat") { app.selectedTab = .fuel }
+                firstStep("dumbbell.fill", "Start your first workout", "Builds your PRs and volume") { app.selectedTab = .train }
+            }
+        }
+    }
+
+    private func firstStep(_ icon: String, _ title: String, _ detail: String, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.tap()
+            withAnimation(Motion.spring) { action() }
+        } label: {
+            HStack(spacing: Space.md) {
+                ZStack {
+                    Circle().fill(Theme.gold.opacity(0.14))
+                    Image(systemName: icon).font(.system(size: IconSize.md)).foregroundStyle(Theme.gold)
+                }
+                .frame(width: 38, height: 38)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(Typography.body.weight(.semibold)).foregroundStyle(Theme.cream)
+                    Text(detail).font(Typography.caption).foregroundStyle(Theme.muted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(Theme.faint)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title). \(detail)")
     }
 
     /// Pull-to-refresh: re-ingest Health signals and recompute the live plan,
@@ -153,8 +210,16 @@ struct DashboardView: View {
                         Chip(text: "\(streakDays)-day streak", tone: .gold)
                     }
                 }
-                Sparkline(values: app.recovery.forgeScoreTrend, height: 64,
-                          accessibilityLabel: "Forge Score trend")
+                if app.recovery.forgeScoreTrend.count >= 2 {
+                    Sparkline(values: app.recovery.forgeScoreTrend, height: 64,
+                              accessibilityLabel: "Forge Score trend")
+                } else {
+                    // A flat/empty line reads as broken — invite the trend instead.
+                    Text("Your trend builds as you log each day.")
+                        .font(Typography.caption).foregroundStyle(Theme.faint)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, Space.md)
+                }
             }
         }
         .accessibilityElement(children: .combine)

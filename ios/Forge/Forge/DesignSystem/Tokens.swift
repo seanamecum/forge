@@ -115,6 +115,8 @@ enum Motion {
     static let gentle  = Animation.easeInOut(duration: 0.45)
     /// Press feedback inside button styles.
     static let press   = Animation.easeOut(duration: 0.12)
+    /// First-appearance choreography — screens and staggered cards easing in.
+    static let entrance = Animation.spring(response: 0.5, dampingFraction: 0.86)
 
     /// Raw durations for `withAnimation` sites that need explicit control.
     enum Duration {
