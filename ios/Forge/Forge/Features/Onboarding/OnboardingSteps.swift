@@ -157,17 +157,53 @@ struct EquipmentStep: View {
 }
 
 struct WearableStep: View {
+    @Environment(AppState.self) private var app
     @Binding var selected: Set<String>
+    @State private var connecting = false
     private let devices = ["Apple Watch", "iPhone only", "Smart scale (writes to Health)", "Other device that syncs to Apple Health"]
+
+    /// Any choice other than "iPhone only" means something writes to Apple Health,
+    /// so connecting now has clear value — the right moment to offer it.
+    private var wantsHealth: Bool { selected.contains { $0 != "iPhone only" } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             StepHeading(title: "Your health data",
-                        subtitle: "Forge runs on Apple Health — anything that writes there feeds your score. You'll connect it on the dashboard.")
+                        subtitle: "Forge runs on Apple Health — anything that writes there feeds your score. Connecting is optional, and you can do it anytime.")
             ForEach(devices, id: \.self) { device in
                 SelectableRow(title: device, selected: selected.contains(device)) {
                     if selected.contains(device) { selected.remove(device) } else { selected.insert(device) }
                 }
+            }
+            if wantsHealth {
+                connectRow.padding(.top, Space.xs).transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(Motion.snappy, value: wantsHealth)
+    }
+
+    @ViewBuilder private var connectRow: some View {
+        if app.healthKit.authState == .authorized {
+            Label("Apple Health connected", systemImage: "checkmark.seal.fill")
+                .font(Typography.footnote.weight(.semibold)).foregroundStyle(Theme.green)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    connecting = true
+                    Haptics.tap()
+                    Analytics.log(.onboardingHealthKitRequested)
+                    Task {
+                        await app.healthKit.connect()
+                        app.ingestHealthKitSignals()
+                        connecting = false
+                    }
+                } label: {
+                    Label(connecting ? "Connecting…" : "Connect Apple Health", systemImage: "heart.fill")
+                }
+                .buttonStyle(GoldButtonStyle(compact: true))
+                .disabled(connecting)
+                Text("Optional — you can skip and connect later from the dashboard.")
+                    .font(Typography.caption).foregroundStyle(Theme.faint)
             }
         }
     }

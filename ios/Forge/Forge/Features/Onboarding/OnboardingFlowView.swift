@@ -127,6 +127,10 @@ struct OnboardingFlowView: View {
         guard canAdvance else { return }
         Haptics.tap()
         Analytics.log(.onboardingStepCompleted, ["step": "\(step)"])
+        // Leaving the wearable step without connecting is a valid, tracked choice.
+        if step == 12, app.healthKit.authState != .authorized {
+            Analytics.log(.onboardingWearableSkipped)
+        }
         if step == totalSteps - 1 {
             Analytics.log(.onboardingCompleted)
             // Commit the real profile AND declared injuries; finishOnboarding clears
