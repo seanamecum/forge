@@ -6,9 +6,10 @@ struct GeneratorView: View {
     @State private var goal: Goal = .buildMuscle
     @State private var minutes = 60
     @State private var equipment: Equipment = .fullGym
-    @State private var injuries: Set<InjuryType> = [.knee]
+    @State private var injuries: Set<InjuryType> = []
     @State private var generated: GeneratedWorkout?
     @State private var thinking = false
+    @State private var primed = false
 
     var body: some View {
         ScreenScaffold {
@@ -72,6 +73,15 @@ struct GeneratorView: View {
         }
         .navigationTitle("Generator")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            guard !primed else { return }
+            primed = true
+            // Seed from the athlete's real profile + flagged injuries — never a
+            // hardcoded knee.
+            goal = app.user.primaryGoal
+            if let eq = app.user.equipment.first { equipment = eq }
+            injuries = Set(app.injuries.active.map(\.type))
+        }
     }
 
     private func pickerSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {

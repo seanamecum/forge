@@ -49,6 +49,18 @@ struct CoachView: View {
         }
     }
 
+    /// Real, live status — recovery, any active rehab, and the earned streak.
+    /// Never the demo athlete's fixed numbers.
+    private var coachStatus: String {
+        var parts = ["Synced", "recovery \(app.recovery.today.recovery)"]
+        if let injury = app.injuries.active.first {
+            parts.append("\(injury.type.rawValue.lowercased()) rehab")
+        }
+        let streak = StreakEngine.streak(days: PersistenceService.activeDays())
+        if streak >= 2 { parts.append("\(streak)-day streak") }
+        return parts.joined(separator: " · ")
+    }
+
     private var header: some View {
         HStack(spacing: 10) {
             ZStack {
@@ -65,8 +77,8 @@ struct CoachView: View {
                     .foregroundStyle(Theme.cream)
                 HStack(spacing: 5) {
                     Circle().fill(Theme.green).frame(width: 6, height: 6)
-                    Text("Synced · recovery 78 · knee phase 2 · 23-day streak")
-                        .font(.system(size: 10.5))
+                    Text(coachStatus)
+                        .font(Typography.caption)
                         .foregroundStyle(Theme.muted)
                 }
             }

@@ -460,9 +460,9 @@ struct ReturnToSportSection: View {
         VStack(spacing: 12) {
             Card(gold: true) {
                 VStack(alignment: .leading, spacing: 12) {
-                    EyebrowLabel(text: "Active · Left Knee")
+                    EyebrowLabel(text: app.injuries.active.first.map { "Active · \($0.type.rawValue)" } ?? "Return to Training")
                     Text("Return-to-Training Checklist").font(Theme.display(19)).foregroundStyle(Theme.cream)
-                    Text("Hockey-specific clearance. Tap to check off as you clear each gate with your PT.")
+                    Text("Clearance gates. Tap to check each off as you clear it with your PT.")
                         .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
 
                     ForEach(app.injuries.rtsChecklist) { item in

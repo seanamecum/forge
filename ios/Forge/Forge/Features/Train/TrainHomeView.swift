@@ -4,11 +4,19 @@ struct TrainHomeView: View {
     @Environment(AppState.self) private var app
     @State private var draftRefresh = 0
 
+    /// Real state — names an active injury only when the user actually has one.
+    private var trainSubtitle: String {
+        if let injury = app.injuries.active.first {
+            return "Tuned daily for recovery \(app.recovery.today.recovery) and your \(injury.type.rawValue.lowercased())."
+        }
+        return "Tuned daily to your recovery, goals, and equipment."
+    }
+
     var body: some View {
         NavigationStack {
             ScreenScaffold {
                 SectionHeader(eyebrow: "Train", title: "Workouts",
-                              subtitle: "Tuned daily for recovery \(app.recovery.today.recovery) and the knee.")
+                              subtitle: trainSubtitle)
 
                 resumeCard
                 quickActions
