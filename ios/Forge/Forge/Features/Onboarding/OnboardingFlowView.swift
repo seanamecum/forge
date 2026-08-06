@@ -10,8 +10,9 @@ struct OnboardingFlowView: View {
     @State private var selectedInjuries: Set<InjuryType> = []
     @State private var selectedWearables: Set<String> = []
     @State private var restored = false
+    @State private var showWelcome = true
 
-    private let totalSteps = 14
+    private let totalSteps = 15
 
     /// Continue is enabled only when the current step's required value is real.
     private var canAdvance: Bool {
@@ -33,6 +34,23 @@ struct OnboardingFlowView: View {
     }
 
     var body: some View {
+        Group {
+            if showWelcome {
+                WelcomeIntro(onStart: beginSteps).transition(.opacity)
+            } else {
+                steppedFlow
+            }
+        }
+        .background(Theme.bg)
+        .onAppear(perform: restoreIfNeeded)
+    }
+
+    private func beginSteps() {
+        Haptics.tap()
+        withAnimation(Motion.spring) { showWelcome = false }
+    }
+
+    private var steppedFlow: some View {
         VStack(spacing: 0) {
             // Progress
             HStack(spacing: 4) {
@@ -81,9 +99,7 @@ struct OnboardingFlowView: View {
             .padding(.horizontal, Space.xxl)
             .padding(.bottom, 28)
         }
-        .background(Theme.bg)
         .animation(.easeInOut(duration: 0.25), value: step)
-        .onAppear(perform: restoreIfNeeded)
         .onChange(of: step) { _, s in
             persist()
             Analytics.log(.onboardingStepViewed, ["step": "\(s)"])
@@ -99,6 +115,7 @@ struct OnboardingFlowView: View {
             step = min(max(0, p.step), totalSteps - 1)
             selectedInjuries = Set(p.injuries)
             selectedWearables = Set(p.wearables)
+            showWelcome = false          // resume straight into the flow, not the intro
             Analytics.log(.onboardingResumed, ["step": "\(step)"])
         } else {
             Analytics.log(.onboardingStarted)
@@ -145,7 +162,8 @@ struct OnboardingFlowView: View {
                             options: DietPreference.allCases, selection: $draft.diet,
                             detail: { _ in "" })
         case 12: WearableStep(selected: $selectedWearables)
-        default: NotificationStep()
+        case 13: NotificationStep()
+        default: PlanStep(draft: draft)
         }
     }
 }
