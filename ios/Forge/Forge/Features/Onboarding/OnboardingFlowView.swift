@@ -1,14 +1,36 @@
 import SwiftUI
 
-/// 14-step onboarding. Edits a draft profile, commits to AppState at the end.
+/// 14-step onboarding. Starts from a truly blank account (never the demo athlete),
+/// gates Continue only where a real value is required, persists progress so an
+/// interrupted run resumes exactly where it left off, and commits at the end.
 struct OnboardingFlowView: View {
     @Environment(AppState.self) private var app
     @State private var step = 0
-    @State private var draft = MockData.sean
+    @State private var draft = UserProfile.blank
     @State private var selectedInjuries: Set<InjuryType> = []
     @State private var selectedWearables: Set<String> = []
+    @State private var restored = false
 
     private let totalSteps = 14
+
+    /// Continue is enabled only when the current step's required value is real.
+    private var canAdvance: Bool {
+        switch step {
+        case 0: return OnboardingValidation.nameValid(draft)
+        case 1: return OnboardingValidation.ageValid(draft)
+        case 3: return OnboardingValidation.heightValid(draft)
+        case 4: return OnboardingValidation.weightValid(draft)
+        case 7: return OnboardingValidation.goalsValid(draft)
+        case 10: return OnboardingValidation.equipmentValid(draft)
+        default: return true   // sex, activity, experience, injuries, diet, wearable, notifications
+        }
+    }
+
+    private func persist() {
+        OnboardingStore.save(OnboardingProgress(
+            step: step, profile: draft,
+            injuries: Array(selectedInjuries), wearables: Array(selectedWearables)))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,20 +75,48 @@ struct OnboardingFlowView: View {
                 advance()
             }
             .buttonStyle(GoldButtonStyle())
-            .padding(.horizontal, 24)
+            .disabled(!canAdvance)
+            .opacity(canAdvance ? 1 : 0.45)
+            .animation(Motion.snappy, value: canAdvance)
+            .padding(.horizontal, Space.xxl)
             .padding(.bottom, 28)
         }
         .background(Theme.bg)
         .animation(.easeInOut(duration: 0.25), value: step)
+        .onAppear(perform: restoreIfNeeded)
+        .onChange(of: step) { _, s in
+            persist()
+            Analytics.log(.onboardingStepViewed, ["step": "\(s)"])
+        }
+    }
+
+    /// Resume an interrupted run, or start fresh — logged either way.
+    private func restoreIfNeeded() {
+        guard !restored else { return }
+        restored = true
+        if let p = OnboardingStore.load() {
+            draft = p.profile
+            step = min(max(0, p.step), totalSteps - 1)
+            selectedInjuries = Set(p.injuries)
+            selectedWearables = Set(p.wearables)
+            Analytics.log(.onboardingResumed, ["step": "\(step)"])
+        } else {
+            Analytics.log(.onboardingStarted)
+            persist()
+        }
     }
 
     private func advance() {
+        guard canAdvance else { return }
+        Haptics.tap()
+        Analytics.log(.onboardingStepCompleted, ["step": "\(step)"])
         if step == totalSteps - 1 {
-            // Commit the real profile AND the declared injuries (which used to be
-            // collected here and then silently dropped).
+            Analytics.log(.onboardingCompleted)
+            // Commit the real profile AND declared injuries; finishOnboarding clears
+            // the saved progress so the flow never resurfaces.
             app.commitOnboarding(profile: draft, injuries: selectedInjuries)
         } else {
-            withAnimation { step += 1 }
+            withAnimation(Motion.spring) { step += 1 }
         }
     }
 

@@ -93,9 +93,12 @@ final class AppState {
         if let saved = Self.loadUser() { user = saved }
         // Forge speaks imperial — migrate any previously saved metric preference.
         user.usesImperial = true
-        // Returning users skip straight to the dashboard.
+        // Returning users skip straight to the dashboard; a user killed mid-
+        // onboarding resumes the flow instead of restarting at Welcome.
         if UserDefaults.standard.bool(forKey: "forge.hasOnboarded") {
             phase = .main
+        } else if UserDefaults.standard.bool(forKey: "forge.onboarding.inProgress") {
+            phase = .onboarding
         }
         // Demo/screenshot hook (no effect in normal use): FORGE_TAB selects the
         // initial tab; -demoAutoLogin skips straight to the dashboard.
@@ -257,6 +260,9 @@ final class AppState {
             weightSamples = []
             refreshTrends()              // this account's own (initially empty) trends
             phase = .onboarding
+            if !PersistenceService.isTestRun {
+                UserDefaults.standard.set(true, forKey: "forge.onboarding.inProgress")
+            }
             // Pull this account's cloud data (restores a reinstall / new device) and
             // push anything logged locally before sign-in.
             sync.syncNow()
@@ -293,6 +299,8 @@ final class AppState {
 
     func finishOnboarding() {
         if !PersistenceService.isTestRun { UserDefaults.standard.set(true, forKey: "forge.hasOnboarded") }
+        UserDefaults.standard.set(false, forKey: "forge.onboarding.inProgress")
+        OnboardingStore.clear()          // interrupted-run progress is now committed
         phase = .main
     }
 
