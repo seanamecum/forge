@@ -27,6 +27,7 @@ struct DashboardView: View {
                 DisclaimerNote()
             }
             .navigationBarHidden(true)
+            .refreshable { await refresh() }
             .onAppear {
                 app.refreshFuelPlan()
                 app.publishWidgetSnapshot()
@@ -34,6 +35,19 @@ struct DashboardView: View {
                 PersistenceService.recordTodayScore(app.forgeScore, context: modelContext)
             }
         }
+    }
+
+    /// Pull-to-refresh: re-ingest Health signals and recompute the live plan,
+    /// boards, and widget — with a soft start / success-end haptic.
+    @MainActor
+    private func refresh() async {
+        Haptics.soft()
+        app.ingestHealthKitSignals()
+        app.refreshFuelPlan()
+        app.refreshTrainingBoards()
+        app.publishWidgetSnapshot()
+        try? await Task.sleep(for: .milliseconds(600))
+        Haptics.success()
     }
 
     // MARK: - Greeting
