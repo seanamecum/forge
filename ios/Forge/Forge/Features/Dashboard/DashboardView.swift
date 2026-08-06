@@ -1,27 +1,28 @@
 import SwiftUI
 import SwiftData
 
+/// Home — calm, premium, alive. It answers three questions and nothing else:
+/// *How am I doing?* (Forge Score + trend), *What matters most right now?*
+/// (one curated ambient insight), *What's the next best action?* (today's
+/// coached priority). Every card earns its place; duplication is designed out.
 struct DashboardView: View {
     @Environment(AppState.self) private var app
     @Environment(\.modelContext) private var modelContext
-    /// Persisted per-directive: dismissing hides *this* directive's tip until the
-    /// directive changes, surviving tab switches and relaunches (P1-9).
-    @AppStorage("forge.dashboard.dismissedTipID") private var dismissedTipID = ""
 
     var body: some View {
         NavigationStack {
             ScreenScaffold {
                 header
                 headline
-                AmbientInsightCard()
-                goalCard
+
+                heroCard                 // How am I doing?
+                AmbientInsightCard()     // What matters most right now? (self-hides when nothing)
+                MorningCheckInCard()     // conditional — only when the day needs it
+                todayCard                // What's the next best action?
+                todaysGoals              // one ring row: fuel · steps · energy
+
                 QuickActionsRow()
-                connectHealthBanner
-                MorningCheckInCard()
-                dailySummary
-                heroCard
-                todayCard
-                tipBanner
+                connectHealthBanner      // conditional
                 ModulesGrid()
                 DisclaimerNote()
             }
@@ -35,160 +36,10 @@ struct DashboardView: View {
         }
     }
 
-    /// Big friendly opener, tuned to the day's state — the reference design's
-    /// "Let's start strong!" moment in Forge's voice.
-    private var headline: some View {
-        Text(headlineText)
-            .font(.system(size: 38, weight: .bold, design: .rounded))
-            .foregroundStyle(Theme.cream)
-            .lineLimit(2)
-            .minimumScaleFactor(0.7)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 2)
-    }
-
-    private var headlineText: String {
-        if app.recovery.today.recovery >= 80 { return "Green light.\nGo get it." }
-        switch Daypart.now {
-        case "Morning": return "Let's start\nstrong."
-        case "Afternoon": return "Keep the\nmomentum."
-        default: return "Finish the\nday right."
-        }
-    }
-
-    /// Reference goal card: one percentage, one bar, one bolt.
-    /// The number is real — today's calories against the coached target.
-    private var goalCard: some View {
-        let n = app.nutrition
-        // One clamped source of truth so the visible bar and the VoiceOver label
-        // can never disagree (previously the label read the unclamped value).
-        let pct = Progress.displayPercent(n.calories, of: n.calorieTarget)
-        return Card {
-            HStack(spacing: 14) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("You're \(pct)% to your fuel target")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.cream)
-                    CapsuleBar(value: Double(n.calories), target: Double(n.calorieTarget),
-                               tone: .gold, height: 10)
-                    Text("\(n.calories.formatted()) / \(n.calorieTarget.formatted()) kcal")
-                        .font(.system(size: 11)).foregroundStyle(Theme.muted)
-                }
-                ZStack {
-                    Circle().fill(Theme.goldGradient)
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(Theme.bg)
-                }
-                .frame(width: 46, height: 46)
-                .shadow(color: Theme.gold.opacity(0.35), radius: 9, y: 2)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Fuel progress: \(pct) percent of today's calorie target")
-        .accessibilityValue("\(n.calories.formatted()) of \(n.calorieTarget.formatted()) kilocalories")
-    }
-
-    /// Reference "Daily Summary": two ring cards over live Health numbers.
-    private var dailySummary: some View {
-        let hk = app.healthKit
-        // Goals are derived from the athlete's profile (labeled defaults), not a
-        // universal 10,000 steps / 1,000 kcal. Progress is clamped + finite-safe.
-        let stepGoal = TargetEngine.steps(app.user)
-        let energyGoal = TargetEngine.activeEnergy(app.user)
-        let stepPct = Progress.displayPercent(hk.steps, of: stepGoal)
-        let energyPct = Progress.displayPercent(hk.activeEnergy, of: energyGoal)
-        return VStack(alignment: .leading, spacing: 10) {
-            EyebrowLabel(text: "Daily Summary")
-            HStack(spacing: 10) {
-                summaryRingCard(pct: stepPct, big: hk.steps.formatted(), label: "Steps",
-                                sub: "goal \(stepGoal.formatted())")
-                summaryRingCard(pct: energyPct, big: hk.activeEnergy.formatted(), label: "Active energy",
-                                sub: "kcal · goal \(energyGoal.formatted())")
-            }
-        }
-    }
-
-    private func summaryRingCard(pct: Int, big: String, label: String, sub: String) -> some View {
-        Card {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(label).font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.muted)
-                    Text(big)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundStyle(Theme.cream)
-                        .lineLimit(1).minimumScaleFactor(0.6)
-                    Text(sub).font(.system(size: 9.5)).foregroundStyle(Theme.faint)
-                }
-                Spacer(minLength: 0)
-                ScoreRing(value: min(pct, 100), size: 46, lineWidth: 5, animated: false)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label): \(big), \(min(pct, 100)) percent")
-    }
-
-    /// Reference tip banner — gold, dismissible, with a real action.
-    /// The tip is the directive's priority, not canned copy.
-    @ViewBuilder
-    private var tipBanner: some View {
-        let directive = app.dailyDirective
-        if directive.id != dismissedTipID {
-            Card(gold: true) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(directive.priorityAction)
-                        .font(Theme.text(14, .medium))
-                        .foregroundStyle(Theme.cream)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 8) {
-                        Button("Dismiss") {
-                            withAnimation { dismissedTipID = directive.id }
-                        }
-                        .buttonStyle(GhostButtonStyle(compact: true))
-                        Button("Ask Coach") {
-                            Haptics.tap()
-                            app.selectedTab = .coach
-                        }
-                        .buttonStyle(GoldButtonStyle(compact: true))
-                    }
-                    RecommendationBasisView(basis: app.directiveBasis)
-                }
-            }
-        }
-    }
-
-    /// A wearable is an *enhancement*, not a requirement — Forge is fully driven by
-    /// the morning check-in, workouts, nutrition, and weight without one. This banner
-    /// offers optional automation; it never implies the experience is incomplete.
-    @ViewBuilder
-    private var connectHealthBanner: some View {
-        if app.healthKit.authState == .notDetermined {
-            Card(gold: true) {
-                HStack(spacing: 12) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 18)).foregroundStyle(Theme.rubyBright)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Add automatic tracking (optional)")
-                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.cream)
-                        Text("Forge already runs on your check-ins and logs. Connect Apple Health to add automatic HRV, sleep, and activity.")
-                            .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                    Button("Connect") {
-                        Task {
-                            await app.healthKit.connect()
-                            app.ingestHealthKitSignals()
-                        }
-                    }
-                    .buttonStyle(GoldButtonStyle(compact: true))
-                }
-            }
-        }
-    }
+    // MARK: - Greeting
 
     private var header: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Space.md) {
             NavigationLink { ProfileView() } label: {
                 ZStack {
                     Circle().fill(Theme.goldGradient)
@@ -206,7 +57,7 @@ struct DashboardView: View {
                     .kerning(1.6)
                     .foregroundStyle(Theme.faint)
                 Text("Good \(Daypart.now.lowercased()), \(app.user.name.split(separator: " ").first.map(String.init) ?? app.user.name)")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(Typography.subheadline)
                     .foregroundStyle(Theme.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -217,7 +68,7 @@ struct DashboardView: View {
             NavigationLink { NotificationsView() } label: {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "bell")
-                        .font(.system(size: 17))
+                        .font(.system(size: IconSize.lg))
                         .foregroundStyle(Theme.creamDim)
                         .frame(width: 38, height: 38)
                         .background(Circle().fill(Theme.card))
@@ -236,101 +87,180 @@ struct DashboardView: View {
                 ? "Notifications, \(app.notifications.unreadCount) unread"
                 : "Notifications")
         }
-        .padding(.top, 6)
+        .padding(.top, Space.xs)
     }
 
-    /// Consecutive days the athlete did the work — completed a workout or logged
-    /// a check-in. Not "opened the app" (see PersistenceService.activeDays).
+    /// Big friendly opener, tuned to the day's state.
+    private var headline: some View {
+        Text(headlineText)
+            .font(.system(size: 38, weight: .bold, design: .rounded))
+            .foregroundStyle(Theme.cream)
+            .lineLimit(2)
+            .minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, Space.xxs)
+    }
+
+    private var headlineText: String {
+        if app.recovery.today.recovery >= 80 { return "Green light.\nGo get it." }
+        switch Daypart.now {
+        case "Morning": return "Let's start\nstrong."
+        case "Afternoon": return "Keep the\nmomentum."
+        default: return "Finish the\nday right."
+        }
+    }
+
+    // MARK: - How am I doing? (Forge Score + trend)
+
+    private var heroCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Space.md) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(app.forgeScore)")
+                            .font(.system(size: 72, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.cream)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                            .animation(Motion.snappy, value: app.forgeScore)
+                        HStack(spacing: 5) {
+                            Text("Forge Score").font(Typography.footnote).foregroundStyle(Theme.muted)
+                            // Honest, but calm — a faint caption while the score is
+                            // still estimated, not an amber debug chip.
+                            if app.recovery.provenance != .live {
+                                Text("· \(app.recovery.provenance.label.lowercased())")
+                                    .font(Typography.caption).foregroundStyle(Theme.faint)
+                            }
+                        }
+                    }
+                    Spacer()
+                    if streakDays >= 2 {
+                        Chip(text: "\(streakDays)-day streak", tone: .gold)
+                    }
+                }
+                Sparkline(values: app.recovery.forgeScoreTrend, height: 64,
+                          accessibilityLabel: "Forge Score trend")
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Forge Score \(app.forgeScore)\(streakDays >= 2 ? ", \(streakDays) day streak" : "")")
+    }
+
+    /// Consecutive days the athlete did the work — a completed workout or a
+    /// logged check-in (not "opened the app").
     private var streakDays: Int {
         StreakEngine.streak(days: PersistenceService.activeDays())
     }
 
-    private var heroCard: some View {
-        let directive = app.dailyDirective
-        return Card {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .top) {
-                        Text("\(app.forgeScore)")
-                            .font(.system(size: 72, weight: .bold, design: .rounded))
-                            .foregroundStyle(Theme.cream)
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 6) {
-                            // Honest provenance: "Demo data" until any live signal
-                            // arrives, then "Partial · estimated" while recovery and
-                            // strain are still modeled — never a silent clean score.
-                            if app.recovery.provenance != .live {
-                                Chip(text: app.recovery.provenance.label, tone: .amber)
-                            }
-                            if streakDays >= 2 {
-                                Chip(text: "\(streakDays)-day streak", tone: .gold)
-                            }
-                        }
-                    }
-                    Text("Forge Score")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.muted)
-                }
-                Sparkline(values: app.recovery.forgeScoreTrend, height: 72,
-                          accessibilityLabel: "Forge Score trend")
-                Text(directive.headline)
-                    .font(Theme.text(14))
-                    .foregroundStyle(Theme.creamDim)
-            }
-        }
-    }
+    // MARK: - What's the next best action? (today's coached priority)
 
-    /// Today, in three quiet rows + the single priority.
     private var todayCard: some View {
         let directive = app.dailyDirective
         return Card {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Today")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.muted)
+            VStack(alignment: .leading, spacing: Space.md) {
+                Text("Today").font(Typography.footnote).foregroundStyle(Theme.muted)
                 ForEach(directive.actions.prefix(3)) { action in
-                    HStack(spacing: 12) {
+                    HStack(spacing: Space.md) {
                         Image(systemName: action.icon)
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.creamDim)
                             .frame(width: 22)
                         Text(action.value)
-                            .font(Theme.text(14))
+                            .font(Typography.body)
                             .foregroundStyle(Theme.cream)
                         Spacer()
                     }
                 }
                 Divider().overlay(Theme.hairline)
                 Text(directive.priorityAction)
-                    .font(Theme.text(13, .medium))
+                    .font(Typography.callout.weight(.medium))
                     .foregroundStyle(Theme.gold)
                     .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button("Ask Coach") { Haptics.tap(); app.selectedTab = .coach }
+                        .buttonStyle(GoldButtonStyle(compact: true))
+                    Spacer()
+                }
+                RecommendationBasisView(basis: app.directiveBasis)
             }
         }
     }
 
-    private var metricRow: some View {
-        let d = app.recovery.today
-        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            MetricRing(value: d.recovery, label: "Recovery",
-                       detail: "HRV \(d.hrv) ms (\(d.hrvDelta >= 0 ? "+" : "")\(d.hrvDelta))",
-                       tone: .green)
-            MetricRing(value: d.sleepScore, label: "Sleep",
-                       detail: String(format: "%.1f h · %.1f deep", d.sleep.hours, d.sleep.deepHours),
-                       tone: .royal)
-            MetricRing(value: d.readiness.percent, label: "Readiness",
-                       detail: d.readiness.rawValue, tone: d.readiness.tone)
-            MetricRing(value: max(0, 100 - app.injuries.risk.percent * 2), label: "Resilience",
-                       detail: "Injury risk \(app.injuries.risk.percent)%",
-                       tone: app.injuries.risk.percent > 35 ? .ruby : .amber)
+    // MARK: - How close to today's goals? (one ring row)
+
+    private var todaysGoals: some View {
+        let n = app.nutrition
+        let hk = app.healthKit
+        let stepGoal = TargetEngine.steps(app.user)
+        let energyGoal = TargetEngine.activeEnergy(app.user)
+        return VStack(alignment: .leading, spacing: Space.sm) {
+            EyebrowLabel(text: "Today's Goals")
+            Card {
+                HStack(spacing: 0) {
+                    goalRing(pct: Progress.displayPercent(n.calories, of: n.calorieTarget),
+                             label: "Fuel", value: "\(n.calories.formatted()) kcal", tone: .gold)
+                    ringDivider
+                    goalRing(pct: Progress.displayPercent(hk.steps, of: stepGoal),
+                             label: "Steps", value: hk.steps.formatted(), tone: .green)
+                    ringDivider
+                    goalRing(pct: Progress.displayPercent(hk.activeEnergy, of: energyGoal),
+                             label: "Energy", value: "\(hk.activeEnergy.formatted()) kcal", tone: .amber)
+                }
+            }
+        }
+    }
+
+    private func goalRing(pct: Int, label: String, value: String, tone: Tone) -> some View {
+        VStack(spacing: 6) {
+            ScoreRing(value: min(pct, 100), label: label, size: 62, lineWidth: 6, tone: tone)
+            Text(value)
+                .font(Typography.caption).foregroundStyle(Theme.muted)
+                .lineLimit(1).minimumScaleFactor(0.6)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value), \(min(pct, 100)) percent of goal")
+    }
+
+    private var ringDivider: some View {
+        Rectangle().fill(Theme.hairline).frame(width: 1, height: 44)
+    }
+
+    // MARK: - Optional: connect Apple Health
+
+    /// A wearable is an *enhancement*, not a requirement — Forge runs on check-ins,
+    /// workouts, nutrition, and weight without one. Offered only when undecided.
+    @ViewBuilder
+    private var connectHealthBanner: some View {
+        if app.healthKit.authState == .notDetermined {
+            Card(gold: true) {
+                HStack(spacing: Space.md) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: IconSize.xl)).foregroundStyle(Theme.rubyBright)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Add automatic tracking (optional)")
+                            .font(Typography.body.weight(.semibold)).foregroundStyle(Theme.cream)
+                        Text("Forge already runs on your check-ins and logs. Connect Apple Health to add automatic HRV, sleep, and activity.")
+                            .font(Typography.footnote).foregroundStyle(Theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Button("Connect") {
+                        Task {
+                            await app.healthKit.connect()
+                            app.ingestHealthKitSignals()
+                        }
+                    }
+                    .buttonStyle(GoldButtonStyle(compact: true))
+                }
+            }
         }
     }
 }
 
 // MARK: - Quick actions
 
-/// Four circular one-tap actions under the greeting — the reference-style
-/// "do the thing now" row. Big targets, zero navigation depth.
+/// Four circular one-tap actions — do the thing now, zero navigation depth.
 private struct QuickActionsRow: View {
     @Environment(AppState.self) private var app
     @State private var waterLogged = false
@@ -342,11 +272,11 @@ private struct QuickActionsRow: View {
             actionButton(waterLogged ? "checkmark" : "drop.fill", waterLogged ? "+16 oz" : "Water") {
                 guard !waterLogged else { return }
                 app.nutrition.addWater(16)
-                Haptics.success()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { waterLogged = true }
+                Haptics.logged()
+                withAnimation(Motion.spring) { waterLogged = true }
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(2))
-                    withAnimation { waterLogged = false }
+                    withAnimation(Motion.gentle) { waterLogged = false }
                 }
             }
             NavigationLink { WearablesView() } label: {
@@ -377,7 +307,7 @@ private struct QuickActionsRow: View {
                     .fill(Theme.card)
                     .overlay(Circle().stroke(Theme.hairline, lineWidth: 1))
                 Image(systemName: icon)
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.system(size: IconSize.lg, weight: .medium))
                     .foregroundStyle(Theme.gold)
             }
             .frame(width: 52, height: 52)
