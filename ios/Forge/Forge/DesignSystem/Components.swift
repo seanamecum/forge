@@ -62,7 +62,7 @@ struct EyebrowLabel: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 12, weight: .semibold))
+            .font(Typography.subheadline.weight(.semibold))
             .foregroundStyle(tone == .gold ? Theme.creamDim : tone.color)
     }
 }
@@ -75,7 +75,7 @@ struct Chip: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .medium))
+            .font(Typography.footnote.weight(.medium))
             .foregroundStyle(tone == .neutral ? Theme.creamDim : tone.color)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -95,7 +95,7 @@ struct StatTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(Typography.footnote.weight(.medium))
                 .foregroundStyle(Theme.muted)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
@@ -105,13 +105,13 @@ struct StatTile: View {
                     .minimumScaleFactor(0.55)
                 if let unit {
                     Text(unit)
-                        .font(.system(size: 11))
+                        .font(Typography.footnote)
                         .foregroundStyle(Theme.muted)
                 }
             }
             if let hint {
                 Text(hint)
-                    .font(.system(size: 10))
+                    .font(Typography.caption)
                     .foregroundStyle(Theme.faint)
             }
         }
@@ -126,7 +126,7 @@ struct GoldButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: compact ? 12 : 14, weight: .semibold))
+            .font((compact ? Typography.subheadline : Typography.body).weight(.semibold))
             .kerning(0.8)
             .foregroundStyle(Theme.bg)
             .padding(.vertical, compact ? 9 : 13)
@@ -145,7 +145,7 @@ struct GhostButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: compact ? 12 : 14, weight: .medium))
+            .font((compact ? Typography.subheadline : Typography.body).weight(.medium))
             .foregroundStyle(Theme.cream)
             .padding(.vertical, compact ? 9 : 13)
             .padding(.horizontal, compact ? 16 : 22)
@@ -205,9 +205,9 @@ struct LabeledBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(label).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                Text(label).font(Typography.subheadline).foregroundStyle(Theme.muted)
                 Spacer()
-                Text(valueText).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.creamDim)
+                Text(valueText).font(Typography.subheadline.weight(.medium)).foregroundStyle(Theme.creamDim)
             }
             CapsuleBar(value: value, target: target, tone: tone, height: 7)
         }
@@ -223,9 +223,9 @@ struct InfoRow: View {
 
     var body: some View {
         HStack {
-            Text(label).font(.system(size: 13)).foregroundStyle(Theme.muted)
+            Text(label).font(Typography.callout).foregroundStyle(Theme.muted)
             Spacer()
-            Text(value).font(.system(size: 13, weight: .medium)).foregroundStyle(valueTone.color)
+            Text(value).font(Typography.callout.weight(.medium)).foregroundStyle(valueTone.color)
         }
         .padding(.vertical, 6)
         .overlay(Rectangle().fill(Theme.gold.opacity(0.06)).frame(height: 1), alignment: .bottom)
@@ -238,11 +238,11 @@ struct CoachNote: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "sparkles")
-                .font(.system(size: 12))
+                .font(.system(size: IconSize.xs))
                 .foregroundStyle(Theme.gold)
                 .padding(.top, 2)
             Text(text)
-                .font(.system(size: 12.5))
+                .font(Typography.subheadline)
                 .foregroundStyle(Theme.creamDim)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -258,12 +258,12 @@ struct DisclaimerNote: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 10.5))
+            .font(Typography.caption)
             .foregroundStyle(Theme.faint)
-            .padding(12)
+            .padding(Space.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.card.opacity(0.5)))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.hairline, lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: Radius.sm).fill(Theme.card.opacity(0.5)))
+            .overlay(RoundedRectangle(cornerRadius: Radius.sm).stroke(Theme.hairline, lineWidth: 1))
     }
 }
 
