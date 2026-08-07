@@ -29,7 +29,7 @@ struct GoalsView: View {
                 ForEach(goals) { goal in
                     GoalCard(goal: goal)
                 }
-                Button("+ New Goal") { showNew = true }
+                Button("+ New Goal") { Haptics.tap(); showNew = true }
                     .buttonStyle(GoldButtonStyle())
             }
         }
@@ -124,7 +124,11 @@ struct GoalCard: View {
                     if !goal.done {
                         Button("Log progress") {
                             goal.currentValue = min(goal.targetValue, goal.currentValue + max(1, goal.targetValue * 0.05))
-                            if goal.currentValue >= goal.targetValue { goal.done = true }
+                            if goal.currentValue >= goal.targetValue {
+                                goal.done = true; Haptics.success()   // crossed the finish line
+                            } else {
+                                Haptics.logged()
+                            }
                             SyncStamp.touch(goal)
                             try? context.save()
                             app.requestSync()
@@ -132,6 +136,7 @@ struct GoalCard: View {
                         .buttonStyle(GhostButtonStyle(compact: true))
 
                         Button("Mark done") {
+                            Haptics.success()
                             goal.done = true
                             goal.currentValue = goal.targetValue
                             SyncStamp.touch(goal)
@@ -142,6 +147,7 @@ struct GoalCard: View {
                     }
                     Spacer()
                     Button {
+                        Haptics.soft()
                         SyncEngine.recordDeletion(kind: GoalRecord.syncKind, syncID: goal.syncID, context: context)
                         context.delete(goal)
                         try? context.save()
@@ -191,6 +197,7 @@ struct NewGoalSheet: View {
             }
             Button("Create Goal") {
                 guard !title.isEmpty, let t = Double(target), t > 0 else { return }
+                Haptics.success()
                 context.insert(GoalRecord(title: title, unit: unit, targetValue: t,
                                           currentValue: Double(current) ?? 0,
                                           deadline: hasDeadline ? deadline : nil))

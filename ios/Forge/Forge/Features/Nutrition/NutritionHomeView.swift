@@ -105,7 +105,7 @@ struct NutritionHomeView: View {
                 CapsuleBar(value: n.waterOz, target: Double(n.waterTargetOz), tone: .royal, height: 9)
                 HStack(spacing: 8) {
                     ForEach([8, 16, 24], id: \.self) { oz in
-                        Button("+\(oz) oz") { app.nutrition.addWater(Double(oz)) }
+                        Button("+\(oz) oz") { Haptics.logged(); app.nutrition.addWater(Double(oz)) }
                             .buttonStyle(GhostButtonStyle(compact: true))
                     }
                     Spacer()
@@ -184,7 +184,7 @@ struct CaptureButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button { Haptics.tap(); action() } label: {
             VStack(spacing: 6) {
                 Image(systemName: icon).font(.system(size: 17)).foregroundStyle(Theme.gold)
                 Text(label).font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.creamDim)

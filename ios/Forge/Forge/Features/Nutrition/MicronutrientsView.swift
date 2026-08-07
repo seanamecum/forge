@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MicronutrientsView: View {
     @Environment(AppState.self) private var app
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ScreenScaffold {
@@ -12,7 +13,9 @@ struct MicronutrientsView: View {
                 EmptyStateView(
                     icon: "chart.bar",
                     title: "No micronutrient data yet",
-                    message: "Micronutrient averages build from your logged meals and bloodwork. Keep logging intake and add your labs, and your vitamin and mineral coverage fills in here.")
+                    message: "Your vitamin and mineral coverage builds from the meals you log. Log a few days of food and it fills in here.",
+                    actionLabel: "Start logging",
+                    action: { Haptics.tap(); dismiss() })
             }
 
             ForEach(app.nutrition.nutrientGroups) { group in
