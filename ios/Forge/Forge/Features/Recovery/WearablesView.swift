@@ -53,7 +53,7 @@ struct WearablesView: View {
                 } else {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("MISSING FROM YOUR STACK")
-                            .font(.system(size: 8.5, weight: .semibold)).kerning(1.4)
+                            .font(Typography.eyebrow).kerning(1.4)
                             .foregroundStyle(Theme.muted)
                         FlowChips(options: missing.map(\.label), isSelected: { _ in false }, toggle: { _ in })
                             .opacity(0.8)
@@ -91,7 +91,7 @@ struct WearablesView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     EyebrowLabel(text: "Cross-Device Read · Today")
                     Text(app.deviceNarrative)
-                        .font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
+                        .font(Typography.subheadline).foregroundStyle(Theme.creamDim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -110,7 +110,7 @@ struct WearablesView: View {
                     Spacer()
                     healthChip(for: hk.authState)
                 }
-                Text(hk.statusMessage).font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                Text(hk.statusMessage).font(Typography.footnote).foregroundStyle(Theme.muted)
                 if app.recovery.provenance != .live {
                     Chip(text: app.recovery.provenance.label, tone: .amber)
                 }
@@ -199,7 +199,7 @@ struct WearablesView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     EyebrowLabel(text: "Preferred Sources")
                     Text("More than one device reports these signals. Pick the winner — Forge falls back to the next source automatically if it stops syncing.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                        .font(Typography.footnote).foregroundStyle(Theme.muted)
                     ForEach(contested) { metric in
                         PreferredSourceRow(metric: metric)
                     }
@@ -230,14 +230,14 @@ struct WearablesView: View {
                             Text(source.displayName)
                                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.cream)
                             Text(source.pitch)
-                                .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                                .font(Typography.footnote).foregroundStyle(Theme.muted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: 0)
                     }
                 }
                 Text("Future partner offers will appear here — Forge stays device-neutral; recommendations follow your goal, not sponsorships.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                    .font(Typography.caption).foregroundStyle(Theme.faint)
             }
         }
     }
@@ -253,7 +253,7 @@ struct WearablesView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Forge Band").font(Theme.display(18)).foregroundStyle(Theme.cream)
                         Text("FUTURE HARDWARE · ROADMAP")
-                            .font(.system(size: 8.5, weight: .semibold)).kerning(1.4)
+                            .font(Typography.eyebrow).kerning(1.4)
                             .foregroundStyle(Theme.gold)
                     }
                     Spacer()
@@ -287,7 +287,7 @@ struct WearablesView: View {
                 }
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 12.5, weight: .semibold))
+                Text(title).font(Typography.subheadline.weight(.semibold))
                     .foregroundStyle(done ? Theme.cream : Theme.creamDim)
                 Text(detail).font(.system(size: 11)).foregroundStyle(Theme.muted)
             }
@@ -309,7 +309,7 @@ private struct PreferredSourceRow: View {
                 .font(.system(size: 12)).foregroundStyle(Theme.gold)
                 .frame(width: 22)
             Text(metric.label)
-                .font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.cream)
+                .font(Typography.subheadline.weight(.medium)).foregroundStyle(Theme.cream)
             Spacer()
             Menu {
                 ForEach(contenders) { source in
@@ -429,7 +429,7 @@ struct WearableRow: View {
         let gaps = DataHub.fillsGap(device.source, connected: app.connectedSources)
         return VStack(alignment: .leading, spacing: 4) {
             Text(device.source.pitch)
-                .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                .font(Typography.footnote).foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
             if !gaps.isEmpty {
                 Text("Adds to your stack: \(gaps.map { $0.label.lowercased() }.joined(separator: ", "))")

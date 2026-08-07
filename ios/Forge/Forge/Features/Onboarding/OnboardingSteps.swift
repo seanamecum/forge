@@ -250,7 +250,7 @@ private struct NudgePreview: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon).font(.system(size: 13)).foregroundStyle(Theme.gold)
-            Text(text).font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
+            Text(text).font(Typography.subheadline).foregroundStyle(Theme.creamDim)
         }
     }
 }

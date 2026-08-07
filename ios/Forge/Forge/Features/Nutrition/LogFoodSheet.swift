@@ -36,7 +36,7 @@ struct LogFoodSheet: View {
                         unitChips
                         if engine.isEstimatedConversion {
                             Label("Estimated conversion.", systemImage: "exclamationmark.triangle")
-                                .font(.system(size: 11.5)).foregroundStyle(Theme.amber)
+                                .font(Typography.footnote).foregroundStyle(Theme.amber)
                         }
                         macroReadout
                         NavigationLink {
@@ -165,7 +165,7 @@ struct SourceBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             Circle().fill(food.isLowConfidence ? Theme.amber : Theme.green).frame(width: 5, height: 5)
-            Text(food.source.label).font(.system(size: 9.5, weight: .medium)).foregroundStyle(Theme.faint)
+            Text(food.source.label).font(Typography.caption.weight(.medium)).foregroundStyle(Theme.faint)
         }
         .padding(.horizontal, 6).padding(.vertical, 2)
         .background(RoundedRectangle(cornerRadius: 5).fill(Theme.card))

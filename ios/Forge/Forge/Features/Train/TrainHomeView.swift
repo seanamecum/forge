@@ -169,7 +169,7 @@ struct TrainHomeView: View {
                         ForEach(block.items) { item in
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.name).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Theme.cream)
+                                    Text(item.name).font(Typography.callout.weight(.medium)).foregroundStyle(Theme.cream)
                                     Text(item.scheme).font(.system(size: 11)).foregroundStyle(Theme.muted)
                                 }
                                 Spacer()
@@ -199,7 +199,7 @@ struct TrainHomeView: View {
                 }
                 Text(p.name).font(Theme.display(18)).foregroundStyle(Theme.cream)
                 Text("\(p.coach) · \(p.daysPerWeek) days/wk · \(p.focus)")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                    .font(Typography.footnote).foregroundStyle(Theme.muted)
                 CapsuleBar(value: Double(p.week), target: Double(p.totalWeeks), tone: .gold, height: 6)
             }
         }
@@ -214,7 +214,7 @@ struct TrainHomeView: View {
                 } else {
                     ForEach(app.workouts.muscleVolume) { m in
                         HStack(spacing: 10) {
-                            Text(m.muscle).font(.system(size: 11.5)).foregroundStyle(Theme.creamDim)
+                            Text(m.muscle).font(Typography.footnote).foregroundStyle(Theme.creamDim)
                                 .frame(width: 80, alignment: .leading)
                             CapsuleBar(value: Double(m.sets), target: Double(m.optimalHigh),
                                        tone: m.inOptimal ? .green : .amber, height: 5)
@@ -225,7 +225,7 @@ struct TrainHomeView: View {
                     }
                     if app.injuries.active.contains(where: { $0.type == .knee }) {
                         Text("Quads intentionally under target — knee rehab block.")
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                            .font(Typography.caption).foregroundStyle(Theme.faint)
                     }
                 }
             }
@@ -243,7 +243,7 @@ struct TrainHomeView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(pr.exerciseName).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.cream)
-                                Text(pr.date).font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                                Text(pr.date).font(Typography.caption).foregroundStyle(Theme.faint)
                             }
                             Spacer()
                             Text("\(Int(pr.weightLb)) lb × \(pr.reps)")
@@ -276,7 +276,7 @@ struct TrainHomeView: View {
 
     private func emptyNote(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+            .font(Typography.footnote).foregroundStyle(Theme.muted)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -311,7 +311,7 @@ struct WorkoutHistoryRow: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(workout.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.cream)
                         Text("\(workout.date.formatted(.dateTime.month().day())) · \(workout.durationMin) min · RPE \(String(format: "%.1f", workout.avgRPE)) · felt \(workout.feel.rawValue.lowercased())")
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                            .font(Typography.caption).foregroundStyle(Theme.faint)
                     }
                     Spacer()
                     Text("\(Int(workout.totalVolumeLb).formatted()) lb")

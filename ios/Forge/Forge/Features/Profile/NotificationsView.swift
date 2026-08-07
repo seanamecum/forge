@@ -26,7 +26,7 @@ struct NotificationsView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {
                                 Text(item.title)
-                                    .font(.system(size: 13.5, weight: item.read ? .regular : .semibold))
+                                    .font(Typography.callout.weight(item.read ? .regular : .semibold))
                                     .foregroundStyle(item.read ? Theme.creamDim : Theme.cream)
                                 Spacer()
                                 Text(item.time).font(.system(size: 10)).foregroundStyle(Theme.faint)

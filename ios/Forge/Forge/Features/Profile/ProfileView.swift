@@ -74,7 +74,7 @@ struct ProfileView: View {
                         Image(systemName: syncIcon)
                             .font(.system(size: 13)).foregroundStyle(syncTone)
                         Text(syncLabel)
-                            .font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
+                            .font(Typography.subheadline).foregroundStyle(Theme.creamDim)
                         Spacer()
                         if app.sync.status.isBusy {
                             ProgressView().controlSize(.small).tint(Theme.gold)
@@ -125,10 +125,10 @@ struct ProfileView: View {
                 EyebrowLabel(text: "Account & Data")
                 if let email = app.auth.sessionEmail {
                     Text("Signed in as \(email)")
-                        .font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
+                        .font(Typography.subheadline).foregroundStyle(Theme.creamDim)
                 } else {
                     Text("Demo mode — no account, nothing leaves this phone.")
-                        .font(.system(size: 12.5)).foregroundStyle(Theme.muted)
+                        .font(Typography.subheadline).foregroundStyle(Theme.muted)
                 }
                 if let error = app.auth.lastError {
                     ErrorBanner(message: error) { app.auth.lastError = nil }
@@ -214,7 +214,7 @@ struct ProfileView: View {
                     Text(u.name).font(Theme.display(21)).foregroundStyle(Theme.cream)
                     Text([u.sport, u.fitnessLevel.rawValue, "\(u.experienceYears) yrs"]
                             .filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.gold)
+                        .font(Typography.footnote).foregroundStyle(Theme.gold)
                     Text("\(u.age) yrs · \(u.heightLabel) · \(Int(u.weightLb)) lb")
                         .font(.system(size: 11)).foregroundStyle(Theme.muted)
                 }
@@ -246,10 +246,10 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 4) {
                 EyebrowLabel(text: "Units")
                 HStack {
-                    Text("Units").font(.system(size: 13.5)).foregroundStyle(Theme.cream)
+                    Text("Units").font(Typography.callout).foregroundStyle(Theme.cream)
                     Spacer()
                     Text("Imperial (lb · in · oz)")
-                        .font(.system(size: 12.5)).foregroundStyle(Theme.muted)
+                        .font(Typography.subheadline).foregroundStyle(Theme.muted)
                 }
                 .tint(Theme.gold)
             }
@@ -318,7 +318,7 @@ struct ProfileView: View {
     }
 
     private func prefLabel(_ text: String) -> some View {
-        Text(text).font(.system(size: 13.5)).foregroundStyle(Theme.cream)
+        Text(text).font(Typography.callout).foregroundStyle(Theme.cream)
     }
 
     private var privacyCard: some View {
@@ -326,7 +326,7 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 8) {
                 EyebrowLabel(text: "Privacy")
                 Text("Your health data stays on your device and, when you enable Cloud Sync, is backed up to your private account — opt-in and never sold. HealthKit data is never used for advertising — App Store rules and ours.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                    .font(Typography.footnote).foregroundStyle(Theme.muted)
             }
         }
     }

@@ -144,7 +144,7 @@ struct FeedbackSheet: View {
     private var form: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("What's broken, confusing, or missing? Raw and unfiltered helps most — it goes straight to the founder.")
-                .font(.system(size: 12.5)).foregroundStyle(Theme.muted)
+                .font(Typography.subheadline).foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
             TextEditor(text: $message)

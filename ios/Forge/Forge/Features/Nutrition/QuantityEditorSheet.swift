@@ -133,14 +133,14 @@ struct QuantityEditorSheet: View {
 
     private var multiplierNote: some View {
         Text("Editing amount as a multiple of the logged serving (\(entry.food.serving)). Unit conversions aren't available for this food yet.")
-            .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+            .font(Typography.footnote).foregroundStyle(Theme.muted)
             .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder private var estimatedNote: some View {
         if engine?.isEstimatedConversion == true {
             Label("This is an estimated conversion.", systemImage: "exclamationmark.triangle")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.amber)
+                .font(Typography.footnote).foregroundStyle(Theme.amber)
         }
     }
 

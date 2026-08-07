@@ -54,13 +54,13 @@ struct PostCard: View {
                     Chip(text: post.kind.rawValue, tone: .gold)
                 }
 
-                Text(post.body).font(.system(size: 13.5)).foregroundStyle(Theme.creamDim)
+                Text(post.body).font(Typography.callout).foregroundStyle(Theme.creamDim)
 
                 if let label = post.statLabel, let value = post.statValue {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(label.uppercased())
-                                .font(.system(size: 8.5, weight: .semibold)).kerning(1.2)
+                                .font(Typography.eyebrow).kerning(1.2)
                                 .foregroundStyle(Theme.gold)
                             Text(value).font(Theme.display(18)).foregroundStyle(Theme.goldGradient)
                         }
@@ -80,13 +80,13 @@ struct PostCard: View {
                                 .foregroundStyle(post.likedByMe ? Theme.rubyBright : Theme.muted)
                             Text("\(post.likes)").foregroundStyle(Theme.muted)
                         }
-                        .font(.system(size: 12.5))
+                        .font(Typography.subheadline)
                     }
                     HStack(spacing: 5) {
                         Image(systemName: "bubble.right")
                         Text("\(post.comments)")
                     }
-                    .font(.system(size: 12.5)).foregroundStyle(Theme.muted)
+                    .font(Typography.subheadline).foregroundStyle(Theme.muted)
                     Spacer()
                     Image(systemName: "square.and.arrow.up")
                         .font(.system(size: 13)).foregroundStyle(Theme.muted)
@@ -105,7 +105,7 @@ struct GroupCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
-                        Text(group.name).font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Theme.cream)
+                        Text(group.name).font(Typography.body.weight(.semibold)).foregroundStyle(Theme.cream)
                         Chip(text: group.tag)
                     }
                     Text("\(group.members.formatted()) members").font(.system(size: 11)).foregroundStyle(Theme.faint)

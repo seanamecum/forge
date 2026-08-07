@@ -349,14 +349,14 @@ struct RunningView: View {
                 ForEach(RunLog.recent) { run in
                     HStack {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(run.name).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Theme.cream)
-                            Text(run.when).font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                            Text(run.name).font(Typography.callout.weight(.medium)).foregroundStyle(Theme.cream)
+                            Text(run.when).font(Typography.caption).foregroundStyle(Theme.faint)
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 1) {
                             Text("\(String(format: "%.1f", run.miles)) mi · \(run.pace)/mi")
-                                .font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
-                            Text("avg \(run.avgHR) bpm").font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                                .font(Typography.subheadline).foregroundStyle(Theme.creamDim)
+                            Text("avg \(run.avgHR) bpm").font(Typography.caption).foregroundStyle(Theme.muted)
                         }
                     }
                     .padding(.vertical, 3)

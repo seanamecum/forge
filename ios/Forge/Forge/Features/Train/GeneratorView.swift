@@ -116,9 +116,9 @@ struct GeneratedPlanCard: View {
                         }
                         ForEach(block.items) { item in
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(item.name).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Theme.cream)
+                                Text(item.name).font(Typography.callout.weight(.medium)).foregroundStyle(Theme.cream)
                                 Text(item.scheme).font(.system(size: 11)).foregroundStyle(Theme.muted)
-                                Text("✦ \(item.note)").font(.system(size: 10.5)).foregroundStyle(Theme.gold.opacity(0.75))
+                                Text("✦ \(item.note)").font(Typography.caption).foregroundStyle(Theme.gold.opacity(0.75))
                             }
                             .padding(.vertical, 4)
                         }

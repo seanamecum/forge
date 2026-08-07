@@ -77,7 +77,7 @@ struct ForecastView: View {
                             VStack(alignment: .trailing, spacing: 1) {
                                 Text("\(Int(f.confidence * 100))%")
                                     .font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.cream)
-                                Text("sample confidence").font(.system(size: 8.5)).foregroundStyle(Theme.faint)
+                                Text("sample confidence").font(Typography.eyebrow).foregroundStyle(Theme.faint)
                             }
                         }
                         HStack {

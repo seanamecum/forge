@@ -49,7 +49,7 @@ struct TeamsView: View {
     private func teamStat(_ label: String, _ value: String, tone: Tone) -> some View {
         VStack(spacing: 2) {
             Text(value).font(Theme.display(17)).foregroundStyle(tone.color)
-            Text(label.uppercased()).font(.system(size: 7.5, weight: .semibold)).kerning(0.8)
+            Text(label.uppercased()).font(Typography.eyebrow).kerning(0.8)
                 .foregroundStyle(Theme.muted)
         }
         .frame(maxWidth: .infinity)

@@ -51,7 +51,7 @@ struct GoalsView: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(s.title).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Theme.cream)
+                                Text(s.title).font(Typography.callout.weight(.medium)).foregroundStyle(Theme.cream)
                                 Text(s.why).font(.system(size: 11)).foregroundStyle(Theme.muted)
                             }
                             Spacer()
@@ -180,7 +180,7 @@ struct NewGoalSheet: View {
                 AuthField(label: "Unit", text: $unit)
             }
             Toggle(isOn: $hasDeadline) {
-                Text("Deadline").font(.system(size: 13.5)).foregroundStyle(Theme.cream)
+                Text("Deadline").font(Typography.callout).foregroundStyle(Theme.cream)
             }
             .tint(Theme.gold)
             if hasDeadline {

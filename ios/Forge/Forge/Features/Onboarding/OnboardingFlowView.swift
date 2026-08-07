@@ -184,7 +184,7 @@ struct StepHeading: View {
                 .font(Theme.display(30))
                 .foregroundStyle(Theme.cream)
             Text(subtitle)
-                .font(.system(size: 13.5))
+                .font(Typography.callout)
                 .foregroundStyle(Theme.muted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -213,7 +213,7 @@ struct SelectableRow: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(selected ? Theme.cream : Theme.creamDim)
                     if !detail.isEmpty {
-                        Text(detail).font(.system(size: 11.5)).foregroundStyle(Theme.faint)
+                        Text(detail).font(Typography.footnote).foregroundStyle(Theme.faint)
                     }
                 }
                 Spacer()

@@ -100,7 +100,7 @@ private struct DirectiveActionRow: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.muted)
                 Text(action.value)
-                    .font(Theme.text(13.5, .medium))
+                    .font(Typography.callout.weight(.medium))
                     .foregroundStyle(Theme.cream)
                     .fixedSize(horizontal: false, vertical: true)
             }

@@ -39,7 +39,7 @@ struct AmbientInsightCard: View {
                 }
                 if expanded {
                     Text(insight.reason)
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                        .font(Typography.footnote).foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }

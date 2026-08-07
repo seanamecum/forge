@@ -23,7 +23,7 @@ struct SupplementsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(s.name).font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Theme.cream)
+                                    Text(s.name).font(Typography.body.weight(.semibold)).foregroundStyle(Theme.cream)
                                     Text("\(s.dose) · \(s.timing)").font(.system(size: 11)).foregroundStyle(Theme.muted)
                                 }
                                 Spacer()
@@ -46,7 +46,7 @@ struct SupplementsView: View {
                                     .font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.gold)
                                 Spacer()
                                 if !s.loggedToday {
-                                    Text("Pending today").font(.system(size: 10.5)).foregroundStyle(Theme.amber)
+                                    Text("Pending today").font(Typography.caption).foregroundStyle(Theme.amber)
                                 }
                             }
                         }

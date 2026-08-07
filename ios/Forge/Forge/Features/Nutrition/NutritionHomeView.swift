@@ -54,12 +54,12 @@ struct NutritionHomeView: View {
                         }
                     }
                     Text(plan.headline)
-                        .font(Theme.text(13.5, .medium))
+                        .font(Typography.callout.weight(.medium))
                         .foregroundStyle(Theme.cream)
                         .fixedSize(horizontal: false, vertical: true)
                     if plan.isAdjusted {
                         Text("Base \(plan.baseCalories) kcal · \(plan.baseProtein)g → today \(plan.calories) kcal · \(plan.protein)g")
-                            .font(.system(size: 11.5))
+                            .font(Typography.footnote)
                             .foregroundStyle(Theme.muted)
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(plan.adjustments) { adj in
@@ -214,7 +214,7 @@ struct MealSection: View {
                     Text(meal.rawValue).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.cream)
                     Spacer()
                     if kcal > 0 {
-                        Text("\(kcal) kcal").font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                        Text("\(kcal) kcal").font(Typography.footnote).foregroundStyle(Theme.muted)
                     }
                     Button(action: onAdd) {
                         Image(systemName: "plus.circle.fill")
@@ -223,15 +223,15 @@ struct MealSection: View {
                     .accessibilityLabel("Add food to \(meal.rawValue)")
                 }
                 if entries.isEmpty {
-                    Text("Nothing logged").font(.system(size: 11.5)).foregroundStyle(Theme.faint)
+                    Text("Nothing logged").font(Typography.footnote).foregroundStyle(Theme.faint)
                 } else {
                     ForEach(entries) { entry in
                         Button { editing = entry } label: {
                             HStack {
-                                Text(entry.food.name).font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
+                                Text(entry.food.name).font(Typography.subheadline).foregroundStyle(Theme.creamDim)
                                 if entry.food.serving != "serving" && !entry.food.serving.isEmpty {
                                     Text(entry.food.serving)
-                                        .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                                        .font(Typography.caption).foregroundStyle(Theme.faint)
                                 }
                                 Spacer()
                                 Text("\(entry.calories) · \(Int(entry.protein))P")
@@ -385,7 +385,7 @@ struct FoodSearchSheet: View {
                     Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(Theme.gold)
                     Text(s.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.cream)
                 }
-                Text(s.reason).font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                Text(s.reason).font(Typography.footnote).foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 Button {
                     app.logRememberedMeal(s, into: meal); Haptics.logged(); dismiss()
@@ -403,7 +403,7 @@ struct FoodSearchSheet: View {
                 ForEach(results) { food in resultRow(food) }
                 if searching {
                     HStack(spacing: 8) { ProgressView().controlSize(.small).tint(Theme.gold)
-                        Text("Searching…").font(.system(size: 11.5)).foregroundStyle(Theme.muted) }
+                        Text("Searching…").font(Typography.footnote).foregroundStyle(Theme.muted) }
                         .padding(.top, 6)
                 } else if results.isEmpty {
                     EmptyStateView(icon: "magnifyingglass", title: "No matches for \"\(query)\"",
@@ -425,14 +425,14 @@ struct FoodSearchSheet: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(food.name).font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.cream).lineLimit(1)
                             HStack(spacing: 6) {
-                                if let b = food.brand { Text(b).font(.system(size: 10.5)).foregroundStyle(Theme.muted).lineLimit(1) }
+                                if let b = food.brand { Text(b).font(Typography.caption).foregroundStyle(Theme.muted).lineLimit(1) }
                                 SourceBadge(food: food)
                             }
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 1) {
                             Text("\(kcal)").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.gold)
-                            Text("kcal").font(.system(size: 8.5)).foregroundStyle(Theme.faint)
+                            Text("kcal").font(Typography.eyebrow).foregroundStyle(Theme.faint)
                         }
                     }
                     .contentShape(Rectangle())
@@ -456,7 +456,7 @@ struct FoodSearchSheet: View {
         } label: {
             Card {
                 HStack {
-                    Text(f.foodName).font(.system(size: 13.5)).foregroundStyle(Theme.creamDim)
+                    Text(f.foodName).font(Typography.callout).foregroundStyle(Theme.creamDim)
                     Spacer()
                     Image(systemName: "plus.circle.fill").font(.system(size: 16)).foregroundStyle(Theme.gold)
                 }

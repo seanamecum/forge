@@ -109,7 +109,7 @@ struct WorkoutLoggerView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("REST").font(Theme.eyebrow(9)).kerning(2).foregroundStyle(Theme.gold)
-                    Text("Next set when the ring closes").font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                    Text("Next set when the ring closes").font(Typography.footnote).foregroundStyle(Theme.muted)
                 }
                 Spacer()
                 restAdjust("−15") { restRemaining = max(0, restRemaining - 15) }
@@ -323,7 +323,7 @@ struct ExerciseLogCard: View {
                                 .foregroundStyle(Theme.gold.opacity(0.85))
                         }
                     }
-                    .font(.system(size: 10.5))
+                    .font(Typography.caption)
                     .foregroundStyle(Theme.muted)
                 }
 
@@ -336,7 +336,7 @@ struct ExerciseLogCard: View {
                     Text("RIR").frame(maxWidth: .infinity)
                     Text("").frame(width: 34)
                 }
-                .font(.system(size: 8.5, weight: .semibold))
+                .font(Typography.eyebrow)
                 .kerning(1)
                 .foregroundStyle(Theme.faint)
 
@@ -361,7 +361,7 @@ struct ExerciseLogCard: View {
                                                   reps: last?.reps ?? 0))
                 } label: {
                     Label("Add set", systemImage: "plus")
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(Typography.footnote.weight(.medium))
                         .foregroundStyle(Theme.gold)
                 }
             }

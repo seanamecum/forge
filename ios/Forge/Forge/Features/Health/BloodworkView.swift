@@ -136,17 +136,17 @@ struct MarkerCard: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(marker.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.cream)
-                        Text(marker.takenAt).font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                        Text(marker.takenAt).font(Typography.caption).foregroundStyle(Theme.faint)
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 1) {
                         HStack(alignment: .firstTextBaseline, spacing: 3) {
                             Text(String(format: "%g", marker.value))
                                 .font(Theme.display(20)).foregroundStyle(Theme.goldGradient)
-                            Text(marker.unit).font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+                            Text(marker.unit).font(Typography.caption).foregroundStyle(Theme.muted)
                         }
                         if let delta = marker.delta {
-                            Text(delta).font(.system(size: 10.5)).foregroundStyle(Theme.green)
+                            Text(delta).font(Typography.caption).foregroundStyle(Theme.green)
                         }
                     }
                 }

@@ -140,7 +140,7 @@ struct RecoverHomeView: View {
                                 Text(trend.name).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.creamDim)
                                 Spacer()
                                 Text("\(String(format: "%g", trend.latest)) \(trend.unit)")
-                                    .font(.system(size: 11.5)).foregroundStyle(Theme.gold)
+                                    .font(Typography.footnote).foregroundStyle(Theme.gold)
                             }
                             Sparkline(values: trend.values,
                                       color: trend.name == "Strain" ? Theme.amber : Theme.gold,

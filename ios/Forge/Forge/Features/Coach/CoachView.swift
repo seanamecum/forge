@@ -193,7 +193,7 @@ struct CoachBubble: View {
                                         .font(.system(size: 11, weight: .semibold))
                                         .foregroundStyle(Theme.gold.opacity(0.7))
                                     Text(step)
-                                        .font(.system(size: 11.5))
+                                        .font(Typography.footnote)
                                         .foregroundStyle(Theme.muted)
                                 }
                             }
@@ -213,7 +213,7 @@ struct CoachBubble: View {
                                     .kerning(1)
                                     .foregroundStyle(Theme.muted)
                                 Text(card.value)
-                                    .font(.system(size: 11.5, weight: .semibold))
+                                    .font(Typography.footnote.weight(.semibold))
                                     .foregroundStyle(card.tone.color)
                             }
                             .padding(10)
@@ -266,7 +266,7 @@ struct EvidenceSheet: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Forge's recommendations are grounded in position stands and landmark studies. The live coach cites only from this vetted list — it is never allowed to invent a reference.")
-                        .font(Theme.text(12.5))
+                        .font(Typography.subheadline)
                         .foregroundStyle(Theme.muted)
                         .padding(.bottom, 4)
 
@@ -287,7 +287,7 @@ struct EvidenceSheet: View {
                     }
 
                     Text("Educational guidance, not medical advice.")
-                        .font(.system(size: 10.5))
+                        .font(Typography.caption)
                         .foregroundStyle(Theme.faint)
                         .padding(.top, 4)
                 }

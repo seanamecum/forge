@@ -415,7 +415,7 @@ private struct QuickActionsRow: View {
             }
             .frame(width: 52, height: 52)
             Text(label)
-                .font(.system(size: 10.5, weight: .medium))
+                .font(Typography.caption.weight(.medium))
                 .foregroundStyle(Theme.muted)
         }
         .contentShape(Rectangle())
