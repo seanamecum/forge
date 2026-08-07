@@ -50,7 +50,13 @@ struct InjuryProfileSection: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            riskCard
+            // The illustrative risk model is demo-only. Real users get an honest
+            // empty state — never a fabricated risk score or medical claim.
+            if app.isDemoAccount {
+                riskCard
+            } else {
+                recoveryInsightsCard
+            }
 
             if app.injuries.active.isEmpty {
                 injuryEmptyState
@@ -63,6 +69,34 @@ struct InjuryProfileSection: View {
             addInjuryCard
         }
         .sheet(isPresented: $showLog) { LogInjurySheet() }
+    }
+
+    /// Honest, premium stand-in for the not-yet-personalized risk model. No score,
+    /// no medical certainty — and it points at the real, non-medical actions the
+    /// user CAN take right now (log soreness/pain below, clear rehab gates in Return).
+    private var recoveryInsightsCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Space.md) {
+                HStack(spacing: Space.md) {
+                    ZStack {
+                        Circle().fill(Theme.gold.opacity(0.12))
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(.system(size: IconSize.lg)).foregroundStyle(Theme.gold)
+                    }
+                    .frame(width: 46, height: 46)
+                    VStack(alignment: .leading, spacing: 2) {
+                        EyebrowLabel(text: "Recovery Insights")
+                        Text("Personalized as you log").font(Typography.title3).foregroundStyle(Theme.cream)
+                    }
+                }
+                Text("Injury-risk and recovery insights appear once Forge has enough of your real training, soreness, and sleep — never a fabricated score, never a medical claim.")
+                    .font(Typography.footnote).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("For now you can log soreness and pain location, track training limitations, and mark rehab gates as you clear them — below and in the Return tab.")
+                    .font(Typography.caption).foregroundStyle(Theme.faint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var injuryEmptyState: some View {
@@ -376,6 +410,7 @@ struct ConcussionSection: View {
                 }
             }
 
+            if app.isDemoAccount {
             Card {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
@@ -416,6 +451,23 @@ struct ConcussionSection: View {
                         .padding(.vertical, 3)
                     }
                 }
+            }
+            } else {
+                concussionEmptyState
+            }
+        }
+    }
+
+    /// Real users never see seeded/sample concussion data. If they sustain a head
+    /// impact they log it and tracking begins — honest, non-medical, clinician-led.
+    private var concussionEmptyState: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Space.md) {
+                EyebrowLabel(text: "Concussion Tracking")
+                Text("Ready when you need it").font(Typography.title3).foregroundStyle(Theme.cream)
+                Text("If you sustain a head impact, log it and Forge will track your clinician-managed symptom scores and return-to-play stages here — it records your recovery, it never decides it. No sample data, no medical judgments.")
+                    .font(Typography.footnote).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
