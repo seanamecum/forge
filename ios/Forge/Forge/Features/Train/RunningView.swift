@@ -12,7 +12,7 @@ struct RunningView: View {
     var body: some View {
         ScreenScaffold {
             SectionHeader(eyebrow: "Train · Endurance", title: "Running",
-                          subtitle: "Engine work, tuned to your recovery and the knee.")
+                          subtitle: runSubtitle)
 
             switch tracker.state {
             case .idle: startCard
@@ -21,9 +21,14 @@ struct RunningView: View {
             }
 
             if tracker.state == .idle {
-                weeklyCard
-                paceGuidance
-                recentRuns
+                if app.isDemoAccount {
+                    weeklyCard       // illustrative demo context
+                    paceGuidance
+                    recentRuns
+                } else {
+                    realWeekSummary  // real logged runs — honest empty when none
+                    realRecentRuns
+                }
             }
         }
         .navigationTitle("Running")
@@ -36,16 +41,26 @@ struct RunningView: View {
 
     // MARK: - Start
 
+    private var runSubtitle: String {
+        if let injury = app.injuries.active.first {
+            return "Engine work, tuned to your recovery and your \(injury.type.rawValue.lowercased())."
+        }
+        return "Engine work, tuned to your recovery and goals."
+    }
+
     private var startCard: some View {
-        Card(gold: true) {
+        let rec = app.recovery.today.recovery
+        let injury = app.injuries.active.first
+        return Card(gold: true) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     EyebrowLabel(text: "Today's call")
                     Spacer()
-                    Chip(text: "Knee: bike preferred", tone: .amber)
+                    Chip(text: "Recovery \(rec)", tone: rec >= 70 ? .green : .amber)
                 }
-                Text("Zone 2 · 25 min easy").font(Theme.display(22)).foregroundStyle(Theme.cream)
-                CoachNote(text: "Recovery 78 allows a run, but the patellar tendon is mid-rehab — keep it flat, conversational pace, and stop if pain passes 3/10. The bike covers conditioning with zero tendon cost if the knee talks.")
+                Text(rec >= 70 ? "Zone 2 · 25–35 min easy" : "Zone 2 · 20 min very easy")
+                    .font(Theme.display(22)).foregroundStyle(Theme.cream)
+                CoachNote(text: runGuidance(recovery: rec, injury: injury))
                 if tracker.authorization == .denied, let err = tracker.lastError {
                     ErrorBanner(message: err)
                 }
@@ -56,6 +71,17 @@ struct RunningView: View {
                 .buttonStyle(GoldButtonStyle())
             }
         }
+    }
+
+    /// Recovery- and injury-aware guidance — real state, never a fixed persona.
+    private func runGuidance(recovery: Int, injury: InjuryProfile?) -> String {
+        if let injury {
+            return "Recovery \(recovery). Keep it flat and conversational — your \(injury.type.rawValue.lowercased()) is flagged, so ease off and stop if pain climbs past 3/10."
+        }
+        if recovery >= 70 {
+            return "Recovery \(recovery) is green — an easy aerobic run is well within range. Keep it conversational and let the pace come to you."
+        }
+        return "Recovery \(recovery) is on the low side — keep this short and very easy, or swap for a brisk walk. Gentle aerobic work today."
     }
 
     // MARK: - Live run
@@ -231,6 +257,63 @@ struct RunningView: View {
     }
 
     // MARK: - Context (idle)
+
+    // MARK: - Real run context (from logged GPS runs)
+
+    /// Real GPS runs saved to training history (saveRun names them "Run · …").
+    private var runWorkouts: [Workout] {
+        app.workouts.history.filter { $0.name.hasPrefix("Run") }
+    }
+
+    private var realWeekSummary: some View {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now
+        let week = runWorkouts.filter { $0.date >= cutoff }
+        return Card {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                EyebrowLabel(text: "This week")
+                if week.isEmpty {
+                    Text("No runs yet this week. Start a GPS run and your weekly log builds here.")
+                        .font(Typography.footnote).foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    let mins = week.reduce(0) { $0 + $1.durationMin }
+                    Text("\(week.count) run\(week.count == 1 ? "" : "s") · \(mins) min")
+                        .font(Typography.title3).foregroundStyle(Theme.cream)
+                    Text("Distance and pace calibrate as you log more.")
+                        .font(Typography.caption).foregroundStyle(Theme.faint)
+                }
+            }
+        }
+    }
+
+    private var realRecentRuns: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                EyebrowLabel(text: "Recent runs")
+                if runWorkouts.isEmpty {
+                    Text("Your logged runs appear here with distance and time — tap Start GPS Run above to log your first.")
+                        .font(Typography.footnote).foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(runWorkouts.prefix(6)) { run in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(run.name).font(Typography.callout.weight(.medium)).foregroundStyle(Theme.cream)
+                                Text(run.date.formatted(.dateTime.weekday().month().day()))
+                                    .font(Typography.caption).foregroundStyle(Theme.faint)
+                            }
+                            Spacer()
+                            Text("\(run.durationMin) min")
+                                .font(Typography.footnote).foregroundStyle(Theme.muted).monospacedDigit()
+                        }
+                        .padding(.vertical, 3)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Demo context (illustrative)
 
     private var weeklyCard: some View {
         Card {
