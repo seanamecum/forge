@@ -27,7 +27,7 @@ struct CoachView: View {
                     }
                     .scrollDismissesKeyboard(.interactively)
                     .onChange(of: vm.messages.count) {
-                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                        withAnimation(Motion.gentle) { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
                 }
 
@@ -153,8 +153,8 @@ struct CoachBubble: View {
                     .font(Theme.text(14))
                     .foregroundStyle(Theme.cream)
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(Theme.gold.opacity(0.12)))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.gold.opacity(0.3), lineWidth: 1))
+                    .background(RoundedRectangle(cornerRadius: Radius.lg).fill(Theme.gold.opacity(0.12)))
+                    .overlay(RoundedRectangle(cornerRadius: Radius.lg).stroke(Theme.gold.opacity(0.3), lineWidth: 1))
             }
         } else {
             VStack(alignment: .leading, spacing: 10) {
@@ -170,12 +170,12 @@ struct CoachBubble: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Theme.card))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline, lineWidth: 1))
+                .background(RoundedRectangle(cornerRadius: Radius.lg).fill(Theme.card))
+                .overlay(RoundedRectangle(cornerRadius: Radius.lg).stroke(Theme.hairline, lineWidth: 1))
 
                 if !message.steps.isEmpty {
                     Button {
-                        withAnimation { showSteps.toggle() }
+                        withAnimation(Motion.snappy) { showSteps.toggle() }
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "list.number")
@@ -199,8 +199,8 @@ struct CoachBubble: View {
                             }
                         }
                         .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.bgElevated))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.hairline, lineWidth: 1))
+                        .background(RoundedRectangle(cornerRadius: Radius.md).fill(Theme.bgElevated))
+                        .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(Theme.hairline, lineWidth: 1))
                     }
                 }
 

@@ -47,11 +47,8 @@ struct ProfileView: View {
             }
             .buttonStyle(GhostButtonStyle())
 
-            Button("Log Out") { app.logout() }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Theme.rubyBright)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+            Button("Log Out") { Haptics.tap(); app.logout() }
+                .buttonStyle(GhostButtonStyle())
 
             Text("\(AppInfo.shortLabel) · Built for athletes")
                 .font(.system(size: 10)).foregroundStyle(Theme.faint)
@@ -243,16 +240,14 @@ struct ProfileView: View {
 
     private var unitsCard: some View {
         Card {
-            VStack(alignment: .leading, spacing: 4) {
+            HStack {
                 EyebrowLabel(text: "Units")
-                HStack {
-                    Text("Units").font(Typography.callout).foregroundStyle(Theme.cream)
-                    Spacer()
-                    Text("Imperial (lb · in · oz)")
-                        .font(Typography.subheadline).foregroundStyle(Theme.muted)
-                }
-                .tint(Theme.gold)
+                Spacer()
+                Text("Imperial (lb · in · oz)")
+                    .font(Typography.subheadline).foregroundStyle(Theme.muted)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Units: Imperial")
         }
     }
 
