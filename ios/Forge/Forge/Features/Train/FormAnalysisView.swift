@@ -38,7 +38,7 @@ struct FormAnalysisView: View {
                 Text("Video analysis — in development")
                     .font(Theme.display(17)).foregroundStyle(Theme.cream)
                 Text("When live: side angle · 2–5 reps · good lighting")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                    .font(Typography.footnote).foregroundStyle(Theme.muted)
                 Button(analyzing ? "Loading sample…" : "See a sample \(lift.lowercased()) report") {
                     analyzed = false
                     analyzing = true
@@ -131,7 +131,7 @@ struct FormResultCard: View {
                         .foregroundStyle(tone.color)
                         .padding(.top, 3)
                     Text(item)
-                        .font(.system(size: 12.5))
+                        .font(Typography.subheadline)
                         .foregroundStyle(Theme.creamDim)
                         .fixedSize(horizontal: false, vertical: true)
                 }

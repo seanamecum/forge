@@ -122,6 +122,17 @@ struct UserProfile: Identifiable, Codable {
     var initials: String {
         name.split(separator: " ").compactMap { $0.first.map(String.init) }.prefix(2).joined()
     }
+
+    /// A brand-new account — no identity, no demo data. Numeric body fields start
+    /// at 0; onboarding requires real values before it can finish, so targets are
+    /// never computed from fabricated defaults. Never seed a new user from `sean`.
+    static var blank: UserProfile {
+        UserProfile(
+            name: "", age: 0, sex: .male, heightInches: 0, weightLb: 0,
+            fitnessLevel: .beginner, activityLevel: .moderate,
+            goals: [], experienceYears: 0, equipment: [], diet: .omnivore,
+            sport: "", level: 1, xp: 0, xpToNext: 1000, streakDays: 0)
+    }
 }
 
 struct CoachMessage: Identifiable {

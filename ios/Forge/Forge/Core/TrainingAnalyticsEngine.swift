@@ -76,6 +76,74 @@ enum TrainingAnalyticsEngine {
         volume.filter { $0.sets < $0.optimalLow }
     }
 
+    // MARK: - Real boards (derived from logged sessions, not seeded)
+
+    /// The athlete's PR board — the best set (by estimated 1RM) for every lift ever
+    /// logged, most recent record first. Real dates, no fabricated entries.
+    static func personalRecords(from history: [Workout]) -> [PersonalRecord] {
+        struct Best { var e1rm: Double; var weight: Double; var reps: Int; var date: Date }
+        var best: [String: Best] = [:]
+        for workout in history {
+            for logged in workout.exercises {
+                for set in logged.sets where set.completed && set.reps > 0 && set.weightLb > 0 {
+                    let e = set.estimatedOneRepMax
+                    let name = logged.exercise.name
+                    if let cur = best[name], cur.e1rm >= e { continue }
+                    best[name] = Best(e1rm: e, weight: set.weightLb, reps: set.reps, date: workout.date)
+                }
+            }
+        }
+        return best
+            .sorted { $0.value.date > $1.value.date }   // freshest PR on top
+            .map { name, b in
+                PersonalRecord(exerciseName: name, weightLb: b.weight, reps: b.reps,
+                               date: b.date.formatted(.dateTime.month(.abbreviated).day()))
+            }
+    }
+
+    /// The canonical volume-board groups, in display order, with their effective
+    /// hypertrophy ranges (sets/week).
+    static let muscleGroupOrder = ["Chest", "Back", "Shoulders", "Arms", "Quads", "Hamstrings", "Glutes", "Core"]
+    static let optimalRange: [String: (low: Int, high: Int)] = [
+        "Chest": (10, 18), "Back": (12, 20), "Shoulders": (10, 18), "Arms": (6, 14),
+        "Quads": (10, 18), "Hamstrings": (8, 14), "Glutes": (8, 16), "Core": (6, 12),
+    ]
+
+    /// Map a catalog's fine-grained primary muscle to a board group (nil = not a
+    /// resistance group we chart, e.g. "Cardiovascular").
+    static func muscleGroup(for primary: String) -> String? {
+        switch primary {
+        case "Chest": return "Chest"
+        case "Lats", "Mid Back", "Upper Back", "Traps", "Erectors": return "Back"
+        case "Front Delts", "Side Delts", "Rear Delts", "Delts", "Shoulders": return "Shoulders"
+        case "Biceps", "Triceps", "Forearms", "Arms": return "Arms"
+        case "Quads": return "Quads"
+        case "Hamstrings": return "Hamstrings"
+        case "Glutes": return "Glutes"
+        case "Core", "Abs": return "Core"
+        default: return nil
+        }
+    }
+
+    /// Weekly completed sets per muscle group from real sessions, vs. optimal
+    /// ranges — only groups actually trained in the window appear.
+    static func muscleVolume(from history: [Workout], days: Int = 7, now: Date = .now) -> [MuscleVolume] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: now) ?? now
+        var counts: [String: Int] = [:]
+        for workout in history where workout.date >= cutoff {
+            for logged in workout.exercises {
+                let done = logged.sets.filter(\.completed).count
+                guard done > 0 else { continue }
+                let groups = Set(logged.exercise.primaryMuscles.compactMap(muscleGroup(for:)))
+                for g in groups { counts[g, default: 0] += done }
+            }
+        }
+        return muscleGroupOrder.compactMap { g in
+            guard let sets = counts[g], sets > 0, let range = optimalRange[g] else { return nil }
+            return MuscleVolume(muscle: g, sets: sets, optimalLow: range.low, optimalHigh: range.high)
+        }
+    }
+
     /// Average sessions per week over the recorded window.
     static func sessionsPerWeek(history: [Workout], days: Int = 28) -> Double {
         guard !history.isEmpty else { return 0 }

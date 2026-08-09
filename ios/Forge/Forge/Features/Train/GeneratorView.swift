@@ -6,9 +6,10 @@ struct GeneratorView: View {
     @State private var goal: Goal = .buildMuscle
     @State private var minutes = 60
     @State private var equipment: Equipment = .fullGym
-    @State private var injuries: Set<InjuryType> = [.knee]
+    @State private var injuries: Set<InjuryType> = []
     @State private var generated: GeneratedWorkout?
     @State private var thinking = false
+    @State private var primed = false
 
     var body: some View {
         ScreenScaffold {
@@ -72,6 +73,15 @@ struct GeneratorView: View {
         }
         .navigationTitle("Generator")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            guard !primed else { return }
+            primed = true
+            // Seed from the athlete's real profile + flagged injuries — never a
+            // hardcoded knee.
+            goal = app.user.primaryGoal
+            if let eq = app.user.equipment.first { equipment = eq }
+            injuries = Set(app.injuries.active.map(\.type))
+        }
     }
 
     private func pickerSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -106,9 +116,9 @@ struct GeneratedPlanCard: View {
                         }
                         ForEach(block.items) { item in
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(item.name).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Theme.cream)
+                                Text(item.name).font(Typography.callout.weight(.medium)).foregroundStyle(Theme.cream)
                                 Text(item.scheme).font(.system(size: 11)).foregroundStyle(Theme.muted)
-                                Text("✦ \(item.note)").font(.system(size: 10.5)).foregroundStyle(Theme.gold.opacity(0.75))
+                                Text("✦ \(item.note)").font(Typography.caption).foregroundStyle(Theme.gold.opacity(0.75))
                             }
                             .padding(.vertical, 4)
                         }

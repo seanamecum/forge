@@ -57,7 +57,7 @@ struct WeightStep: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            StepHeading(title: "Current weight", subtitle: "Your smart scale will keep this honest later.")
+            StepHeading(title: "Current weight", subtitle: "Sets your starting targets — you can update it anytime.")
             let binding = Binding<Int>(
                 get: { Int(draft.weightLb) },
                 set: { draft.weightLb = Double($0) }
@@ -157,17 +157,53 @@ struct EquipmentStep: View {
 }
 
 struct WearableStep: View {
+    @Environment(AppState.self) private var app
     @Binding var selected: Set<String>
+    @State private var connecting = false
     private let devices = ["Apple Watch", "iPhone only", "Smart scale (writes to Health)", "Other device that syncs to Apple Health"]
+
+    /// Any choice other than "iPhone only" means something writes to Apple Health,
+    /// so connecting now has clear value — the right moment to offer it.
+    private var wantsHealth: Bool { selected.contains { $0 != "iPhone only" } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             StepHeading(title: "Your health data",
-                        subtitle: "Forge runs on Apple Health — anything that writes there feeds your score. You'll connect it on the dashboard.")
+                        subtitle: "Forge runs on Apple Health — anything that writes there feeds your score. Connecting is optional, and you can do it anytime.")
             ForEach(devices, id: \.self) { device in
                 SelectableRow(title: device, selected: selected.contains(device)) {
                     if selected.contains(device) { selected.remove(device) } else { selected.insert(device) }
                 }
+            }
+            if wantsHealth {
+                connectRow.padding(.top, Space.xs).transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(Motion.snappy, value: wantsHealth)
+    }
+
+    @ViewBuilder private var connectRow: some View {
+        if app.healthKit.authState == .authorized {
+            Label("Apple Health connected", systemImage: "checkmark.seal.fill")
+                .font(Typography.footnote.weight(.semibold)).foregroundStyle(Theme.green)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    connecting = true
+                    Haptics.tap()
+                    Analytics.log(.onboardingHealthKitRequested)
+                    Task {
+                        await app.healthKit.connect()
+                        app.ingestHealthKitSignals()
+                        connecting = false
+                    }
+                } label: {
+                    Label(connecting ? "Connecting…" : "Connect Apple Health", systemImage: "heart.fill")
+                }
+                .buttonStyle(GoldButtonStyle(compact: true))
+                .disabled(connecting)
+                Text("Optional — you can skip and connect later from the dashboard.")
+                    .font(Typography.caption).foregroundStyle(Theme.faint)
             }
         }
     }
@@ -214,8 +250,109 @@ private struct NudgePreview: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon).font(.system(size: 13)).foregroundStyle(Theme.gold)
-            Text(text).font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
+            Text(text).font(Typography.subheadline).foregroundStyle(Theme.creamDim)
         }
+    }
+}
+
+// MARK: - Welcome intro (explains Forge in under 30 seconds)
+
+/// The first thing a new user sees. Says what Forge is, that it adapts with or
+/// without a wearable, and that setup is quick — then gets out of the way.
+struct WelcomeIntro: View {
+    let onStart: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: Space.xxl)
+            VStack(spacing: Space.md) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 44)).foregroundStyle(Theme.goldGradient)
+                Text("Forge")
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.cream)
+                Text("Your operating system for human performance.")
+                    .font(Typography.callout).foregroundStyle(Theme.muted)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.bottom, Space.xxl)
+            .accessibilityElement(children: .combine)
+
+            VStack(alignment: .leading, spacing: Space.lg) {
+                valueRow("gauge.with.dots.needle.67percent", "One score, every day",
+                         "Recovery, training, sleep, and nutrition become a single Forge Score.")
+                valueRow("sparkles", "Coaching that adapts",
+                         "Targets adjust to your training and recovery — explained, never silent.")
+                valueRow("applewatch", "Works with or without a wearable",
+                         "Forge runs on your check-ins and logs. Connect Apple Health for automatic HRV, sleep, and activity — optional, anytime.")
+            }
+            .padding(.horizontal, Space.xxl)
+
+            Spacer(minLength: Space.xxl)
+
+            Button("Get Started", action: onStart)
+                .buttonStyle(GoldButtonStyle())
+                .padding(.horizontal, Space.xxl)
+            Text("Takes about a minute.")
+                .font(Typography.caption).foregroundStyle(Theme.faint)
+                .padding(.top, Space.md).padding(.bottom, 24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func valueRow(_ icon: String, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: Space.md) {
+            Image(systemName: icon)
+                .font(.system(size: IconSize.xl)).foregroundStyle(Theme.gold)
+                .frame(width: 34)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(Typography.body.weight(.semibold)).foregroundStyle(Theme.cream)
+                Text(detail).font(Typography.footnote).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(detail)")
+    }
+}
+
+// MARK: - Personalized plan (the finish — not a generic success page)
+
+/// The last screen: the real starting targets Forge just computed from the
+/// user's own inputs. Personal, honest, and framed as adaptive.
+struct PlanStep: View {
+    let draft: UserProfile
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.lg) {
+            StepHeading(title: "Your starting plan",
+                        subtitle: "Computed from what you just told us — Forge tunes it as you log.")
+            Card(gold: true) {
+                VStack(alignment: .leading, spacing: Space.md) {
+                    planRow("flame.fill", "Daily calories", "\(draft.calorieTarget.formatted()) kcal")
+                    planRow("fork.knife", "Protein", "\(draft.proteinTarget) g")
+                    planRow("drop.fill", "Water", "\(draft.waterTargetOz) oz")
+                    if let goal = draft.goals.first {
+                        planRow(goal.icon, "Primary goal", goal.rawValue)
+                    }
+                }
+            }
+            Text("These adapt to your training, recovery, and weight trend — never silently.")
+                .font(Typography.footnote).foregroundStyle(Theme.faint)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func planRow(_ icon: String, _ label: String, _ value: String) -> some View {
+        HStack(spacing: Space.md) {
+            Image(systemName: icon)
+                .font(.system(size: IconSize.md)).foregroundStyle(Theme.gold).frame(width: 26)
+            Text(label).font(Typography.body).foregroundStyle(Theme.creamDim)
+            Spacer()
+            Text(value).font(Typography.body.weight(.semibold)).foregroundStyle(Theme.cream).monospacedDigit()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
     }
 }
 

@@ -8,9 +8,18 @@ struct NotificationsView: View {
             HStack {
                 SectionHeader(eyebrow: "Daily", title: "Notifications",
                               subtitle: "Only what moves the needle.")
-                Button("Mark all read") { app.notifications.markAllRead() }
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.gold)
+                if app.notifications.items.contains(where: { !$0.read }) {
+                    Button("Mark all read") { Haptics.tap(); app.notifications.markAllRead() }
+                        .font(Typography.subheadline.weight(.medium))
+                        .foregroundStyle(Theme.gold)
+                }
+            }
+
+            if app.notifications.items.isEmpty {
+                EmptyStateView(
+                    icon: "bell.badge",
+                    title: "You're all caught up",
+                    message: "Forge only pings you when something moves the needle — a recovery drop, a protein gap, a streak at risk. New alerts land here.")
             }
 
             ForEach(app.notifications.items) { item in
@@ -26,7 +35,7 @@ struct NotificationsView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {
                                 Text(item.title)
-                                    .font(.system(size: 13.5, weight: item.read ? .regular : .semibold))
+                                    .font(Typography.callout.weight(item.read ? .regular : .semibold))
                                     .foregroundStyle(item.read ? Theme.creamDim : Theme.cream)
                                 Spacer()
                                 Text(item.time).font(.system(size: 10)).foregroundStyle(Theme.faint)

@@ -9,7 +9,7 @@ enum PersistenceService {
         UserRecord.self, GoalRecord.self, WorkoutRecord.self,
         NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
         ScoreRecord.self, CheckInRecord.self, WeightRecord.self,
-        SupplementRecord.self, BloodworkRecord.self,
+        SupplementRecord.self, BloodworkRecord.self, DiaryEntry.self,
     ]
 
     /// One container for the whole app — views get it via .modelContainer,
@@ -20,7 +20,7 @@ enum PersistenceService {
             UserRecord.self, GoalRecord.self, WorkoutRecord.self,
             NutritionEntryRecord.self, RecoveryRecord.self, SleepRecord.self,
             ScoreRecord.self, CheckInRecord.self, WeightRecord.self,
-            SupplementRecord.self, BloodworkRecord.self, SyncTombstone.self,
+            SupplementRecord.self, BloodworkRecord.self, DiaryEntry.self, SyncTombstone.self,
         ])
         do {
             return try ModelContainer(for: schema)
@@ -54,6 +54,7 @@ enum PersistenceService {
         try? context.delete(model: WeightRecord.self)
         try? context.delete(model: SupplementRecord.self)
         try? context.delete(model: BloodworkRecord.self)
+        try? context.delete(model: DiaryEntry.self)
         try? context.delete(model: SyncTombstone.self)
         try? context.save()
         // Data keys only — the auth session (forge.auth.*) is cleared by the
@@ -429,17 +430,152 @@ enum PersistenceService {
         (try? context.fetch(FetchDescriptor<BloodworkRecord>(sortBy: [SortDescriptor(\.date, order: .reverse)]))) ?? []
     }
 
-    // MARK: - Nutrition
+    // MARK: - Diary (grams-aware; the current read/write path — Phase 1.3)
 
+    static func insertDiaryEntry(_ entry: DiaryEntry, context: ModelContext) {
+        context.insert(entry); try? context.save()
+    }
+
+    /// Today's diary, oldest→newest by log time (for the meal timeline).
     @MainActor
-    static func saveEntry(_ entry: FoodEntry) {
-        guard !isTestRun else { return }
-        context.insert(NutritionEntryRecord(
-            entryID: entry.id.uuidString, date: .now, meal: entry.meal.rawValue,
-            name: entry.food.name, calories: entry.calories,
-            protein: entry.protein, carbs: entry.carbs, fat: entry.fat,
-            servings: entry.servings))
+    static func loadTodayDiary() -> [DiaryEntry] {
+        let start = startOfToday()
+        let d = FetchDescriptor<DiaryEntry>(
+            predicate: #Predicate { $0.day >= start },
+            sortBy: [SortDescriptor(\.loggedAt)])
+        return (try? context.fetch(d)) ?? []
+    }
+
+    /// Recent diary history (default 60 days) — the signal source for Smart Meal
+    /// Memory + personalization. Oldest→newest.
+    @MainActor
+    static func loadDiaryHistory(days: Int = 60) -> [DiaryEntry] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: startOfToday()) ?? .distantPast
+        let d = FetchDescriptor<DiaryEntry>(
+            predicate: #Predicate { $0.day >= cutoff },
+            sortBy: [SortDescriptor(\.loggedAt)])
+        return (try? context.fetch(d)) ?? []
+    }
+
+    /// The user's most recent log of a given food — the template a one-tap
+    /// "log your usual" clones (re-logs exactly what they normally eat).
+    @MainActor
+    static func latestDiaryEntry(foodID: String) -> DiaryEntry? {
+        var d = FetchDescriptor<DiaryEntry>(
+            predicate: #Predicate { $0.foodID == foodID },
+            sortBy: [SortDescriptor(\.loggedAt, order: .reverse)])
+        d.fetchLimit = 1
+        return try? context.fetch(d).first
+    }
+
+    /// The diary for a specific calendar day (past/future logging).
+    @MainActor
+    static func loadDiary(day: Date) -> [DiaryEntry] {
+        let start = Calendar.current.startOfDay(for: day)
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
+        let d = FetchDescriptor<DiaryEntry>(
+            predicate: #Predicate { $0.day >= start && $0.day < end },
+            sortBy: [SortDescriptor(\.loggedAt)])
+        return (try? context.fetch(d)) ?? []
+    }
+
+    static func deleteDiaryEntry(entryID: String, context: ModelContext) {
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == entryID })
+        for r in (try? context.fetch(d)) ?? [] {
+            SyncEngine.recordDeletion(kind: DiaryEntry.syncKind, syncID: r.syncID, context: context)
+            context.delete(r)
+        }
         try? context.save()
+    }
+
+    /// Edit a logged amount in place, re-scaling nutrition (grams-accurate when a
+    /// basis exists, else by ratio). Powers inline quantity editing from the diary.
+    static func updateDiaryQuantity(entryID: String, newAmount: Double, context: ModelContext) {
+        guard newAmount > 0 else { return }
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == entryID })
+        guard let e = (try? context.fetch(d))?.first else { return }
+        e.rescale(toAmount: newAmount)
+        SyncStamp.touch(e)
+        try? context.save()
+    }
+
+    /// Replace a logged entry's quantity wholesale (amount + unit + recomputed
+    /// nutrition) from the editor. Grams-accurate when the entry has a basis.
+    static func updateDiaryQuantity(entryID: String, amount: Double, unitID: String,
+                                    unitLabel: String, grams: Double?, gramSource: String,
+                                    consumed: NutrientVector, context: ModelContext) {
+        guard amount > 0 else { return }
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == entryID })
+        guard let e = (try? context.fetch(d))?.first else { return }
+        e.amount = amount; e.unitID = unitID; e.unitLabel = unitLabel
+        e.grams = grams; e.gramSource = gramSource
+        e.consumedJSON = DiaryEntry.encode(consumed)
+        SyncStamp.touch(e)
+        try? context.save()
+    }
+
+    /// Move an entry to another meal (drag between meals). Sync-safe (re-marks dirty).
+    static func moveDiaryEntry(entryID: String, toMeal meal: String, context: ModelContext) {
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == entryID })
+        guard let e = (try? context.fetch(d))?.first, e.meal != meal else { return }
+        e.meal = meal
+        SyncStamp.touch(e)
+        try? context.save()
+    }
+
+    /// Duplicate a logged entry (a fresh id + "now" timestamp) — "eat this again" /
+    /// copy. Returns the new entry's id. The copy is its own syncable record.
+    @discardableResult
+    static func duplicateDiaryEntry(entryID: String, toMeal meal: String? = nil,
+                                    at: Date = .now, context: ModelContext) -> String? {
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == entryID })
+        guard let src = (try? context.fetch(d))?.first else { return nil }
+        let newID = UUID().uuidString
+        let copy = DiaryEntry(
+            entryID: newID, day: Calendar.current.startOfDay(for: at), loggedAt: at,
+            meal: meal ?? src.meal, foodID: src.foodID, foodName: src.foodName,
+            foodBrand: src.foodBrand, foodSource: src.foodSource,
+            amount: src.amount, unitID: src.unitID, unitLabel: src.unitLabel,
+            grams: src.grams, gramSource: src.gramSource,
+            consumedJSON: src.consumedJSON, per100gJSON: src.per100gJSON)
+        context.insert(copy); try? context.save()
+        return newID
+    }
+
+    // MARK: - Legacy nutrition migration → diary
+
+    private static let diaryMigrationKey = "forge.diaryMigrated.v1"
+
+    /// One-time (per device) migration of legacy `NutritionEntryRecord`s to the
+    /// grams-aware diary. Idempotent + cross-device-safe via deterministic ids.
+    @MainActor
+    static func migrateLegacyNutritionIfNeeded(context: ModelContext) {
+        guard !isTestRun,
+              !UserDefaults.standard.bool(forKey: diaryMigrationKey) else { return }
+        migrateLegacyNutrition(context: context)
+        UserDefaults.standard.set(true, forKey: diaryMigrationKey)
+    }
+
+    /// Convert every legacy entry to a `DiaryEntry` (deterministic id, skipping any
+    /// already migrated) and remove the legacy row so it can't double-count or
+    /// re-sync. The deletion tombstones propagate; the new diary rows sync forward.
+    @MainActor
+    @discardableResult
+    static func migrateLegacyNutrition(context: ModelContext) -> Int {
+        let legacy = (try? context.fetch(FetchDescriptor<NutritionEntryRecord>())) ?? []
+        guard !legacy.isEmpty else { return 0 }
+        let existing = Set(((try? context.fetch(FetchDescriptor<DiaryEntry>())) ?? []).map(\.entryID))
+        var migrated = 0
+        for rec in legacy {
+            let entry = DiaryMigration.entry(from: rec)   // deterministic "legacy-…" id
+            if !existing.contains(entry.entryID) {
+                context.insert(entry); migrated += 1
+            }
+            SyncEngine.recordDeletion(kind: NutritionEntryRecord.syncKind, syncID: rec.syncID, context: context)
+            context.delete(rec)
+        }
+        try? context.save()
+        return migrated
     }
 
     @MainActor

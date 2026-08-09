@@ -8,17 +8,17 @@ struct Card<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
-            .padding(20)
+            .padding(Space.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
                     .fill(Theme.card)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
                     .stroke(gold ? Theme.gold.opacity(0.22) : Theme.hairline, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.25), radius: 14, y: 6)
+            .elevation(.card)
     }
 }
 
@@ -30,19 +30,29 @@ struct SectionHeader: View {
     var subtitle: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            // The context eyebrow — the premium "where am I" label above the title.
+            // Rendered (it used to be silently dropped); hidden only when empty.
+            if !eyebrow.isEmpty {
+                Text(eyebrow.uppercased())
+                    .font(Typography.eyebrow)
+                    .kerning(1.6)
+                    .foregroundStyle(Theme.gold)
+            }
             Text(title)
-                .font(Theme.display(28))
+                .font(Typography.largeTitle)
                 .foregroundStyle(Theme.cream)
             if let subtitle {
                 Text(subtitle)
-                    .font(.system(size: 13.5))
+                    .font(Typography.callout)
                     .foregroundStyle(Theme.muted)
                     .lineSpacing(2)
             }
         }
-        .padding(.top, 6)
+        .padding(.top, Space.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(eyebrow.isEmpty ? title : "\(eyebrow). \(title)")
     }
 }
 
@@ -52,7 +62,7 @@ struct EyebrowLabel: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 12, weight: .semibold))
+            .font(Typography.subheadline.weight(.semibold))
             .foregroundStyle(tone == .gold ? Theme.creamDim : tone.color)
     }
 }
@@ -65,7 +75,7 @@ struct Chip: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .medium))
+            .font(Typography.footnote.weight(.medium))
             .foregroundStyle(tone == .neutral ? Theme.creamDim : tone.color)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -85,23 +95,23 @@ struct StatTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(Typography.footnote.weight(.medium))
                 .foregroundStyle(Theme.muted)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
-                    .font(Theme.display(24))
+                    .font(Typography.title)
                     .foregroundStyle(tone == .neutral ? Theme.cream : tone.color)
                     .lineLimit(1)
                     .minimumScaleFactor(0.55)
                 if let unit {
                     Text(unit)
-                        .font(.system(size: 11))
+                        .font(Typography.footnote)
                         .foregroundStyle(Theme.muted)
                 }
             }
             if let hint {
                 Text(hint)
-                    .font(.system(size: 10))
+                    .font(Typography.caption)
                     .foregroundStyle(Theme.faint)
             }
         }
@@ -116,7 +126,7 @@ struct GoldButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: compact ? 12 : 14, weight: .semibold))
+            .font((compact ? Typography.subheadline : Typography.body).weight(.semibold))
             .kerning(0.8)
             .foregroundStyle(Theme.bg)
             .padding(.vertical, compact ? 9 : 13)
@@ -126,7 +136,7 @@ struct GoldButtonStyle: ButtonStyle {
             .shadow(color: Theme.gold.opacity(0.18), radius: 8, y: 2)
             .opacity(configuration.isPressed ? 0.8 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(Motion.press, value: configuration.isPressed)
     }
 }
 
@@ -135,13 +145,15 @@ struct GhostButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: compact ? 12 : 14, weight: .medium))
+            .font((compact ? Typography.subheadline : Typography.body).weight(.medium))
             .foregroundStyle(Theme.cream)
             .padding(.vertical, compact ? 9 : 13)
             .padding(.horizontal, compact ? 16 : 22)
             .frame(maxWidth: compact ? nil : .infinity)
             .background(Capsule().fill(Color.white.opacity(configuration.isPressed ? 0.10 : 0.05)))
             .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1))
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(Motion.press, value: configuration.isPressed)
     }
 }
 
@@ -193,9 +205,9 @@ struct LabeledBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(label).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                Text(label).font(Typography.subheadline).foregroundStyle(Theme.muted)
                 Spacer()
-                Text(valueText).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.creamDim)
+                Text(valueText).font(Typography.subheadline.weight(.medium)).foregroundStyle(Theme.creamDim)
             }
             CapsuleBar(value: value, target: target, tone: tone, height: 7)
         }
@@ -211,9 +223,9 @@ struct InfoRow: View {
 
     var body: some View {
         HStack {
-            Text(label).font(.system(size: 13)).foregroundStyle(Theme.muted)
+            Text(label).font(Typography.callout).foregroundStyle(Theme.muted)
             Spacer()
-            Text(value).font(.system(size: 13, weight: .medium)).foregroundStyle(valueTone.color)
+            Text(value).font(Typography.callout.weight(.medium)).foregroundStyle(valueTone.color)
         }
         .padding(.vertical, 6)
         .overlay(Rectangle().fill(Theme.gold.opacity(0.06)).frame(height: 1), alignment: .bottom)
@@ -226,18 +238,18 @@ struct CoachNote: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "sparkles")
-                .font(.system(size: 12))
+                .font(.system(size: IconSize.xs))
                 .foregroundStyle(Theme.gold)
                 .padding(.top, 2)
             Text(text)
-                .font(.system(size: 12.5))
+                .font(Typography.subheadline)
                 .foregroundStyle(Theme.creamDim)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
+        .padding(Space.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.gold.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.gold.opacity(0.18), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: Radius.sm).fill(Theme.gold.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: Radius.sm).stroke(Theme.gold.opacity(0.18), lineWidth: 1))
     }
 }
 
@@ -246,12 +258,12 @@ struct DisclaimerNote: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 10.5))
+            .font(Typography.caption)
             .foregroundStyle(Theme.faint)
-            .padding(12)
+            .padding(Space.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.card.opacity(0.5)))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.hairline, lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: Radius.sm).fill(Theme.card.opacity(0.5)))
+            .overlay(RoundedRectangle(cornerRadius: Radius.sm).stroke(Theme.hairline, lineWidth: 1))
     }
 }
 
@@ -262,10 +274,10 @@ struct ScreenScaffold<Content: View>: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) { content }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 110) // clear the floating tab bar
+            VStack(alignment: .leading, spacing: Space.lg) { content }
+                .padding(.horizontal, Space.lg)
+                .padding(.top, Space.sm)
+                .padding(.bottom, Space.tabInset) // clear the floating tab bar
         }
         .background(Theme.bg)
         .scrollContentBackground(.hidden)

@@ -9,6 +9,7 @@ struct WorkoutLoggerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.requestReview) private var requestReview
+    @Environment(\.scenePhase) private var scenePhase
 
     let plan: GeneratedWorkout
     @State private var logged: [LoggedExercise] = []
@@ -17,6 +18,7 @@ struct WorkoutLoggerView: View {
     @State private var restTotal = 0
     @State private var showExercisePicker = false
     @State private var finished = false
+    @State private var secondsSinceSave = 0
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -25,7 +27,10 @@ struct WorkoutLoggerView: View {
             header
             if restRemaining > 0 { restBanner }
             ForEach($logged) { $exercise in
-                ExerciseLogCard(logged: $exercise, onSetCompleted: startRest)
+                ExerciseLogCard(logged: $exercise, onSetCompleted: startRest,
+                                onRemove: { removeExercise(id: exercise.id) },
+                                onMoveUp: { moveExercise(id: exercise.id, by: -1) },
+                                onMoveDown: { moveExercise(id: exercise.id, by: 1) })
             }
             Button {
                 showExercisePicker = true
@@ -41,17 +46,27 @@ struct WorkoutLoggerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.bgElevated, for: .navigationBar)
         .onAppear {
-            seed()
+            restoreOrSeed()
             WorkoutLiveActivityController.start(
                 workoutName: plan.name, startedAt: startedAt, totalSets: totalSets)
         }
         .onDisappear {
+            // Abandoning mid-session keeps the draft so it can be resumed; a
+            // finished session already cleared it.
+            if !finished { autosave() }
             // Leaving the logger ends the lock-screen session either way —
             // a finished workout already ended it; an abandoned one must too.
             WorkoutLiveActivityController.end()
         }
+        .onChange(of: scenePhase) { _, phase in
+            // The critical vector: iOS can kill a backgrounded app. Save the moment
+            // we lose focus so nothing entered is ever lost.
+            if phase != .active { autosave() }
+        }
         .onReceive(timer) { _ in
             if restRemaining > 0 { restRemaining -= 1 }
+            secondsSinceSave += 1
+            if secondsSinceSave >= 3 { secondsSinceSave = 0; autosave() }
         }
         .sheet(isPresented: $showExercisePicker) {
             ExercisePickerSheet { exercise in
@@ -94,16 +109,51 @@ struct WorkoutLoggerView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("REST").font(Theme.eyebrow(9)).kerning(2).foregroundStyle(Theme.gold)
-                    Text("Next set when the ring closes").font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                    Text("Next set when the ring closes").font(Typography.footnote).foregroundStyle(Theme.muted)
                 }
                 Spacer()
-                Button("Skip") { restRemaining = 0 }
+                restAdjust("−15") { restRemaining = max(0, restRemaining - 15) }
+                restAdjust("+15") { restRemaining += 15; restTotal = max(restTotal, restRemaining) }
+                Button("Skip") { Haptics.tap(); restRemaining = 0 }
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.muted)
             }
         }
     }
 
     // MARK: - Logic
+
+    /// Resume a matching in-progress session if one was autosaved; otherwise seed
+    /// fresh. Restoring nothing when there's no draft is the normal path.
+    private func restoreOrSeed() {
+        guard logged.isEmpty else { return }
+        if !app.isDemoAccount, let draft = WorkoutDraftStore.load(),
+           draft.name == plan.name, !draft.exercises.isEmpty {
+            logged = draft.restore { MockData.exercise($0) }
+            startedAt = draft.startedAt
+        } else {
+            seed()
+        }
+    }
+
+    // MARK: - In-session editing (fewer taps than Hevy: one long-press menu)
+
+    private func removeExercise(id: UUID) {
+        withAnimation(Motion.snappy) { logged = WorkoutEditing.removingExercise(logged, id: id) }
+        Haptics.soft(); autosave()
+    }
+
+    private func moveExercise(id: UUID, by offset: Int) {
+        withAnimation(Motion.snappy) { logged = WorkoutEditing.movingExercise(logged, id: id, by: offset) }
+        Haptics.rigid(); autosave()
+    }
+
+    /// Persist the live session so nothing is lost before "Finish" (LC-1). Real
+    /// accounts only — demo never persists a draft.
+    private func autosave() {
+        guard !app.isDemoAccount, !finished, !logged.isEmpty else { return }
+        WorkoutDraftStore.save(.from(name: plan.name, startedAt: startedAt,
+                                     exercises: logged, savedAt: .now))
+    }
 
     private func seed() {
         guard logged.isEmpty else { return }
@@ -146,6 +196,16 @@ struct WorkoutLoggerView: View {
             isPR: prCount > 0)
     }
 
+    private func restAdjust(_ label: String, _ action: @escaping () -> Void) -> some View {
+        Button { Haptics.rigid(); action() } label: {
+            Text(label)
+                .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.gold)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(Capsule().fill(Theme.gold.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var restLabel: String {
         String(format: "%d:%02d", restRemaining / 60, restRemaining % 60)
     }
@@ -182,10 +242,13 @@ struct WorkoutLoggerView: View {
                                    avgRPE: averageRPE, exerciseSummary: summary,
                                    exercisesJSON: PersistenceService.encodeExercises(completed))
         PersistenceService.saveWorkout(record, context: modelContext)
+        WorkoutDraftStore.clear()   // it's a real record now — nothing left to resume
         app.requestSync()
 
-        // Close the loop: real training now moves strain → Forge Score → Directive.
+        // Close the loop: real training now moves strain → Forge Score → Directive,
+        // and updates the PR + weekly-volume boards from the new session.
         app.applyTrainingLoad()
+        app.refreshTrainingBoards()
 
         // Mirror to Apple Health when connected (best-effort, never blocks the UI).
         if app.healthKit.authState == .authorized {
@@ -221,6 +284,9 @@ struct ExerciseLogCard: View {
     @Environment(AppState.self) private var app
     @Binding var logged: LoggedExercise
     let onSetCompleted: (Int) -> Void
+    var onRemove: () -> Void = {}
+    var onMoveUp: () -> Void = {}
+    var onMoveDown: () -> Void = {}
 
     var body: some View {
         Card {
@@ -232,6 +298,18 @@ struct ExerciseLogCard: View {
                     Spacer()
                     Text(logged.exercise.primaryMuscles.joined(separator: " · "))
                         .font(.system(size: 10)).foregroundStyle(Theme.faint)
+                    Menu {
+                        Button { onMoveUp() } label: { Label("Move up", systemImage: "arrow.up") }
+                        Button { onMoveDown() } label: { Label("Move down", systemImage: "arrow.down") }
+                        Button(role: .destructive) { onRemove() } label: { Label("Remove exercise", systemImage: "trash") }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.muted)
+                            .frame(width: 32, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Edit \(logged.exercise.name)")
                 }
 
                 // Hevy-style ghost: where you left off, and the bar to beat.
@@ -245,7 +323,7 @@ struct ExerciseLogCard: View {
                                 .foregroundStyle(Theme.gold.opacity(0.85))
                         }
                     }
-                    .font(.system(size: 10.5))
+                    .font(Typography.caption)
                     .foregroundStyle(Theme.muted)
                 }
 
@@ -258,7 +336,7 @@ struct ExerciseLogCard: View {
                     Text("RIR").frame(maxWidth: .infinity)
                     Text("").frame(width: 34)
                 }
-                .font(.system(size: 8.5, weight: .semibold))
+                .font(Typography.eyebrow)
                 .kerning(1)
                 .foregroundStyle(Theme.faint)
 
@@ -266,6 +344,14 @@ struct ExerciseLogCard: View {
                     SetRow(set: $set, index: indexOf(set: set),
                            exerciseName: logged.exercise.name) {
                         onSetCompleted(logged.restSeconds)
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            withAnimation(Motion.snappy) {
+                                logged = WorkoutEditing.removingSet(logged, setID: set.id)
+                            }
+                            Haptics.soft()
+                        } label: { Label("Delete set", systemImage: "trash") }
                     }
                 }
 
@@ -275,7 +361,7 @@ struct ExerciseLogCard: View {
                                                   reps: last?.reps ?? 0))
                 } label: {
                     Label("Add set", systemImage: "plus")
-                        .font(.system(size: 11.5, weight: .medium))
+                        .font(Typography.footnote.weight(.medium))
                         .foregroundStyle(Theme.gold)
                 }
             }
@@ -435,13 +521,21 @@ struct OptionalIntField: View {
 // MARK: - Exercise picker
 
 struct ExercisePickerSheet: View {
+    @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
     let onPick: (Exercise) -> Void
     @State private var query = ""
 
+    /// Search the real catalog by name, muscle, or category — so "chest", "legs",
+    /// or "back" all work, not just exact exercise names.
     private var results: [Exercise] {
-        query.isEmpty ? MockData.exercises
-                      : MockData.exercises.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        let all = app.workouts.exercises
+        guard !query.isEmpty else { return all }
+        return all.filter { ex in
+            ex.name.localizedCaseInsensitiveContains(query)
+            || ex.primaryMuscles.contains { $0.localizedCaseInsensitiveContains(query) }
+            || ex.category.rawValue.localizedCaseInsensitiveContains(query)
+        }
     }
 
     var body: some View {

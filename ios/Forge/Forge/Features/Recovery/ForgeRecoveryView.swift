@@ -50,7 +50,13 @@ struct InjuryProfileSection: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            riskCard
+            // The illustrative risk model is demo-only. Real users get an honest
+            // empty state — never a fabricated risk score or medical claim.
+            if app.isDemoAccount {
+                riskCard
+            } else {
+                recoveryInsightsCard
+            }
 
             if app.injuries.active.isEmpty {
                 injuryEmptyState
@@ -63,6 +69,34 @@ struct InjuryProfileSection: View {
             addInjuryCard
         }
         .sheet(isPresented: $showLog) { LogInjurySheet() }
+    }
+
+    /// Honest, premium stand-in for the not-yet-personalized risk model. No score,
+    /// no medical certainty — and it points at the real, non-medical actions the
+    /// user CAN take right now (log soreness/pain below, clear rehab gates in Return).
+    private var recoveryInsightsCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Space.md) {
+                HStack(spacing: Space.md) {
+                    ZStack {
+                        Circle().fill(Theme.gold.opacity(0.12))
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(.system(size: IconSize.lg)).foregroundStyle(Theme.gold)
+                    }
+                    .frame(width: 46, height: 46)
+                    VStack(alignment: .leading, spacing: 2) {
+                        EyebrowLabel(text: "Recovery Insights")
+                        Text("Personalized as you log").font(Typography.title3).foregroundStyle(Theme.cream)
+                    }
+                }
+                Text("Injury-risk and recovery insights appear once Forge has enough of your real training, soreness, and sleep — never a fabricated score, never a medical claim.")
+                    .font(Typography.footnote).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("For now you can log soreness and pain location, track training limitations, and mark rehab gates as you clear them — below and in the Return tab.")
+                    .font(Typography.caption).foregroundStyle(Theme.faint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var injuryEmptyState: some View {
@@ -89,12 +123,12 @@ struct InjuryProfileSection: View {
                     Chip(text: "Sample", tone: .amber)
                 }
                 Text("Sample factors below — an illustration of the model, not a medical prediction about you.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                    .font(Typography.caption).foregroundStyle(Theme.faint)
                 ForEach(risk.drivers) { d in
                     HStack {
-                        Text(d.name).font(.system(size: 11.5)).foregroundStyle(Theme.creamDim)
+                        Text(d.name).font(Typography.footnote).foregroundStyle(Theme.creamDim)
                         Spacer()
-                        Text(d.value).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Theme.amber)
+                        Text(d.value).font(Typography.footnote.weight(.semibold)).foregroundStyle(Theme.amber)
                     }
                     .padding(.vertical, 2)
                 }
@@ -245,7 +279,7 @@ private struct LogInjurySheet: View {
                             .tint(pain >= 5 ? Theme.ruby : Theme.amber)
                     }
                     Text("Forge will block aggravating lifts and queue the matching protocol. This is training guidance, not medical advice — see a clinician for a real injury.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                        .font(Typography.footnote).foregroundStyle(Theme.muted)
                     Button("Log injury") {
                         app.injuries.add(type: type, phase: phase, pain: Int(pain))
                         Haptics.success()
@@ -290,14 +324,14 @@ struct PTLibrarySection: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(pt.area.uppercased())
-                                    .font(.system(size: 8.5, weight: .semibold)).kerning(1.2)
+                                    .font(Typography.eyebrow).kerning(1.2)
                                     .foregroundStyle(Theme.gold)
                                 Text(pt.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.cream)
                             }
                             Spacer()
                             Chip(text: pt.phase.rawValue)
                         }
-                        Text(pt.prescription).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.creamDim)
+                        Text(pt.prescription).font(Typography.subheadline.weight(.medium)).foregroundStyle(Theme.creamDim)
                         Text(pt.note).font(.system(size: 11)).foregroundStyle(Theme.muted)
                     }
                 }
@@ -325,7 +359,7 @@ struct ProtocolsSection: View {
                             EyebrowLabel(text: "Progression Phases")
                             ForEach(proto.phases) { phase in
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(phase.name).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.gold)
+                                    Text(phase.name).font(Typography.subheadline.weight(.semibold)).foregroundStyle(Theme.gold)
                                     Text(phase.goal).font(.system(size: 12)).foregroundStyle(Theme.cream)
                                     Text(phase.criteria).font(.system(size: 11)).foregroundStyle(Theme.muted)
                                 }
@@ -372,10 +406,11 @@ struct ConcussionSection: View {
                         Text("Medical emergency signs").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.rubyBright)
                     }
                     Text("Loss of consciousness, repeated vomiting, worsening headache, slurred speech, vision changes, or weakness after any head impact → emergency care now. This module is for tracking a clinician-managed recovery, not replacing one.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.creamDim)
+                        .font(Typography.footnote).foregroundStyle(Theme.creamDim)
                 }
             }
 
+            if app.isDemoAccount {
             Card {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
@@ -394,7 +429,7 @@ struct ConcussionSection: View {
                 VStack(alignment: .leading, spacing: 10) {
                     EyebrowLabel(text: "Return-to-Play · 7 Stages")
                     Text("Advance only after 24 symptom-free hours at the current stage.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                        .font(Typography.footnote).foregroundStyle(Theme.muted)
                     ForEach(app.injuries.rtpStages) { stage in
                         HStack(alignment: .top, spacing: 10) {
                             ZStack {
@@ -416,6 +451,23 @@ struct ConcussionSection: View {
                         .padding(.vertical, 3)
                     }
                 }
+            }
+            } else {
+                concussionEmptyState
+            }
+        }
+    }
+
+    /// Real users never see seeded/sample concussion data. If they sustain a head
+    /// impact they log it and tracking begins — honest, non-medical, clinician-led.
+    private var concussionEmptyState: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Space.md) {
+                EyebrowLabel(text: "Concussion Tracking")
+                Text("Ready when you need it").font(Typography.title3).foregroundStyle(Theme.cream)
+                Text("If you sustain a head impact, log it and Forge will track your clinician-managed symptom scores and return-to-play stages here — it records your recovery, it never decides it. No sample data, no medical judgments.")
+                    .font(Typography.footnote).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -460,10 +512,10 @@ struct ReturnToSportSection: View {
         VStack(spacing: 12) {
             Card(gold: true) {
                 VStack(alignment: .leading, spacing: 12) {
-                    EyebrowLabel(text: "Active · Left Knee")
+                    EyebrowLabel(text: app.injuries.active.first.map { "Active · \($0.type.rawValue)" } ?? "Return to Training")
                     Text("Return-to-Training Checklist").font(Theme.display(19)).foregroundStyle(Theme.cream)
-                    Text("Hockey-specific clearance. Tap to check off as you clear each gate with your PT.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                    Text("Clearance gates. Tap to check each off as you clear it with your PT.")
+                        .font(Typography.footnote).foregroundStyle(Theme.muted)
 
                     ForEach(app.injuries.rtsChecklist) { item in
                         Button {
@@ -479,7 +531,7 @@ struct ReturnToSportSection: View {
                                         .foregroundStyle(item.done ? Theme.muted : Theme.cream)
                                         .strikethrough(item.done, color: Theme.muted)
                                         .multilineTextAlignment(.leading)
-                                    Text(item.detail).font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                                    Text(item.detail).font(Typography.caption).foregroundStyle(Theme.faint)
                                 }
                                 Spacer()
                             }

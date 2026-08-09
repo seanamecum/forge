@@ -40,12 +40,20 @@ final class InjuryService {
             active = []
         }
         rtsChecklist = MockData.kneeRTSChecklist.map { var i = $0; i.done = false; return i }
-        risk = active.isEmpty ? Self.cleanRisk : MockData.injuryRisk
+        // A real user never inherits the demo athlete's concussion log, return-to-
+        // play progress, or a fabricated risk score. The injury-risk model isn't
+        // personalized yet, so real accounts always read clean — the UI shows an
+        // honest empty state, never a mock number or medical claim.
+        concussionSymptoms = []
+        rtpStages = []
+        risk = Self.cleanRisk
     }
 
     func restoreDemoSeed() {
         active = [MockData.knee]
         rtsChecklist = MockData.kneeRTSChecklist
+        concussionSymptoms = MockData.concussionSymptoms
+        rtpStages = MockData.rtpStages
         risk = MockData.injuryRisk
     }
 

@@ -34,7 +34,7 @@ struct MorningCheckInCard: View {
                                 Text("Start your morning check-in")
                                     .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.cream)
                                 Text("10 seconds — tunes today's directive and the coach.")
-                                    .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                                    .font(Typography.footnote).foregroundStyle(Theme.muted)
                             }
                             Spacer()
                             Image(systemName: "chevron.right")

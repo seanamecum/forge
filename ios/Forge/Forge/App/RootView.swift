@@ -16,11 +16,13 @@ struct RootView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             case .main:
                 MainTabView()
-                    .transition(.opacity)
+                    // Onboarding → Home reveals with a gentle scale-up, so the
+                    // dashboard feels like it settles into place rather than cutting in.
+                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
             }
         }
         .task { app.rehydrate() }
-        .animation(.easeInOut(duration: 0.35), value: phaseKey)
+        .animation(Motion.entrance, value: phaseKey)
         // Dynamic Type: honor user text size up to AX2; larger sizes need a
         // dedicated reflow pass before they render acceptably in dense cards.
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)

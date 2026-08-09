@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DeficienciesView: View {
     @Environment(AppState.self) private var app
+    @State private var showBloodwork = false
 
     var body: some View {
         ScreenScaffold {
@@ -13,8 +14,10 @@ struct DeficienciesView: View {
                     icon: "checkmark.seal",
                     title: app.nutrition.bloodwork.isEmpty ? "No labs yet" : "Nothing flagged",
                     message: app.nutrition.bloodwork.isEmpty
-                        ? "Add your bloodwork on the Health screen and Forge flags any marker sitting below its optimal range."
-                        : "Every marker you've logged is at or above its optimal range. Forge will surface a flag the moment one drops.")
+                        ? "Add your bloodwork and Forge flags any marker sitting below its optimal range."
+                        : "Every marker you've logged is at or above its optimal range. Forge will surface a flag the moment one drops.",
+                    actionLabel: app.nutrition.bloodwork.isEmpty ? "Add bloodwork" : nil,
+                    action: app.nutrition.bloodwork.isEmpty ? { Haptics.tap(); showBloodwork = true } : nil)
             }
 
             ForEach(app.nutrition.deficiencies) { d in
@@ -39,5 +42,8 @@ struct DeficienciesView: View {
         }
         .navigationTitle("Deficiencies")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showBloodwork) {
+            NavigationStack { BloodworkView() }
+        }
     }
 }

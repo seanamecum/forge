@@ -93,9 +93,12 @@ final class AppState {
         if let saved = Self.loadUser() { user = saved }
         // Forge speaks imperial — migrate any previously saved metric preference.
         user.usesImperial = true
-        // Returning users skip straight to the dashboard.
+        // Returning users skip straight to the dashboard; a user killed mid-
+        // onboarding resumes the flow instead of restarting at Welcome.
         if UserDefaults.standard.bool(forKey: "forge.hasOnboarded") {
             phase = .main
+        } else if UserDefaults.standard.bool(forKey: "forge.onboarding.inProgress") {
+            phase = .onboarding
         }
         // Demo/screenshot hook (no effect in normal use): FORGE_TAB selects the
         // initial tab; -demoAutoLogin skips straight to the dashboard.
@@ -127,8 +130,13 @@ final class AppState {
         }
 
         // Today's food + water: real log only. A fresh day starts honestly empty.
-        nutrition.entries = PersistenceService.loadTodayEntries()
+        // Migrate any legacy per-serving entries to the grams-aware diary first, then
+        // load from it. Demo keeps its seeded entries (never persisted).
         nutrition.waterOz = PersistenceService.loadTodayWater()
+        if !isDemoAccount {
+            PersistenceService.migrateLegacyNutritionIfNeeded(context: PersistenceService.context)
+            nutrition.reloadDiary()
+        }
 
         // Workout history: a real account sees only its own logged sessions; demo
         // mode keeps the demo athlete's baseline (with any saved layered on top).
@@ -140,6 +148,7 @@ final class AppState {
         } else {
             workouts.clearDemoSeed()
             workouts.history = saved.sorted { $0.date > $1.date }
+            refreshTrainingBoards()   // PRs + weekly muscle volume from the real log
         }
 
         // Real training load from logged sessions → strain → Forge Score + Directive.
@@ -251,6 +260,9 @@ final class AppState {
             weightSamples = []
             refreshTrends()              // this account's own (initially empty) trends
             phase = .onboarding
+            if !PersistenceService.isTestRun {
+                UserDefaults.standard.set(true, forKey: "forge.onboarding.inProgress")
+            }
             // Pull this account's cloud data (restores a reinstall / new device) and
             // push anything logged locally before sign-in.
             sync.syncNow()
@@ -287,6 +299,8 @@ final class AppState {
 
     func finishOnboarding() {
         if !PersistenceService.isTestRun { UserDefaults.standard.set(true, forKey: "forge.hasOnboarded") }
+        UserDefaults.standard.set(false, forKey: "forge.onboarding.inProgress")
+        OnboardingStore.clear()          // interrupted-run progress is now committed
         phase = .main
     }
 
@@ -383,22 +397,32 @@ final class AppState {
     var forgeScoreBasis: RecommendationBasis {
         let used = forgeScoreBreakdown.map { "\($0.label) \($0.value)" }
         var missing: [String] = []
+        // Forge works fully without a wearable — the morning check-in is the primary
+        // way to personalize the score, so it leads; a wearable is an optional
+        // enhancement that adds automatic HRV/sleep/activity.
+        if checkIn == nil { missing.append("Your morning check-in (no wearable needed)") }
         switch recovery.provenance {
         case .demo:
-            missing.append("Live Apple Health signals (sleep, HRV, activity)")
+            missing.append("Automatic HRV, sleep & activity from a wearable (optional)")
         case .partial:
-            if !recovery.recoveryFromLiveSignals { missing.append("Live recovery (currently estimated)") }
-            missing.append("Live strain & readiness (currently estimated)")
+            if !recovery.recoveryFromLiveSignals { missing.append("Automatic HRV recovery from a wearable (optional)") }
         case .live:
             break
         }
-        if checkIn == nil { missing.append("Today's morning check-in") }
         if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
             missing.append("A fresh HRV reading (last sample ~\(Int(hrvAge))h old)")
         }
 
-        let fallback = recovery.provenance == .live ? nil
-            : "Using demo/estimated values where live data isn't connected — connect Apple Health to personalize."
+        let fallback: String?
+        switch recovery.provenance {
+        case .live:
+            fallback = nil
+        case .partial:
+            fallback = recovery.recoveryFromLiveSignals ? nil
+                : "Running on your morning check-in and logged training, nutrition, and weight. Add a wearable for automatic HRV & sleep."
+        case .demo:
+            fallback = "Do your morning check-in to personalize your score — no wearable needed. A wearable later adds automatic HRV, sleep, and activity."
+        }
         return RecommendationBasis(
             summary: forgeScoreNarrative, inputsUsed: used, inputsMissing: missing,
             confidence: RecommendationBasis.confidence(provenance: recovery.provenance, hasCheckIn: checkIn != nil),
@@ -420,18 +444,16 @@ final class AppState {
 
         var missing: [String] = []
         if checkIn == nil { missing.append("Morning check-in (soreness, energy, stress)") }
-        if recovery.provenance == .demo { missing.append("Live recovery & sleep from Apple Health") }
+        if recovery.provenance == .demo { missing.append("Automatic recovery & sleep from a wearable (optional)") }
         if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
             missing.append("A fresh HRV reading (last sample ~\(Int(hrvAge))h old)")
         }
 
         let fallback: String?
         if checkIn == nil {
-            fallback = "No check-in yet — log soreness and energy to sharpen today's call."
-        } else if recovery.provenance == .demo {
-            fallback = "Recovery is demo data until Apple Health is connected."
+            fallback = "Do your morning check-in — log soreness and energy to sharpen today's call. No wearable needed."
         } else {
-            fallback = nil
+            fallback = nil   // a check-in personalizes the directive; a wearable only adds automation
         }
         return RecommendationBasis(
             summary: dailyDirective.rationale, inputsUsed: used, inputsMissing: missing,
@@ -450,18 +472,28 @@ final class AppState {
         ]
         var missing: [String] = []
         if recovery.provenance == .demo {
-            missing.append("Live HRV, resting HR & sleep from Apple Health")
+            missing.append("Your morning check-in (no wearable needed)")
+            missing.append("Automatic HRV, resting HR & sleep from a wearable (optional)")
         } else if !recovery.recoveryFromLiveSignals {
-            missing.append("A fresh HRV reading to derive recovery from your own data")
+            missing.append("Automatic HRV recovery from a wearable (optional)")
         }
         if let hrvAge = recovery.liveAgeHours(.hrv), hrvAge >= RecoveryService.staleThresholdHours {
             missing.append("A current HRV sample (last one ~\(Int(hrvAge))h old)")
         }
-        let fallback = recovery.recoveryFromLiveSignals ? nil
-            : "Recovery is a demo/estimated value until fresh Apple Health signals are connected."
-        let summary = recovery.recoveryFromLiveSignals
-            ? "Recovery \(d.recovery), derived from your HRV vs baseline, resting HR, and sleep."
-            : "Recovery \(d.recovery) (estimate) — connect Apple Health to base it on your own signals."
+        // Two paths: HRV from a wearable, OR the morning check-in. Only the truly
+        // no-input state is unpersonalized — and even then the fix is the check-in.
+        let summary: String
+        let fallback: String?
+        if recovery.recoveryFromLiveSignals {
+            summary = "Recovery \(d.recovery), derived from your HRV vs baseline, resting HR, and sleep."
+            fallback = nil
+        } else if recovery.recoveryFromCheckIn {
+            summary = "Recovery \(d.recovery), from your morning check-in. Add a wearable for automatic HRV-based recovery."
+            fallback = nil
+        } else {
+            summary = "Recovery \(d.recovery) is a starting estimate — do your morning check-in to personalize it. No wearable needed."
+            fallback = "Recovery isn't personalized yet. Your morning check-in sets it from your own sleep, soreness, energy, and stress; a wearable later makes it automatic."
+        }
         return RecommendationBasis(
             summary: summary, inputsUsed: used, inputsMissing: missing,
             confidence: RecommendationBasis.confidence(provenance: recovery.provenance, hasCheckIn: checkIn != nil),
@@ -661,6 +693,312 @@ final class AppState {
             context: context)
         loadHealthData()
         sync.requestSync()
+    }
+
+    // MARK: - Diary editing (Phase 1.4 — edit / duplicate / move / delete)
+
+    /// The persisted diary entry backing a displayed row (nil for demo/optimistic).
+    @MainActor
+    func diaryEntry(for fe: FoodEntry) -> DiaryEntry? {
+        let id = DiaryBridge.diaryID(for: fe)
+        let d = FetchDescriptor<DiaryEntry>(predicate: #Predicate { $0.entryID == id })
+        return try? PersistenceService.context.fetch(d).first
+    }
+
+    /// Build the editor engine for a row: rich (units + grams) when the entry has a
+    /// gram basis, else nil so the caller uses honest multiplier editing.
+    @MainActor
+    func quantityEditor(for fe: FoodEntry) -> QuantityEditorEngine? {
+        guard let d = diaryEntry(for: fe), let food = CanonicalFood(editableFrom: d) else { return nil }
+        return QuantityEditorEngine(food: food, amount: d.amount, unitID: d.unitID)
+    }
+
+    /// Write an editor's quantity back to the diary (real accounts). Remembers the
+    /// amount+unit for that food so it pre-fills next time.
+    @MainActor
+    func applyQuantityEdit(_ fe: FoodEntry, engine: QuantityEditorEngine) {
+        guard !isDemoAccount, let consumed = engine.nutrients else { return }
+        PersistenceService.updateDiaryQuantity(
+            entryID: DiaryBridge.diaryID(for: fe), amount: engine.amount, unitID: engine.unitID,
+            unitLabel: engine.unit.label, grams: engine.grams, gramSource: engine.unit.source.rawValue,
+            consumed: consumed, context: PersistenceService.context)
+        FoodQuantityMemory().remember(foodID: engine.food.id, amount: engine.amount, unitID: engine.unitID)
+        nutrition.reloadDiary(); sync.requestSync()
+    }
+
+    /// Multiplier edit for a basis-less entry (no gram data): scale by a new amount.
+    @MainActor
+    func applyMultiplierEdit(_ fe: FoodEntry, newAmount: Double) {
+        guard !isDemoAccount, newAmount > 0 else { return }
+        PersistenceService.updateDiaryQuantity(entryID: DiaryBridge.diaryID(for: fe),
+                                               newAmount: newAmount, context: PersistenceService.context)
+        nutrition.reloadDiary(); sync.requestSync()
+    }
+
+    @MainActor
+    func duplicateDiaryEntry(_ fe: FoodEntry, toMeal meal: MealType? = nil) {
+        guard !isDemoAccount else {
+            let copy = FoodEntry(meal: meal ?? fe.meal, food: fe.food, servings: fe.servings, time: "Now")
+            nutrition.entries.append(copy); return
+        }
+        PersistenceService.duplicateDiaryEntry(entryID: DiaryBridge.diaryID(for: fe),
+                                               toMeal: meal?.rawValue, context: PersistenceService.context)
+        nutrition.reloadDiary(); sync.requestSync()
+    }
+
+    @MainActor
+    func moveDiaryEntry(_ fe: FoodEntry, toMeal meal: MealType) {
+        guard fe.meal != meal else { return }
+        guard !isDemoAccount else {
+            if let i = nutrition.entries.firstIndex(where: { $0.id == fe.id }) {
+                nutrition.entries[i] = FoodEntry(meal: meal, food: fe.food, servings: fe.servings, time: fe.time)
+            }
+            return
+        }
+        PersistenceService.moveDiaryEntry(entryID: DiaryBridge.diaryID(for: fe), toMeal: meal.rawValue,
+                                          context: PersistenceService.context)
+        nutrition.reloadDiary(); sync.requestSync()
+    }
+
+    // MARK: - Federated food search (Phase 2.2c)
+
+    /// Local-first federated search: the curated common foods (instant/offline) +
+    /// Open Food Facts (global). Merged/deduped/ranked by the pipeline, biased toward
+    /// the user's own foods via personal signals.
+    private var foodProviders: [any FoodSearchProvider] { [LocalFoodProvider(), OpenFoodFactsProvider()] }
+
+    /// Search foods for the unified search UI. Local results stream instantly; OFF
+    /// fills gaps. Ranked so the right food is usually first.
+    @MainActor
+    func searchFoods(_ query: String, limit: Int = 25) async -> [CanonicalFood] {
+        let service = FoodSearchService(providers: foodProviders, personal: foodPersonalSignals())
+        return await service.search(query, limit: limit)
+    }
+
+    /// Instant local-only results (no await on the network) — for the first keystrokes.
+    @MainActor
+    func localFoodResults(_ query: String, limit: Int = 25) -> [CanonicalFood] {
+        let candidates = CommonFoods.all.filter {
+            FoodRelevance.norm(query).isEmpty || FoodRelevance.score(query: query, name: $0.name, brand: $0.brand) > 0
+        }
+        return FoodSearchPipeline.process(candidates, query: query, personal: foodPersonalSignals(), limit: limit)
+    }
+
+    /// Barcode → canonical food (global). nil when not found.
+    func lookupBarcode(_ barcode: String) async -> CanonicalFood? {
+        await FoodSearchService(providers: foodProviders).lookup(barcode: barcode)
+    }
+
+    /// A sensible default quantity for one-tap logging — the user's remembered serving
+    /// for this food (so it "already knows"), else one natural portion, else 100 g.
+    func defaultQuantity(for food: CanonicalFood) -> FoodQuantity {
+        if let last = FoodQuantityMemory().last(foodID: food.id), food.unit(id: last.unitID) != nil {
+            return FoodQuantity(amount: last.amount, unitID: last.unitID)
+        }
+        let unit = food.defaultUnit
+        return unit.kind == .mass ? FoodQuantity(amount: 100, unitID: "g")
+                                  : FoodQuantity(amount: 1, unitID: unit.id)
+    }
+
+    /// Log a searched food at a chosen quantity into a meal (the production logging
+    /// path — grams-canonical, rich re-editing). Real accounts persist + sync; demo
+    /// appends in-memory only. Returns the entry id so a single tap can be undone.
+    @discardableResult
+    @MainActor
+    func logFood(_ food: CanonicalFood, quantity: FoodQuantity, meal: MealType) -> String? {
+        guard let entry = DiaryEntry.log(food: food, quantity: quantity, meal: meal, at: .now) else { return nil }
+        if isDemoAccount {
+            if let fe = DiaryBridge.foodEntry(from: entry) { nutrition.entries.append(fe) }
+            return entry.entryID
+        }
+        PersistenceService.insertDiaryEntry(entry, context: PersistenceService.context)
+        FoodQuantityMemory().remember(foodID: food.id, amount: quantity.amount, unitID: quantity.unitID)
+        nutrition.reloadDiary()
+        sync.requestSync()
+        return entry.entryID
+    }
+
+    /// Undo a just-logged food (delete the entry). Real accounts remove + sync; demo
+    /// removes the in-memory row.
+    @MainActor
+    func undoFoodLog(entryID: String) {
+        guard !isDemoAccount else {
+            nutrition.entries.removeAll { DiaryBridge.diaryID(for: $0) == entryID }
+            return
+        }
+        PersistenceService.deleteDiaryEntry(entryID: entryID, context: PersistenceService.context)
+        nutrition.reloadDiary()
+        sync.requestSync()
+    }
+
+    // MARK: - Ambient intelligence (surface the right thing, calmly)
+
+    private let dismissalStore = DismissalStore()
+
+    /// The one or two calm, explainable insights worth surfacing right now — the
+    /// visible face of the unified model. Assembled from real current state across
+    /// domains, then curated (top-N, confidence-gated, dismissed ones suppressed).
+    @MainActor
+    func ambientInsights(surface: InsightSurface = .home, now: Date = .now) -> [AmbientInsight] {
+        var candidates: [AmbientInsight] = []
+
+        // "Log your usual …" (real accounts only; nutrition's meal memory).
+        for s in mealSuggestions(for: nil, now: now).prefix(1) {
+            var i = s.asAmbientInsight(); i.surface = surface; candidates.append(i)
+        }
+        // Protein still to go today (from live targets).
+        if let i = InsightGenerators.proteinShort(remaining: nutrition.proteinRemaining, target: nutrition.proteinTarget) {
+            candidates.append(i)
+        }
+        // Recovery below the user's own usual (real accounts with enough history).
+        // Prefer the cross-domain *causal* explanation (the brain connecting sleep +
+        // training + recovery); fall back to the single-domain note when no real
+        // driver is present.
+        if !isDemoAccount {
+            let usual = usualRecovery()
+            let today = recovery.today.recovery
+            let sleep = PersistenceService.loadSleepHistory(days: 10).map(\.hours)
+            let (thisWeek, priorWeek) = weeklyTrainingVolumes()
+            if let i = CrossDomainInsights.recoveryDriver(recoveryToday: today, usual: usual,
+                                                          sleepHours: sleep,
+                                                          volumeThisWeek: thisWeek, volumePriorWeek: priorWeek) {
+                candidates.append(i)
+            } else if let i = InsightGenerators.recoveryVsNormal(today: today, usual: usual) {
+                candidates.append(i)
+            }
+        }
+
+        return InsightCurator.curate(candidates, now: now, dismissed: dismissalStore.load(),
+                                     policy: .standard(for: surface))
+    }
+
+    /// Recompute the PR board and weekly muscle-volume board from real logged
+    /// sessions. Real accounts only — demo keeps its seeded boards. Without this a
+    /// real user's PR/volume cards sit permanently empty (they were demo-seeded).
+    @MainActor
+    func refreshTrainingBoards() {
+        guard !isDemoAccount else { return }
+        workouts.personalRecords = TrainingAnalyticsEngine.personalRecords(from: workouts.history)
+        workouts.muscleVolume = TrainingAnalyticsEngine.muscleVolume(from: workouts.history)
+    }
+
+    /// Recompute the Micronutrients screen from the last 7 days of real logged
+    /// intake (7-day-average coverage vs. reference Daily Values). Real accounts
+    /// only — demo keeps its seeded groups. Honest: only nutrients the logged foods
+    /// actually carry are shown.
+    @MainActor
+    func refreshMicronutrients() {
+        guard !isDemoAccount else { return }
+        let history = PersistenceService.loadDiaryHistory(days: 7)
+        let cal = Calendar.current
+        let daysLogged = Set(history.map { cal.startOfDay(for: $0.day) }).count
+        let total = NutrientVector.total(history.map(\.consumed))
+        nutrition.nutrientGroups = MicronutrientEngine.groups(totalConsumed: total, daysLogged: daysLogged)
+    }
+
+    /// Total training volume (lb) for the trailing 7 days and the 7 days before that —
+    /// the input to cross-domain load-vs-recovery insights. Real logged workouts only.
+    @MainActor
+    private func weeklyTrainingVolumes(now: Date = .now) -> (thisWeek: Double, priorWeek: Double) {
+        let cal = Calendar.current
+        let weekAgo = cal.date(byAdding: .day, value: -7, to: now) ?? now
+        let twoWeeksAgo = cal.date(byAdding: .day, value: -14, to: now) ?? now
+        var thisWeek = 0.0, priorWeek = 0.0
+        for w in workouts.history {
+            if w.date >= weekAgo { thisWeek += w.totalVolumeLb }
+            else if w.date >= twoWeeksAgo { priorWeek += w.totalVolumeLb }
+        }
+        return (thisWeek, priorWeek)
+    }
+
+    /// Dismiss an ambient insight — it goes quiet (persisted, so it stays quiet).
+    func dismissInsight(id: String) { dismissalStore.recordDismissal(id) }
+
+    /// The account's usual recovery (average of recent history), or 0 when too new.
+    @MainActor
+    private func usualRecovery() -> Int {
+        let recs = PersistenceService.loadRecoveryHistory().map(\.recovery)
+        guard recs.count >= 5 else { return 0 }
+        return Int((Double(recs.reduce(0, +)) / Double(recs.count)).rounded())
+    }
+
+    // MARK: - Smart Meal Memory & personalization (Phase 2.2)
+
+    /// This account's recent diary as personalization signals (real accounts only —
+    /// demo never learns real personalization).
+    @MainActor
+    func diaryHistoryLogs() -> [LoggedFood] {
+        guard !isDemoAccount else { return [] }
+        return PersistenceService.loadDiaryHistory().map(LoggedFood.init(entry:))
+    }
+
+    /// Complete meals Forge has learned this account eats repeatedly.
+    @MainActor
+    func rememberedMeals(now: Date = .now) -> [RememberedMeal] {
+        MealMemory.rememberedMeals(from: diaryHistoryLogs(), now: now)
+    }
+
+    /// Proactive "Log your usual …" suggestions for the current moment / meal section,
+    /// partial-match aware and suppressing anything already fully logged today.
+    @MainActor
+    func mealSuggestions(for meal: MealType? = nil, now: Date = .now) -> [MealSuggestion] {
+        guard !isDemoAccount else { return [] }
+        let today = PersistenceService.loadTodayDiary()
+        let logged = Set(today.filter { meal == nil || $0.meal == meal!.rawValue }.map(\.foodID))
+        let ctx = SuggestionContext(now: now, meal: meal, alreadyLoggedFoodIDs: logged)
+        return MealSuggester.suggestions(remembered: rememberedMeals(now: now), context: ctx)
+    }
+
+    /// One tap logs a remembered meal — re-logs each food from the user's most recent
+    /// version of it (its nutrition, their usual serving), into today's meal.
+    @MainActor
+    func logRememberedMeal(_ suggestion: MealSuggestion, into meal: MealType) {
+        guard !isDemoAccount else { return }
+        for item in suggestion.itemsToLog {
+            guard let latest = PersistenceService.latestDiaryEntry(foodID: item.foodID) else { continue }
+            PersistenceService.duplicateDiaryEntry(entryID: latest.entryID, toMeal: meal.rawValue,
+                                                   context: PersistenceService.context)
+        }
+        nutrition.reloadDiary()
+        sync.requestSync()
+    }
+
+    /// Most-recently logged distinct foods (for the search "Recents" row).
+    @MainActor
+    func recentLoggedFoods(limit: Int = 12) -> [MealMemory.FoodFrequency] {
+        guard !isDemoAccount else { return [] }
+        return MealMemory.recentFoods(from: diaryHistoryLogs(), limit: limit)
+    }
+
+    /// Most-frequently logged foods (the "Frequently eaten" row).
+    @MainActor
+    func frequentLoggedFoods(limit: Int = 12) -> [MealMemory.FoodFrequency] {
+        guard !isDemoAccount else { return [] }
+        return Array(MealMemory.frequentFoods(from: diaryHistoryLogs(), now: .now).prefix(limit))
+    }
+
+    /// One-tap re-log of a recent/frequent food — clones the user's most recent
+    /// version (their usual serving + nutrition) into the meal.
+    @MainActor
+    func logRecentFood(foodID: String, into meal: MealType) {
+        guard !isDemoAccount, let latest = PersistenceService.latestDiaryEntry(foodID: foodID) else { return }
+        PersistenceService.duplicateDiaryEntry(entryID: latest.entryID, toMeal: meal.rawValue,
+                                               context: PersistenceService.context)
+        nutrition.reloadDiary()
+        sync.requestSync()
+    }
+
+    /// Personalization signals that bias food-search ranking toward the user's own
+    /// foods (frequency + recents now; favorites when that entity lands).
+    @MainActor
+    func foodPersonalSignals(now: Date = .now) -> PersonalSignals {
+        guard !isDemoAccount else { return .none }
+        let logs = diaryHistoryLogs()
+        var signals = PersonalSignals()
+        signals.frequency = Dictionary(uniqueKeysWithValues:
+            MealMemory.frequentFoods(from: logs, now: now).map { ($0.foodID, $0.count) })
+        signals.recentFoodIDs = MealMemory.recentFoods(from: logs).map(\.foodID)
+        return signals
     }
 
     /// Publish today's directive to the home-screen widget's shared container

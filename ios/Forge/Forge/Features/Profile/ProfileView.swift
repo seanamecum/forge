@@ -29,7 +29,6 @@ struct ProfileView: View {
             unitsCard
             devicesCard
             notificationPrefs
-            subscriptionCard
             privacyCard
             accountCard
             cloudSyncCard
@@ -48,11 +47,8 @@ struct ProfileView: View {
             }
             .buttonStyle(GhostButtonStyle())
 
-            Button("Log Out") { app.logout() }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Theme.rubyBright)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+            Button("Log Out") { Haptics.tap(); app.logout() }
+                .buttonStyle(GhostButtonStyle())
 
             Text("\(AppInfo.shortLabel) · Built for athletes")
                 .font(.system(size: 10)).foregroundStyle(Theme.faint)
@@ -75,7 +71,7 @@ struct ProfileView: View {
                         Image(systemName: syncIcon)
                             .font(.system(size: 13)).foregroundStyle(syncTone)
                         Text(syncLabel)
-                            .font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
+                            .font(Typography.subheadline).foregroundStyle(Theme.creamDim)
                         Spacer()
                         if app.sync.status.isBusy {
                             ProgressView().controlSize(.small).tint(Theme.gold)
@@ -126,10 +122,10 @@ struct ProfileView: View {
                 EyebrowLabel(text: "Account & Data")
                 if let email = app.auth.sessionEmail {
                     Text("Signed in as \(email)")
-                        .font(.system(size: 12.5)).foregroundStyle(Theme.creamDim)
+                        .font(Typography.subheadline).foregroundStyle(Theme.creamDim)
                 } else {
                     Text("Demo mode — no account, nothing leaves this phone.")
-                        .font(.system(size: 12.5)).foregroundStyle(Theme.muted)
+                        .font(Typography.subheadline).foregroundStyle(Theme.muted)
                 }
                 if let error = app.auth.lastError {
                     ErrorBanner(message: error) { app.auth.lastError = nil }
@@ -215,7 +211,7 @@ struct ProfileView: View {
                     Text(u.name).font(Theme.display(21)).foregroundStyle(Theme.cream)
                     Text([u.sport, u.fitnessLevel.rawValue, "\(u.experienceYears) yrs"]
                             .filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.gold)
+                        .font(Typography.footnote).foregroundStyle(Theme.gold)
                     Text("\(u.age) yrs · \(u.heightLabel) · \(Int(u.weightLb)) lb")
                         .font(.system(size: 11)).foregroundStyle(Theme.muted)
                 }
@@ -244,16 +240,14 @@ struct ProfileView: View {
 
     private var unitsCard: some View {
         Card {
-            VStack(alignment: .leading, spacing: 4) {
+            HStack {
                 EyebrowLabel(text: "Units")
-                HStack {
-                    Text("Units").font(.system(size: 13.5)).foregroundStyle(Theme.cream)
-                    Spacer()
-                    Text("Imperial (lb · in · oz)")
-                        .font(.system(size: 12.5)).foregroundStyle(Theme.muted)
-                }
-                .tint(Theme.gold)
+                Spacer()
+                Text("Imperial (lb · in · oz)")
+                    .font(Typography.subheadline).foregroundStyle(Theme.muted)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Units: Imperial")
         }
     }
 
@@ -319,48 +313,15 @@ struct ProfileView: View {
     }
 
     private func prefLabel(_ text: String) -> some View {
-        Text(text).font(.system(size: 13.5)).foregroundStyle(Theme.cream)
-    }
-
-    private var subscriptionCard: some View {
-        Card(gold: true) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    EyebrowLabel(text: "Membership")
-                    Spacer()
-                    Chip(text: "Pro trial · 9 days left", tone: .gold)
-                }
-                tierRow("Free", "Logging · exercise library · basic dashboard", current: false)
-                tierRow("Pro · $11.99/mo", "AI Coach · Forge Score · Digital Twin · Form Analysis", current: true)
-                tierRow("Elite · $29.99/mo", "1:1 coach marketplace credit · bloodwork reads · team tools", current: false)
-                Text("College athlete and team plans available — StoreKit wiring is the production step.")
-                    .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
-            }
-        }
-    }
-
-    private func tierRow(_ name: String, _ detail: String, current: Bool) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: current ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 16))
-                .foregroundStyle(current ? Theme.gold : Theme.faint)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(name).font(.system(size: 13, weight: current ? .semibold : .regular)).foregroundStyle(Theme.cream)
-                Text(detail).font(.system(size: 10.5)).foregroundStyle(Theme.muted)
-            }
-            Spacer()
-        }
-        .padding(8)
-        .background(RoundedRectangle(cornerRadius: 10).fill(current ? Theme.gold.opacity(0.07) : Theme.bgElevated))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(current ? Theme.gold.opacity(0.35) : Theme.hairline, lineWidth: 1))
+        Text(text).font(Typography.callout).foregroundStyle(Theme.cream)
     }
 
     private var privacyCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 EyebrowLabel(text: "Privacy")
-                Text("Health data stays on device in the prototype. Backend sync will be opt-in, end-to-end encrypted, and never sold. HealthKit data is never used for advertising — App Store rules and ours.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                Text("Your health data stays on your device and, when you enable Cloud Sync, is backed up to your private account — opt-in and never sold. HealthKit data is never used for advertising — App Store rules and ours.")
+                    .font(Typography.footnote).foregroundStyle(Theme.muted)
             }
         }
     }

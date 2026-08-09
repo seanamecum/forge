@@ -72,7 +72,7 @@ struct ExerciseRow: View {
         Card {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(exercise.name).font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Theme.cream)
+                    Text(exercise.name).font(Typography.body.weight(.semibold)).foregroundStyle(Theme.cream)
                     Text(exercise.primaryMuscles.joined(separator: " · "))
                         .font(.system(size: 11)).foregroundStyle(Theme.muted)
                     HStack(spacing: 6) {
@@ -87,7 +87,7 @@ struct ExerciseRow: View {
                 if let max = exercise.userOneRepMaxLb {
                     VStack(alignment: .trailing, spacing: 1) {
                         Text("\(Int(max))").font(Theme.display(19)).foregroundStyle(Theme.goldGradient)
-                        Text("e1RM lb").font(.system(size: 8.5)).foregroundStyle(Theme.faint)
+                        Text("e1RM lb").font(Typography.eyebrow).foregroundStyle(Theme.faint)
                     }
                 }
                 Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(Theme.faint)

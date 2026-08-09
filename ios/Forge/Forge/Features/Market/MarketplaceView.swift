@@ -64,7 +64,7 @@ struct MarketplaceView: View {
                     Chip(text: app.user.primaryGoal.rawValue, tone: .gold)
                 }
                 Text("Devices that would sharpen YOUR Forge Score — matched to your goal, not to ad spend. Partner offers land here at launch.")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                    .font(Typography.footnote).foregroundStyle(Theme.muted)
                 ForEach(featured) { source in
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "sparkle")
@@ -77,7 +77,7 @@ struct MarketplaceView: View {
                                 Chip(text: "Partner slot", tone: .neutral)
                             }
                             Text(source.pitch)
-                                .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                                .font(Typography.footnote).foregroundStyle(Theme.muted)
                                 .fixedSize(horizontal: false, vertical: true)
                             if !DataHub.fillsGap(source, connected: app.connectedSources).isEmpty {
                                 Text("Fills your gap: \(DataHub.fillsGap(source, connected: app.connectedSources).map { $0.label.lowercased() }.joined(separator: ", "))")
@@ -151,7 +151,7 @@ struct ProgramCardView: View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(program.name).font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Theme.cream)
+                    Text(program.name).font(Typography.body.weight(.semibold)).foregroundStyle(Theme.cream)
                     Spacer()
                     Text(program.price).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.goldBright)
                 }
@@ -182,11 +182,11 @@ struct ProductCardView: View {
                     Spacer()
                     if let tag = product.tag { Chip(text: tag, tone: .gold) }
                 }
-                Text(product.name).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.cream)
-                Text(product.brand).font(.system(size: 10.5)).foregroundStyle(Theme.muted)
+                Text(product.name).font(Typography.subheadline.weight(.semibold)).foregroundStyle(Theme.cream)
+                Text(product.brand).font(Typography.caption).foregroundStyle(Theme.muted)
                 HStack {
                     Text("★ \(String(format: "%.1f", product.rating))")
-                        .font(.system(size: 10.5)).foregroundStyle(Theme.creamDim)
+                        .font(Typography.caption).foregroundStyle(Theme.creamDim)
                     Spacer()
                     Text(product.price).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.goldBright)
                 }

@@ -39,7 +39,7 @@ struct LeaderboardCard: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(board.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.cream)
-                        Text(board.subtitle).font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                        Text(board.subtitle).font(Typography.caption).foregroundStyle(Theme.faint)
                     }
                     Spacer()
                     Chip(text: "Friends", tone: .gold)
@@ -94,7 +94,7 @@ struct ChallengeCard: View {
                 CapsuleBar(value: challenge.progress, target: 1, tone: challenge.joined ? .green : .gold, height: 6)
                 HStack {
                     Text("\(Int(challenge.progress * 100))% complete")
-                        .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                        .font(Typography.caption).foregroundStyle(Theme.faint)
                     Spacer()
                     Button(challenge.joined ? "Joined ✓" : "Join Challenge") {
                         app.social.toggleJoin(challenge)

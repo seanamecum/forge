@@ -10,11 +10,12 @@ struct BarcodeScanSheet: View {
     let meal: MealType
     @State private var phase: Phase = .scanning
     @State private var manualCode = ""
+    @State private var adjusting: CanonicalFood?
 
     enum Phase: Equatable {
         case scanning
         case looking(String)
-        case found(Food)
+        case found(CanonicalFood)
         case failed(String)
     }
 
@@ -74,6 +75,9 @@ struct BarcodeScanSheet: View {
                     Button("Done") { dismiss() }.foregroundStyle(Theme.gold)
                 }
             }
+            .sheet(item: $adjusting) { food in
+                LogFoodSheet(food: food, meal: meal, onLogged: { dismiss() })
+            }
         }
         .preferredColorScheme(.dark)
     }
@@ -81,15 +85,16 @@ struct BarcodeScanSheet: View {
     private func lookup(_ code: String) {
         phase = .looking(code)
         Task { @MainActor in
-            do {
-                let food = try await OpenFoodFacts.lookup(barcode: code)
+            if let food = await app.lookupBarcode(code) {
                 Haptics.success()
                 phase = .found(food)
-            } catch {
-                phase = .failed(error.localizedDescription)
+            } else {
+                phase = .failed(OpenFoodFacts.LookupError.notFound.errorDescription ?? "Not found.")
             }
         }
     }
+
+    private func defaultQuantity(for food: CanonicalFood) -> FoodQuantity { app.defaultQuantity(for: food) }
 
     @ViewBuilder
     private func manualEntry(reason: String?) -> some View {
@@ -117,28 +122,37 @@ struct BarcodeScanSheet: View {
         }
     }
 
-    private func foundCard(_ food: Food) -> some View {
-        Card {
+    private func foundCard(_ food: CanonicalFood) -> some View {
+        let q = defaultQuantity(for: food)
+        let n = food.nutrients(for: q).nutrients
+        let unitLabel = food.unit(id: q.unitID)?.label ?? "g"
+        return Card {
             VStack(alignment: .leading, spacing: 10) {
-                Text(food.name)
-                    .font(Theme.display(20)).foregroundStyle(Theme.cream)
-                if let brand = food.brand {
-                    Text(brand).font(.system(size: 12)).foregroundStyle(Theme.muted)
+                Text(food.name).font(Theme.display(20)).foregroundStyle(Theme.cream)
+                HStack(spacing: 6) {
+                    if let brand = food.brand { Text(brand).font(.system(size: 12)).foregroundStyle(Theme.muted) }
+                    SourceBadge(food: food)
                 }
-                Text("Per \(food.serving) · OpenFoodFacts")
+                Text("Per \(String(format: "%g", q.amount)) \(unitLabel)")
                     .font(.system(size: 11)).foregroundStyle(Theme.faint)
                 HStack(spacing: 14) {
-                    StatTile(label: "Calories", value: "\(food.calories)", tone: .gold)
-                    StatTile(label: "Protein", value: String(format: "%.0f", food.protein), unit: "g")
-                    StatTile(label: "Carbs", value: String(format: "%.0f", food.carbs), unit: "g")
-                    StatTile(label: "Fat", value: String(format: "%.0f", food.fat), unit: "g")
+                    StatTile(label: "Calories", value: "\(Int((n?[.calories] ?? 0).rounded()))", tone: .gold)
+                    StatTile(label: "Protein", value: String(format: "%.0f", n?[.protein] ?? 0), unit: "g")
+                    StatTile(label: "Carbs", value: String(format: "%.0f", n?[.carbs] ?? 0), unit: "g")
+                    StatTile(label: "Fat", value: String(format: "%.0f", n?[.fat] ?? 0), unit: "g")
                 }
-                Button("Add to \(meal.rawValue)") {
-                    Haptics.success()
-                    app.nutrition.add(food: food, to: meal)
-                    dismiss()
+                HStack(spacing: 8) {
+                    Button("Add to \(meal.rawValue)") {
+                        Haptics.success()
+                        app.logFood(food, quantity: q, meal: meal)
+                        dismiss()
+                    }
+                    .buttonStyle(GoldButtonStyle())
+                    Button("Adjust") { adjusting = food }
+                        .buttonStyle(GhostButtonStyle(compact: true))
                 }
-                .buttonStyle(GoldButtonStyle())
+                Button("Scan another") { phase = .scanning }
+                    .font(.system(size: 12)).foregroundStyle(Theme.muted)
             }
         }
         .padding(.horizontal, 16)

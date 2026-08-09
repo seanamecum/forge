@@ -125,6 +125,16 @@ final class NutritionHealthTests: XCTestCase {
         XCTAssertTrue(app.injuries.active.isEmpty)                  // demo knee cleared
         XCTAssertEqual(app.injuries.risk.percent, 0)                // clean risk, not Sean's 22
         XCTAssertEqual(app.injuries.risk.band, "Low")
+        // Never inherit the demo athlete's concussion log / return-to-play progress.
+        XCTAssertTrue(app.injuries.concussionSymptoms.isEmpty)
+        XCTAssertTrue(app.injuries.rtpStages.isEmpty)
+    }
+
+    func testDemoAccountKeepsConcussionAndRiskSeed() {
+        let app = AppState(); app.completeAuth(demo: true)
+        XCTAssertFalse(app.injuries.concussionSymptoms.isEmpty)      // demo shows the illustrative tracker
+        XCTAssertFalse(app.injuries.rtpStages.isEmpty)
+        XCTAssertEqual(app.injuries.risk.percent, MockData.injuryRisk.percent)
     }
 
     // MARK: - AppState management (real account, persisted)

@@ -33,7 +33,7 @@ struct PhotoFoodScanSheet: View {
                         Text("Snap or pick a photo of your plate")
                             .font(Theme.display(18)).foregroundStyle(Theme.cream)
                         Text("Recognition runs on this phone — nothing is uploaded.")
-                            .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                            .font(Typography.footnote).foregroundStyle(Theme.muted)
                         PhotosPicker(selection: $pickerItem, matching: .images) {
                             Text("Choose photo")
                         }
@@ -71,7 +71,7 @@ struct PhotoFoodScanSheet: View {
                                 .font(.system(size: 13)).foregroundStyle(Theme.cream)
                                 .multilineTextAlignment(.center)
                             Text("Use Search or Scan for anything packaged — those always work.")
-                                .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                                .font(Typography.footnote).foregroundStyle(Theme.muted)
                                 .multilineTextAlignment(.center)
                             retryButton
                         }

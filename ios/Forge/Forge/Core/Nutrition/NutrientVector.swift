@@ -43,6 +43,8 @@ struct NutrientVector: Codable, Equatable, Sendable {
         self.values = Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
     }
     private init(raw: [String: Double]) { self.values = raw }
+    /// Reconstruct from raw nutrient-key → amount pairs (used by dedup/merge).
+    init(rawValues: [String: Double]) { self.values = rawValues }
 
     // MARK: Access
 
@@ -58,6 +60,15 @@ struct NutrientVector: Codable, Equatable, Sendable {
     /// The macros that are actually known — drives the completeness/honesty UI.
     var knownMacros: Set<Nutrient> { Set(Nutrient.macros.filter { has($0) }) }
     var hasAllMacros: Bool { knownMacros.count == Nutrient.macros.count }
+
+    /// Data completeness (0–1) over the priority nutrient set — macros weighted
+    /// heavily, priority micros lightly. Feeds confidence + the "incomplete" flag.
+    func completenessScore() -> Double {
+        let macroKnown = Double(Nutrient.macros.filter { has($0) }.count) / Double(Nutrient.macros.count)
+        let microSet: [Nutrient] = [.fiber, .sugar, .sodium, .potassium, .calcium, .iron]
+        let microKnown = Double(microSet.filter { has($0) }.count) / Double(microSet.count)
+        return macroKnown * 0.8 + microKnown * 0.2
+    }
 
     // MARK: Math (linear; preserves unknown-ness)
 

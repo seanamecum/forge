@@ -101,11 +101,11 @@ struct BodyTrackingView: View {
                     ForEach(MockData.measurements) { m in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(m.name.uppercased())
-                                .font(.system(size: 8.5, weight: .semibold)).kerning(1)
+                                .font(Typography.eyebrow).kerning(1)
                                 .foregroundStyle(Theme.muted)
                             Text(m.value).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.cream)
                             if let delta = m.delta30d {
-                                Text("\(delta) /30d").font(.system(size: 9.5)).foregroundStyle(Theme.green)
+                                Text("\(delta) /30d").font(Typography.caption).foregroundStyle(Theme.green)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -135,7 +135,7 @@ struct BodyTrackingView: View {
                                         .foregroundStyle(Theme.gold.opacity(0.25))
                                 )
                                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.hairline, lineWidth: 1))
-                            Text(snap.date).font(.system(size: 9.5)).foregroundStyle(Theme.muted)
+                            Text(snap.date).font(Typography.caption).foregroundStyle(Theme.muted)
                         }
                     }
                 }
@@ -152,7 +152,7 @@ struct BodyTrackingView: View {
                         Text(snap.date).font(.system(size: 12)).foregroundStyle(Theme.muted)
                             .frame(width: 56, alignment: .leading)
                         Text("\(String(format: "%.1f", snap.weightLb)) lb")
-                            .font(.system(size: 12.5, weight: .medium)).foregroundStyle(Theme.cream)
+                            .font(Typography.subheadline.weight(.medium)).foregroundStyle(Theme.cream)
                         Spacer()
                         Text("\(String(format: "%.1f", snap.bodyFatPct))% bf")
                             .font(.system(size: 12)).foregroundStyle(Theme.creamDim)
@@ -192,7 +192,7 @@ private struct LogWeightSheet: View {
                     .background(RoundedRectangle(cornerRadius: 12).fill(Theme.card))
 
                     Text("Forge charts your trend and tunes your calorie and protein targets to it. Two weeks of weigh-ins unlocks weight-trend coaching.")
-                        .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                        .font(Typography.footnote).foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Button("Save weigh-in") {

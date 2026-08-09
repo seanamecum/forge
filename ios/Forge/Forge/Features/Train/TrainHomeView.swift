@@ -2,13 +2,23 @@ import SwiftUI
 
 struct TrainHomeView: View {
     @Environment(AppState.self) private var app
+    @State private var draftRefresh = 0
+
+    /// Real state — names an active injury only when the user actually has one.
+    private var trainSubtitle: String {
+        if let injury = app.injuries.active.first {
+            return "Tuned daily for recovery \(app.recovery.today.recovery) and your \(injury.type.rawValue.lowercased())."
+        }
+        return "Tuned daily to your recovery, goals, and equipment."
+    }
 
     var body: some View {
         NavigationStack {
             ScreenScaffold {
                 SectionHeader(eyebrow: "Train", title: "Workouts",
-                              subtitle: "Tuned daily for recovery \(app.recovery.today.recovery) and the knee.")
+                              subtitle: trainSubtitle)
 
+                resumeCard
                 quickActions
                 repeatLastCard
                 todayCard
@@ -19,6 +29,7 @@ struct TrainHomeView: View {
                 historyList
             }
             .navigationBarHidden(true)
+            .onAppear { app.refreshTrainingBoards() }
         }
     }
 
@@ -64,6 +75,35 @@ struct TrainHomeView: View {
                                 .foregroundStyle(Theme.creamDim)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    /// An in-progress session that wasn't finished — Forge kept every set you
+    /// logged, so you pick up exactly where you left off. Nothing is ever lost.
+    @ViewBuilder
+    private var resumeCard: some View {
+        // draftRefresh is read here so a Discard tap re-evaluates this card.
+        let _ = draftRefresh
+        if !app.isDemoAccount, let draft = WorkoutDraftStore.resumable() {
+            Card(gold: true) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        EyebrowLabel(text: "Resume Workout")
+                        Text(draft.name).font(Typography.headline).foregroundStyle(Theme.cream)
+                        Text("\(draft.completedSets) set\(draft.completedSets == 1 ? "" : "s") · \(Int(draft.totalVolumeLb).formatted()) lb in progress")
+                            .font(Typography.caption).foregroundStyle(Theme.muted)
+                    }
+                    Spacer()
+                    VStack(spacing: 6) {
+                        NavigationLink { WorkoutLoggerView(plan: draft.asPlan()) } label: { Text("Resume") }
+                            .buttonStyle(GoldButtonStyle(compact: true))
+                        Button("Discard") {
+                            Haptics.soft(); WorkoutDraftStore.clear(); draftRefresh += 1
+                        }
+                        .font(Typography.caption).foregroundStyle(Theme.muted)
                     }
                 }
             }
@@ -129,7 +169,7 @@ struct TrainHomeView: View {
                         ForEach(block.items) { item in
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.name).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Theme.cream)
+                                    Text(item.name).font(Typography.callout.weight(.medium)).foregroundStyle(Theme.cream)
                                     Text(item.scheme).font(.system(size: 11)).foregroundStyle(Theme.muted)
                                 }
                                 Spacer()
@@ -159,7 +199,7 @@ struct TrainHomeView: View {
                 }
                 Text(p.name).font(Theme.display(18)).foregroundStyle(Theme.cream)
                 Text("\(p.coach) · \(p.daysPerWeek) days/wk · \(p.focus)")
-                    .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+                    .font(Typography.footnote).foregroundStyle(Theme.muted)
                 CapsuleBar(value: Double(p.week), target: Double(p.totalWeeks), tone: .gold, height: 6)
             }
         }
@@ -174,7 +214,7 @@ struct TrainHomeView: View {
                 } else {
                     ForEach(app.workouts.muscleVolume) { m in
                         HStack(spacing: 10) {
-                            Text(m.muscle).font(.system(size: 11.5)).foregroundStyle(Theme.creamDim)
+                            Text(m.muscle).font(Typography.footnote).foregroundStyle(Theme.creamDim)
                                 .frame(width: 80, alignment: .leading)
                             CapsuleBar(value: Double(m.sets), target: Double(m.optimalHigh),
                                        tone: m.inOptimal ? .green : .amber, height: 5)
@@ -185,7 +225,7 @@ struct TrainHomeView: View {
                     }
                     if app.injuries.active.contains(where: { $0.type == .knee }) {
                         Text("Quads intentionally under target — knee rehab block.")
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                            .font(Typography.caption).foregroundStyle(Theme.faint)
                     }
                 }
             }
@@ -203,7 +243,7 @@ struct TrainHomeView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(pr.exerciseName).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.cream)
-                                Text(pr.date).font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                                Text(pr.date).font(Typography.caption).foregroundStyle(Theme.faint)
                             }
                             Spacer()
                             Text("\(Int(pr.weightLb)) lb × \(pr.reps)")
@@ -236,7 +276,7 @@ struct TrainHomeView: View {
 
     private func emptyNote(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11.5)).foregroundStyle(Theme.muted)
+            .font(Typography.footnote).foregroundStyle(Theme.muted)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -271,7 +311,7 @@ struct WorkoutHistoryRow: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(workout.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.cream)
                         Text("\(workout.date.formatted(.dateTime.month().day())) · \(workout.durationMin) min · RPE \(String(format: "%.1f", workout.avgRPE)) · felt \(workout.feel.rawValue.lowercased())")
-                            .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                            .font(Typography.caption).foregroundStyle(Theme.faint)
                     }
                     Spacer()
                     Text("\(Int(workout.totalVolumeLb).formatted()) lb")

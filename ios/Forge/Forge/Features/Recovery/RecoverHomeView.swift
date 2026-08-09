@@ -52,9 +52,9 @@ struct RecoverHomeView: View {
             return "\(base) — last HRV ~\(Int(age))h old, recovery held at estimate"
         }
         if app.recovery.recoveryFromCheckIn {
-            return "From your morning check-in — connect Apple Health for HRV-based recovery"
+            return "From your morning check-in · add a wearable for automatic HRV-based recovery"
         }
-        return "Demo recovery · \(base)"
+        return "Estimate — do your morning check-in to personalize · \(base)"
     }
 
     private var ringsRow: some View {
@@ -132,7 +132,7 @@ struct RecoverHomeView: View {
                     EmptyStateView(
                         icon: "chart.xyaxis.line",
                         title: "Your trends are building",
-                        message: "Keep logging and connect Apple Health — your recovery, HRV, sleep, and Forge Score charts fill in over the next couple of weeks.")
+                        message: "Keep logging your check-ins and workouts — your recovery, sleep, and Forge Score charts fill in over the next couple of weeks. A wearable adds automatic HRV & sleep.")
                 } else {
                     ForEach(app.recovery.trends.filter { !$0.values.isEmpty }) { trend in
                         VStack(alignment: .leading, spacing: 4) {
@@ -140,7 +140,7 @@ struct RecoverHomeView: View {
                                 Text(trend.name).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.creamDim)
                                 Spacer()
                                 Text("\(String(format: "%g", trend.latest)) \(trend.unit)")
-                                    .font(.system(size: 11.5)).foregroundStyle(Theme.gold)
+                                    .font(Typography.footnote).foregroundStyle(Theme.gold)
                             }
                             Sparkline(values: trend.values,
                                       color: trend.name == "Strain" ? Theme.amber : Theme.gold,

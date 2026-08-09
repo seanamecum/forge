@@ -27,7 +27,7 @@ struct CoachView: View {
                     }
                     .scrollDismissesKeyboard(.interactively)
                     .onChange(of: vm.messages.count) {
-                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                        withAnimation(Motion.gentle) { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
                 }
 
@@ -49,6 +49,18 @@ struct CoachView: View {
         }
     }
 
+    /// Real, live status — recovery, any active rehab, and the earned streak.
+    /// Never the demo athlete's fixed numbers.
+    private var coachStatus: String {
+        var parts = ["Synced", "recovery \(app.recovery.today.recovery)"]
+        if let injury = app.injuries.active.first {
+            parts.append("\(injury.type.rawValue.lowercased()) rehab")
+        }
+        let streak = StreakEngine.streak(days: PersistenceService.activeDays())
+        if streak >= 2 { parts.append("\(streak)-day streak") }
+        return parts.joined(separator: " · ")
+    }
+
     private var header: some View {
         HStack(spacing: 10) {
             ZStack {
@@ -65,8 +77,8 @@ struct CoachView: View {
                     .foregroundStyle(Theme.cream)
                 HStack(spacing: 5) {
                     Circle().fill(Theme.green).frame(width: 6, height: 6)
-                    Text("Synced · recovery 78 · knee phase 2 · 23-day streak")
-                        .font(.system(size: 10.5))
+                    Text(coachStatus)
+                        .font(Typography.caption)
                         .foregroundStyle(Theme.muted)
                 }
             }
@@ -141,8 +153,8 @@ struct CoachBubble: View {
                     .font(Theme.text(14))
                     .foregroundStyle(Theme.cream)
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(Theme.gold.opacity(0.12)))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.gold.opacity(0.3), lineWidth: 1))
+                    .background(RoundedRectangle(cornerRadius: Radius.lg).fill(Theme.gold.opacity(0.12)))
+                    .overlay(RoundedRectangle(cornerRadius: Radius.lg).stroke(Theme.gold.opacity(0.3), lineWidth: 1))
             }
         } else {
             VStack(alignment: .leading, spacing: 10) {
@@ -158,12 +170,12 @@ struct CoachBubble: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Theme.card))
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline, lineWidth: 1))
+                .background(RoundedRectangle(cornerRadius: Radius.lg).fill(Theme.card))
+                .overlay(RoundedRectangle(cornerRadius: Radius.lg).stroke(Theme.hairline, lineWidth: 1))
 
                 if !message.steps.isEmpty {
                     Button {
-                        withAnimation { showSteps.toggle() }
+                        withAnimation(Motion.snappy) { showSteps.toggle() }
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "list.number")
@@ -181,14 +193,14 @@ struct CoachBubble: View {
                                         .font(.system(size: 11, weight: .semibold))
                                         .foregroundStyle(Theme.gold.opacity(0.7))
                                     Text(step)
-                                        .font(.system(size: 11.5))
+                                        .font(Typography.footnote)
                                         .foregroundStyle(Theme.muted)
                                 }
                             }
                         }
                         .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.bgElevated))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.hairline, lineWidth: 1))
+                        .background(RoundedRectangle(cornerRadius: Radius.md).fill(Theme.bgElevated))
+                        .overlay(RoundedRectangle(cornerRadius: Radius.md).stroke(Theme.hairline, lineWidth: 1))
                     }
                 }
 
@@ -201,7 +213,7 @@ struct CoachBubble: View {
                                     .kerning(1)
                                     .foregroundStyle(Theme.muted)
                                 Text(card.value)
-                                    .font(.system(size: 11.5, weight: .semibold))
+                                    .font(Typography.footnote.weight(.semibold))
                                     .foregroundStyle(card.tone.color)
                             }
                             .padding(10)
@@ -254,7 +266,7 @@ struct EvidenceSheet: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Forge's recommendations are grounded in position stands and landmark studies. The live coach cites only from this vetted list — it is never allowed to invent a reference.")
-                        .font(Theme.text(12.5))
+                        .font(Typography.subheadline)
                         .foregroundStyle(Theme.muted)
                         .padding(.bottom, 4)
 
@@ -275,7 +287,7 @@ struct EvidenceSheet: View {
                     }
 
                     Text("Educational guidance, not medical advice.")
-                        .font(.system(size: 10.5))
+                        .font(Typography.caption)
                         .foregroundStyle(Theme.faint)
                         .padding(.top, 4)
                 }

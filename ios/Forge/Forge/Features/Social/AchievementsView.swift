@@ -57,7 +57,7 @@ struct AchievementsView: View {
                             CapsuleBar(value: Double(mission.progress), target: Double(mission.total),
                                        tone: mission.done ? .green : .gold, height: 5)
                             Text("\(mission.progress)/\(mission.total)")
-                                .font(.system(size: 10.5)).foregroundStyle(Theme.faint)
+                                .font(Typography.caption).foregroundStyle(Theme.faint)
                         }
                     }
                     .padding(.vertical, 2)
@@ -89,11 +89,11 @@ struct AchievementsView: View {
                             }
                             .shadow(color: badge.earned ? Theme.gold.opacity(0.3) : .clear, radius: 8)
                             Text(badge.name)
-                                .font(.system(size: 10.5, weight: .medium))
+                                .font(Typography.caption.weight(.medium))
                                 .foregroundStyle(badge.earned ? Theme.cream : Theme.faint)
                                 .multilineTextAlignment(.center)
                             Text(badge.earnedDate ?? badge.detail)
-                                .font(.system(size: 8.5))
+                                .font(Typography.eyebrow)
                                 .foregroundStyle(Theme.faint)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)

@@ -46,7 +46,7 @@ struct WeeklyReportCard: View {
                             .foregroundStyle(Theme.gold)
                             .padding(.top, 2)
                         Text(report.nextFocus)
-                            .font(Theme.text(12.5, .medium))
+                            .font(Typography.subheadline.weight(.medium))
                             .foregroundStyle(Theme.gold)
                             .fixedSize(horizontal: false, vertical: true)
                     }
